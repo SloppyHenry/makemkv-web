@@ -184,6 +184,12 @@ function mainTitleIds(disc){
   const max = Math.max(0, ...disc.titles.map(t=>t.duration));
   return disc.titles.filter(t => t.duration >= max*0.5).map(t=>t.id);
 }
+// Vorschlag für den Dateinamen: MakeMKV liefert oft für alle Titel den Disc-Namen -> Titelnummer anhängen
+function suggestName(disc, t){
+  const base = (t.name || '').trim() || `Titel ${t.id+1}`;
+  const dup = disc.titles.filter(x => (x.name||'').trim() === base).length > 1;
+  return dup ? `${base} - Titel ${String(t.id+1).padStart(2,'0')}` : base;
+}
 function selOf(d){
   const k = keyOf(d);
   if(!ui.sel[k]) ui.sel[k] = Object.fromEntries(d.disc.titles.map(t=>[t.id, false])), mainTitleIds(d.disc).forEach(i=>ui.sel[k][i]=true);
@@ -227,7 +233,7 @@ function discHtml(d, busy){
   if(ui.folder[k]===undefined) ui.folder[k] = disc.name || disc.volume || 'Disc';
   const rows = disc.titles.map(t => {
     const v = t.tracks.filter(x=>x.type==='Video').length, a = t.tracks.filter(x=>x.type==='Audio').length, s = t.tracks.filter(x=>x.type==='Subtitles').length;
-    const nm = names[t.id] ?? (t.name || `Titel ${t.id}`);
+    const nm = names[t.id] ?? suggestName(disc, t);
     const open = ui.open[k+':'+t.id];
     return `<tr class="${sel[t.id]?'':'off'}" data-t="${t.id}">
       <td><input type="checkbox" data-sel="${t.id}" ${sel[t.id]?'checked':''} ${busy?'disabled':''}></td>
@@ -282,7 +288,7 @@ function wire(el, d){
 
 async function startRip(d, mode){
   const k = keyOf(d), sel = selOf(d), names = ui.names[k]||{};
-  const titles = mode==='mkv' ? d.disc.titles.filter(t=>sel[t.id]).map(t => ({id:t.id, name:(names[t.id] ?? t.name ?? '').trim()})) : [];
+  const titles = mode==='mkv' ? d.disc.titles.filter(t=>sel[t.id]).map(t => ({id:t.id, name:(names[t.id] ?? suggestName(d.disc, t)).trim()})) : [];
   if(mode==='mkv' && !titles.length){ alert('Bitte mindestens einen Titel auswählen.'); return; }
   await api(`/api/drives/${d.id}/rip`, 'POST', {titles, folder: ui.folder[k]||'', mode});
 }
