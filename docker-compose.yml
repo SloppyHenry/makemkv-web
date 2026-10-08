@@ -1,0 +1,27 @@
+services:
+  makemkv-web:
+    build:
+      context: .
+      args:
+        MKV_VERSION: ${MKV_VERSION:-latest}
+        ACCEPT_EULA: ${ACCEPT_EULA:-no}
+    image: makemkv-web
+    container_name: makemkv-web
+    restart: unless-stopped
+    ports:
+      - "${PORT:-8780}:8780"
+    user: "${PUID:-1000}:${PGID:-1000}"
+    group_add: ["${CDROM_GID:-24}"]
+    environment:
+      TZ: ${TZ:-Europe/Berlin}
+      OUTPUT_MOUNT: ${NAS_MOUNT:-/mnt/nas}
+      AUTH_USER: ${AUTH_USER:-}
+      AUTH_PASS: ${AUTH_PASS:-}
+      OUTPUT_DIR: ${OUTPUT_DIR:-/mnt/nas/rips}
+    volumes:
+      - /dev:/dev                                   # Laufwerk darf jederzeit neu angesteckt werden
+      - ./data:/data
+      - ${NAS_MOUNT:-/mnt/nas}:${NAS_MOUNT:-/mnt/nas}:rslave
+    device_cgroup_rules:
+      - "b 11:* rmw"                                # /dev/sr*
+      - "c 21:* rmw"                                # /dev/sg*
