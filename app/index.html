@@ -1,0 +1,362 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MakeMKV Web</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%23e5484d'/%3E%3Ccircle cx='16' cy='16' r='5' fill='%23fff'/%3E%3Ccircle cx='16' cy='16' r='2' fill='%23e5484d'/%3E%3C/svg%3E">
+<style>
+:root{
+  --bg:#f4f5f7;--card:#fff;--ink:#16181d;--mute:#6b7280;--line:#e3e5ea;--acc:#e5484d;--acc-ink:#fff;
+  --ok:#1f9d55;--warn:#c27c0e;--err:#d03b3b;--chip:#eef0f4;--bar:#e6e8ee;--log:#0f1115;--logink:#c9d1d9;
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#0e1013;--card:#171a20;--ink:#e8eaee;--mute:#8b93a1;--line:#272b33;--chip:#222730;--bar:#262b35;--log:#0a0c0f;
+}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif}
+header{display:flex;align-items:center;gap:14px;padding:14px 20px;border-bottom:1px solid var(--line);background:var(--card);position:sticky;top:0;z-index:5;flex-wrap:wrap}
+.logo{display:flex;align-items:center;gap:10px;font-weight:700;font-size:17px;letter-spacing:.2px}
+.logo i{width:22px;height:22px;border-radius:50%;background:radial-gradient(circle,var(--card) 0 2px,var(--acc) 2.5px 5px,var(--card) 5.5px 7px,var(--acc) 7.5px);display:inline-block}
+.sp{flex:1}
+.chip{display:inline-flex;align-items:center;gap:6px;background:var(--chip);border-radius:99px;padding:3px 11px;font-size:13px;color:var(--mute);white-space:nowrap}
+.chip b{color:var(--ink);font-weight:600}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--mute);display:inline-block}
+.dot.ok{background:var(--ok)}.dot.warn{background:var(--warn)}.dot.err{background:var(--err)}
+.dot.live{background:var(--ok);box-shadow:0 0 0 0 rgba(31,157,85,.6);animation:pulse 2s infinite}
+@keyframes pulse{70%{box-shadow:0 0 0 7px rgba(31,157,85,0)}100%{box-shadow:0 0 0 0 rgba(31,157,85,0)}}
+main{max-width:1100px;margin:0 auto;padding:20px;display:grid;gap:18px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.card>.hd{display:flex;align-items:center;gap:12px;padding:14px 18px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.card>.hd h2{margin:0;font-size:16px}
+.card>.bd{padding:18px}
+.badge{font-size:12px;font-weight:600;padding:3px 10px;border-radius:99px;background:var(--chip);color:var(--mute)}
+.badge.ok{background:rgba(31,157,85,.15);color:var(--ok)}
+.badge.busy{background:rgba(229,72,77,.14);color:var(--acc)}
+.badge.warn{background:rgba(194,124,14,.15);color:var(--warn)}
+button,.btn{font:inherit;border:1px solid var(--line);background:var(--card);color:var(--ink);padding:7px 14px;border-radius:9px;cursor:pointer;text-decoration:none;display:inline-block}
+button:hover:not(:disabled){border-color:var(--mute)}
+button:disabled{opacity:.45;cursor:not-allowed}
+button.pri{background:var(--acc);color:var(--acc-ink);border-color:var(--acc);font-weight:600}
+button.pri:hover:not(:disabled){filter:brightness(1.08)}
+button.sm{padding:3px 10px;font-size:13px}
+button.danger{color:var(--err)}
+input[type=text],input[type=number],textarea{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:6px 10px;width:100%}
+input:focus{outline:2px solid var(--acc);outline-offset:-1px}
+.empty{text-align:center;padding:34px 10px;color:var(--mute)}
+.empty .disc{width:84px;height:84px;margin:0 auto 14px;border-radius:50%;border:2px dashed var(--line);display:grid;place-items:center;font-size:30px}
+.disc-hd{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+.disc-hd h3{margin:0;font-size:18px}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.bar{height:12px;border-radius:99px;background:var(--bar);overflow:hidden}
+.bar>div{height:100%;background:var(--acc);border-radius:99px;transition:width .35s}
+.bar.thin{height:6px}
+.bar.indet>div{width:35%!important;animation:ind 1.2s infinite ease-in-out}
+@keyframes ind{0%{margin-left:-35%}100%{margin-left:100%}}
+.stats{display:flex;gap:22px;flex-wrap:wrap;color:var(--mute);font-size:13px;margin-top:8px}
+.stats b{color:var(--ink)}
+table{width:100%;border-collapse:collapse}
+th{font-size:12px;text-transform:uppercase;letter-spacing:.4px;color:var(--mute);text-align:left;padding:6px 8px;font-weight:600}
+td{padding:7px 8px;border-top:1px solid var(--line);vertical-align:middle}
+td.n{color:var(--mute);width:34px}
+td.num{white-space:nowrap;font-variant-numeric:tabular-nums}
+tr.off td:not(:first-child){opacity:.55}
+tr.tr td{border-top:0;padding:0 8px 10px 50px;color:var(--mute);font-size:13px}
+.trk{display:grid;grid-template-columns:70px 1fr 90px;gap:2px 12px;padding:6px 10px;background:var(--bg);border-radius:8px}
+.tag{font-size:11px;font-weight:700;padding:1px 7px;border-radius:5px;background:rgba(229,72,77,.14);color:var(--acc);margin-left:6px;vertical-align:middle}
+.sum{display:flex;gap:12px;align-items:center;flex-wrap:wrap;justify-content:space-between;margin-top:16px;padding-top:16px;border-top:1px solid var(--line)}
+.sum .info{color:var(--mute);font-size:14px}
+.err-box{background:rgba(208,59,59,.1);border:1px solid rgba(208,59,59,.35);color:var(--err);padding:11px 14px;border-radius:10px;margin-bottom:14px}
+.ok-box{background:rgba(31,157,85,.1);border:1px solid rgba(31,157,85,.35);color:var(--ok);padding:11px 14px;border-radius:10px;margin-bottom:14px}
+.warn-box{background:rgba(194,124,14,.12);border:1px solid rgba(194,124,14,.4);color:var(--warn);padding:8px 14px;font-size:14px}
+details.log{margin-top:16px}
+details.log summary{cursor:pointer;color:var(--mute);font-size:13px}
+.logbox{background:var(--log);color:var(--logink);font:12px/1.5 ui-monospace,Menlo,Consolas,monospace;padding:10px 12px;border-radius:9px;max-height:240px;overflow:auto;margin-top:8px;white-space:pre-wrap;word-break:break-word}
+.logbox .error{color:#ff7b7b}.logbox .ok{color:#6ee7a0}.logbox span.t{color:#6b7280}
+.files td.sz{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+.files td.a{text-align:right;white-space:nowrap}
+.files a{color:var(--ink)}
+dialog{border:1px solid var(--line);border-radius:14px;background:var(--card);color:var(--ink);padding:0;width:min(520px,94vw)}
+dialog::backdrop{background:rgba(0,0,0,.5)}
+dialog form{padding:20px;display:grid;gap:14px}
+dialog h3{margin:0}
+label.f{display:grid;gap:4px;font-size:13px;color:var(--mute)}
+label.chk{display:flex;gap:10px;align-items:center;color:var(--ink);font-size:15px}
+.hint{font-size:12px;color:var(--mute)}
+@media(max-width:700px){.hide-s{display:none}main{padding:12px}}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo"><i></i> MakeMKV Web</div>
+  <span class="chip" id="conn"><span class="dot"></span><span>verbinde …</span></span>
+  <div class="sp"></div>
+  <span class="chip" id="outchip"></span>
+  <button id="btn-set">Einstellungen</button>
+</header>
+<div id="outwarn"></div>
+<main>
+  <div id="drives"></div>
+  <section class="card files">
+    <div class="hd"><h2>Fertige Dateien</h2><span class="chip" id="filesdir"></span><div class="sp"></div><button class="sm" id="files-reload">Aktualisieren</button></div>
+    <div class="bd" style="padding:6px 10px 10px"><table><tbody id="files"></tbody></table><div class="empty" id="nofiles" hidden>Noch nichts im Ausgabeordner.</div></div>
+  </section>
+</main>
+
+<dialog id="dlg">
+  <form method="dialog" id="setform">
+    <h3>Einstellungen</h3>
+    <label class="chk"><input type="checkbox" id="s-auto_scan"> Eingelegte Disc automatisch analysieren</label>
+    <label class="chk"><input type="checkbox" id="s-auto_eject"> Nach erfolgreichem Rip automatisch auswerfen</label>
+    <label class="f">Minimale Titellänge (Sekunden)<input type="number" id="s-minlength" min="0" step="10"></label>
+    <div class="row" style="flex-wrap:nowrap">
+      <label class="f" style="flex:1">Audio-Sprachen behalten<input type="text" id="s-audio_langs" placeholder="alle  –  z. B. deu,eng"></label>
+      <label class="f" style="flex:1">Untertitel behalten<input type="text" id="s-sub_langs" placeholder="alle  –  z. B. deu"></label>
+    </div>
+    <div class="hint" style="margin-top:-8px">3-Buchstaben-Sprachcodes (deu, eng, fra …). Video und Spuren ohne Sprachangabe bleiben immer erhalten. Gilt für den nächsten Rip.</div>
+    <label class="f">Eigener MakeMKV-Key (optional)<input type="text" id="s-key" placeholder="leer = öffentlicher Beta-Key wird automatisch geholt"></label>
+    <div class="row hint" id="keystate"></div>
+    <div class="row" style="justify-content:flex-end">
+      <button type="button" id="s-cancel">Schließen</button>
+      <button type="submit" class="pri" id="s-save" value="save">Speichern</button>
+    </div>
+  </form>
+</dialog>
+
+<script>
+const $ = (s, r=document) => r.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmtB = n => { if(!n) return '0 B'; const u=['B','KB','MB','GB','TB']; let i=0; while(n>=1024&&i<4){n/=1024;i++} return (i?n.toFixed(i>2?2:1):n)+' '+u[i]; };
+const fmtD = s => { s=Math.max(0,Math.round(s)); const h=Math.floor(s/3600),m=Math.floor(s%3600/60),x=s%60; return h?`${h}:${String(m).padStart(2,'0')}:${String(x).padStart(2,'0')}`:`${m}:${String(x).padStart(2,'0')}`; };
+const ago = ts => { const s=Date.now()/1000-ts; return s<90?'gerade eben':s<5400?`vor ${Math.round(s/60)} Min.`:s<172800?`vor ${Math.round(s/3600)} Std.`:`vor ${Math.round(s/86400)} Tagen`; };
+
+let S = null;                       // letzter Serverstand
+const ui = { sel:{}, names:{}, folder:{}, open:{}, sig:{}, wasBusy:{} };
+const keyOf = d => `${d.id}:${d.scan_id}`;
+
+async function api(path, method='POST', body){
+  const r = await fetch(path, {method, headers: body?{'Content-Type':'application/json'}:{}, body: body?JSON.stringify(body):undefined});
+  if(!r.ok){ let m=r.statusText; try{ m=(await r.json()).detail||m }catch{} alert(m); throw new Error(m); }
+  return r.json();
+}
+
+// ---------- Verbindung
+function connect(){
+  const es = new EventSource('/api/events');
+  es.onmessage = e => { S = JSON.parse(e.data); setConn(true); render(); };
+  es.onerror = () => { setConn(false); es.close(); setTimeout(connect, 2500); };
+}
+function setConn(ok){
+  $('#conn').innerHTML = `<span class="dot ${ok?'live':'err'}"></span><span>${ok?'live verbunden':'getrennt – verbinde neu …'}</span>`;
+}
+
+// ---------- Rendering
+const STATUS = { empty:['Keine Disc',''], open:['Schublade offen','warn'], loading:['Laufwerk lädt …','warn'], ready:['Disc erkannt','ok'], unknown:['…',''] };
+
+function render(){
+  const o = S.output;
+  $('#outchip').innerHTML = `<span class="dot ${o.mounted?'ok':'warn'}"></span> Ziel <b>${esc(o.dir)}</b> · ${fmtB(o.free)} frei`;
+  $('#filesdir').textContent = o.dir;
+  $('#outwarn').innerHTML = o.mounted ? '' : `<div class="warn-box">⚠ ${esc(o.preferred)} ist nicht eingehängt – es wird vorübergehend lokal auf diesem Server gespeichert (${esc(o.dir)}).</div>`;
+
+  const host = $('#drives');
+  const ids = S.drives.map(d => d.id);
+  [...host.children].forEach(c => { if(!ids.includes(c.dataset.id)) c.remove(); });
+  if(!S.drives.length){
+    host.innerHTML = `<div class="card"><div class="bd"><div class="empty"><div class="disc">⌀</div>Kein Laufwerk gefunden.<br>USB-Laufwerk anstecken – es erscheint hier automatisch.</div></div></div>`;
+  } else if(host.firstElementChild && !host.firstElementChild.dataset.id){ host.innerHTML=''; }
+
+  let anyPct = null;
+  for(const d of S.drives){
+    let el = host.querySelector(`[data-id="${d.id}"]`);
+    if(!el){ el = document.createElement('section'); el.className='card'; el.dataset.id=d.id; host.appendChild(el); }
+    const sig = [d.scan_id, d.status, d.job?d.job.kind:'', d.disc?1:0, d.error, o.dir].join('|');
+    if(ui.sig[d.id] !== sig){ ui.sig[d.id] = sig; buildCard(el, d); }
+    updateDynamic(el, d);
+    if(d.job && d.job.kind!=='scan') anyPct = Math.round((d.job.overall||0)*100);
+    const was = ui.wasBusy[d.id]; ui.wasBusy[d.id] = !!d.job;
+    if(was && !d.job) loadFiles();
+  }
+  document.title = anyPct!==null ? `${anyPct}% – MakeMKV Web` : 'MakeMKV Web';
+}
+
+function mainTitleIds(disc){
+  const max = Math.max(0, ...disc.titles.map(t=>t.duration));
+  return disc.titles.filter(t => t.duration >= max*0.5).map(t=>t.id);
+}
+function selOf(d){
+  const k = keyOf(d);
+  if(!ui.sel[k]) ui.sel[k] = Object.fromEntries(d.disc.titles.map(t=>[t.id, false])), mainTitleIds(d.disc).forEach(i=>ui.sel[k][i]=true);
+  return ui.sel[k];
+}
+
+function buildCard(el, d){
+  const [stTxt, stCls] = STATUS[d.status] || STATUS.unknown;
+  const busy = !!d.job;
+  const badge = busy ? `<span class="badge busy">${d.job.kind==='scan'?'analysiert …':d.job.kind==='backup'?'Backup läuft':'rippt …'}</span>` : `<span class="badge ${stCls}">${stTxt}</span>`;
+  let body = '';
+  if(d.job && d.job.kind==='scan'){
+    body = `<div class="prog"></div>`;
+  } else if(d.disc){
+    body = discHtml(d, busy);
+  } else if(d.error && d.status==='ready'){
+    body = `<div class="err-box">${esc(d.error)}</div><button class="pri" data-act="scan">Erneut analysieren</button>`;
+  } else if(d.status==='ready'){
+    body = `<div class="empty"><div class="disc">💿</div>Disc erkannt.<br><button class="pri" data-act="scan" style="margin-top:12px">Jetzt analysieren</button></div>`;
+  } else if(d.status==='open'){
+    body = `<div class="empty"><div class="disc">⏏</div>Schublade ist offen – Disc einlegen.<br><button data-act="close" style="margin-top:12px">Schublade schließen</button></div>`;
+  } else if(d.status==='loading'){
+    body = `<div class="empty"><div class="disc">…</div>Laufwerk liest die Disc ein.</div>`;
+  } else {
+    body = `<div class="empty"><div class="disc">💿</div>Bitte eine DVD oder Blu-ray einlegen.<br><span class="hint">Sie wird automatisch erkannt und analysiert.</span></div>`;
+  }
+  const post = (d.job && d.job.kind!=='scan') ? `<div class="prog"></div>` : '';
+  el.innerHTML = `
+    <div class="hd"><h2>${esc(d.name)}</h2><span class="chip">${esc(d.dev)}</span>${badge}<div class="sp"></div>
+      <button class="sm" data-act="eject" ${busy?'disabled':''}>Auswerfen</button></div>
+    <div class="bd">${d.job && d.job.kind!=='scan' ? '<div class="prog"></div>' : ''}${body}
+      ${d.job && d.job.kind==='scan' ? '' : ''}
+      <details class="log" ${busy||d.error?'open':''}><summary>Protokoll</summary><div class="logbox"></div></details></div>`;
+  wire(el, d);
+}
+
+function discHtml(d, busy){
+  const disc = d.disc, k = keyOf(d), sel = selOf(d);
+  const names = ui.names[k] ||= {};
+  const mainId = disc.titles.reduce((a,t)=>t.duration>(a?.duration||0)?t:a, null)?.id;
+  if(ui.folder[k]===undefined) ui.folder[k] = disc.name || disc.volume || 'Disc';
+  const rows = disc.titles.map(t => {
+    const v = t.tracks.filter(x=>x.type==='Video').length, a = t.tracks.filter(x=>x.type==='Audio').length, s = t.tracks.filter(x=>x.type==='Subtitles').length;
+    const nm = names[t.id] ?? (t.name || `Titel ${t.id}`);
+    const open = ui.open[k+':'+t.id];
+    return `<tr class="${sel[t.id]?'':'off'}" data-t="${t.id}">
+      <td><input type="checkbox" data-sel="${t.id}" ${sel[t.id]?'checked':''} ${busy?'disabled':''}></td>
+      <td class="n">${t.id+1}</td>
+      <td><input type="text" data-name="${t.id}" value="${esc(nm)}" ${busy?'disabled':''}>${t.id===mainId?'<span class="tag">LÄNGSTER</span>':''}</td>
+      <td class="num">${esc(t.duration_text)}</td>
+      <td class="num">${esc(t.size_text)}</td>
+      <td class="num hide-s">${t.chapters} Kap.</td>
+      <td class="hide-s"><button class="sm" data-trk="${t.id}">${v} V · ${a} A · ${s} UT ${open?'▴':'▾'}</button></td></tr>
+      ${open?`<tr class="tr"><td colspan="7"><div class="trk">${t.tracks.map(x=>`<span>${esc(x.type)}</span><span>${esc(x.info||x.codec)} ${x.res?'· '+esc(x.res):''} ${x.layout?'· '+esc(x.layout):''}</span><span>${esc(x.lang||x.code)}</span>`).join('')}</div></td></tr>`:''}`;
+  }).join('');
+  return `
+    <div class="disc-hd"><h3>${esc(disc.name||'Unbenannte Disc')}</h3><span class="chip">${esc(disc.type)}</span>
+      <span class="chip">${disc.titles.length} Titel ≥ ${disc.minlength}s</span><div class="sp"></div>
+      <button class="sm" data-pick="all" ${busy?'disabled':''}>Alle</button>
+      <button class="sm" data-pick="main" ${busy?'disabled':''}>Nur lange</button>
+      <button class="sm" data-pick="none" ${busy?'disabled':''}>Keine</button></div>
+    <table><thead><tr><th></th><th>#</th><th>Dateiname</th><th>Dauer</th><th>Größe</th><th class="hide-s">Kapitel</th><th class="hide-s">Spuren</th></tr></thead><tbody>${rows}</tbody></table>
+    <div class="sum"><div class="row" style="flex:1;min-width:240px"><label class="hint" for="folder">Ordner</label><input type="text" id="folder" data-folder value="${esc(ui.folder[k])}" ${busy?'disabled':''} style="max-width:380px"></div>
+      <div class="info" data-summary></div></div>
+    <div class="row" style="margin-top:14px;justify-content:flex-end">
+      ${d.error?`<span style="color:var(--err);flex:1">${esc(d.error)}</span>`:''}
+      <button data-act="scan" ${busy?'disabled':''}>Neu analysieren</button>
+      <button data-act="backup" ${busy?'disabled':''} title="Entschlüsselte Kopie der ganzen Disc (BDMV/VIDEO_TS-Ordner)">Disc-Backup</button>
+      <button class="pri" data-act="rip" ${busy?'disabled':''}>Auswahl rippen</button></div>`;
+}
+
+function wire(el, d){
+  const id = d.id, k = keyOf(d);
+  el.onclick = async ev => {
+    const b = ev.target.closest('button'); if(!b) return;
+    if(b.dataset.act==='scan') api(`/api/drives/${id}/scan`);
+    else if(b.dataset.act==='eject') api(`/api/drives/${id}/eject`);
+    else if(b.dataset.act==='close') api(`/api/drives/${id}/close`);
+    else if(b.dataset.act==='cancel'){ if(confirm('Laufenden Vorgang abbrechen?')) api(`/api/drives/${id}/cancel`); }
+    else if(b.dataset.act==='rip') startRip(d, 'mkv');
+    else if(b.dataset.act==='backup'){ if(confirm('Komplettes entschlüsseltes Disc-Backup erstellen? Das dauert länger und braucht den vollen Platz der Disc.')) startRip(d,'backup'); }
+    else if(b.dataset.pick){
+      const sel = selOf(d), main = mainTitleIds(d.disc);
+      d.disc.titles.forEach(t => sel[t.id] = b.dataset.pick==='all' ? true : b.dataset.pick==='main' ? main.includes(t.id) : false);
+      el.querySelectorAll('[data-sel]').forEach(c => { c.checked = sel[c.dataset.sel]; c.closest('tr').classList.toggle('off', !c.checked); });
+      updateDynamic(el, d);
+    } else if(b.dataset.trk){ const kk=k+':'+b.dataset.trk; ui.open[kk]=!ui.open[kk]; ui.sig[id]=''; buildCard(el,d); updateDynamic(el,d); }
+  };
+  el.oninput = ev => {
+    const t = ev.target;
+    if(t.dataset.sel!==undefined){ selOf(d)[t.dataset.sel]=t.checked; t.closest('tr').classList.toggle('off', !t.checked); updateDynamic(el,d); }
+    else if(t.dataset.name!==undefined){ (ui.names[k] ||= {})[t.dataset.name]=t.value; }
+    else if(t.dataset.folder!==undefined){ ui.folder[k]=t.value; updateDynamic(el,d); }
+  };
+}
+
+async function startRip(d, mode){
+  const k = keyOf(d), sel = selOf(d), names = ui.names[k]||{};
+  const titles = mode==='mkv' ? d.disc.titles.filter(t=>sel[t.id]).map(t => ({id:t.id, name:(names[t.id] ?? t.name ?? '').trim()})) : [];
+  if(mode==='mkv' && !titles.length){ alert('Bitte mindestens einen Titel auswählen.'); return; }
+  await api(`/api/drives/${d.id}/rip`, 'POST', {titles, folder: ui.folder[k]||'', mode});
+}
+
+function updateDynamic(el, d){
+  const prog = el.querySelector('.prog');
+  if(prog){
+    const j = d.job;
+    if(j){
+      const pct = j.kind==='scan' ? Math.round((j.total||0)*100) : Math.round((j.overall||0)*100);
+      const el_s = Math.max(1, S.now - j.started);
+      let stats = `<span>Laufzeit <b>${fmtD(el_s)}</b></span>`;
+      if(j.kind!=='scan' && j.overall>0.01){
+        stats += `<span>Restzeit ca. <b>${fmtD(el_s/j.overall-el_s)}</b></span>`;
+        if(j.bytes) stats += `<span>Tempo <b>${fmtB(j.overall*j.bytes/el_s)}/s</b></span>`;
+      }
+      if(j.kind==='rip') stats += `<span>Titel <b>${j.index}/${j.count}</b></span>`;
+      const label = j.kind==='scan' ? (j.text||'Analysiere …') : (j.kind==='backup' ? (j.text||'Backup') : `${esc(j.title||'')} – ${esc(j.text||'')}`);
+      const indet = (j.kind==='scan' ? !(j.total>0) : false);
+      prog.innerHTML = `<div style="margin-bottom:16px"><div class="row" style="justify-content:space-between;margin-bottom:6px"><b>${label}</b><span><b>${j.kind==='scan'&&indet?'':pct+' %'}</b> <button class="sm danger" data-act="cancel">Abbrechen</button></span></div>
+        <div class="bar ${indet?'indet':''}"><div style="width:${pct}%"></div></div>
+        ${j.sub?`<div class="hint" style="margin-top:6px">${esc(j.sub)}</div>`:''}<div class="stats">${stats}</div>
+        ${j.done&&j.done.length?`<div class="hint" style="margin-top:8px">Fertig: ${j.done.map(x=>esc(x.name)).join(', ')}</div>`:''}</div>`;
+    } else prog.innerHTML = '';
+  }
+  const lb = el.querySelector('.logbox');
+  if(lb){
+    const atEnd = lb.scrollTop + lb.clientHeight >= lb.scrollHeight - 12;
+    lb.innerHTML = d.log.map(l=>`<div class="${l.l}"><span class="t">${l.t}</span> ${esc(l.m)}</div>`).join('') || '<span class="t">noch keine Meldungen</span>';
+    if(atEnd) lb.scrollTop = lb.scrollHeight;
+  }
+  const sm = el.querySelector('[data-summary]');
+  if(sm && d.disc){
+    const sel = selOf(d), ts = d.disc.titles.filter(t=>sel[t.id]);
+    const bytes = ts.reduce((a,t)=>a+t.bytes,0);
+    sm.innerHTML = `<b>${ts.length}</b> Titel · <b>${fmtB(bytes)}</b> → ${esc(S.output.dir)}/${esc(ui.folder[keyOf(d)]||'')}`;
+    const rip = el.querySelector('[data-act="rip"]'); if(rip && !d.job) rip.disabled = !ts.length;
+  }
+}
+
+// ---------- Dateien
+async function loadFiles(){
+  try{
+    const r = await (await fetch('/api/files')).json();
+    $('#nofiles').hidden = r.files.length>0;
+    $('#files').innerHTML = r.files.map(f => `<tr><td>${esc(f.path)}</td><td class="sz">${fmtB(f.size)}</td><td class="sz hide-s">${ago(f.mtime)}</td>
+      <td class="a"><a class="btn sm" href="/api/download?path=${encodeURIComponent(f.path)}">Download</a> <button class="sm danger" data-del="${esc(f.path)}">Löschen</button></td></tr>`).join('');
+  }catch{}
+}
+$('#files').onclick = async e => {
+  const p = e.target.dataset.del; if(!p) return;
+  if(confirm(`„${p}“ endgültig löschen?`)){ await fetch('/api/files?path='+encodeURIComponent(p), {method:'DELETE'}); loadFiles(); }
+};
+$('#files-reload').onclick = loadFiles;
+
+// ---------- Einstellungen
+const dlg = $('#dlg');
+$('#btn-set').onclick = () => {
+  const s = S.settings;
+  $('#s-auto_scan').checked = s.auto_scan; $('#s-auto_eject').checked = s.auto_eject; $('#s-minlength').value = s.minlength;
+  $('#s-audio_langs').value = s.audio_langs; $('#s-sub_langs').value = s.sub_langs; $('#s-key').value = s.key;
+  const k = S.key;
+  $('#keystate').innerHTML = k.custom ? 'Eigener Key wird verwendet.' : k.beta ? `Öffentlicher Beta-Key aktiv (geholt ${ago(k.fetched)}). <button type="button" class="sm" id="keyref">Neu holen</button>` : `Kein Key vorhanden${k.error?': '+esc(k.error):''}. <button type="button" class="sm" id="keyref">Beta-Key holen</button>`;
+  const kr = $('#keyref'); if(kr) kr.onclick = async () => { kr.disabled=true; try{ await api('/api/key/refresh'); }catch{} dlg.close(); };
+  dlg.showModal();
+};
+$('#s-cancel').onclick = () => dlg.close();
+$('#setform').onsubmit = async e => {
+  await api('/api/settings', 'POST', {
+    auto_scan: $('#s-auto_scan').checked, auto_eject: $('#s-auto_eject').checked, minlength: +$('#s-minlength').value || 0,
+    audio_langs: $('#s-audio_langs').value, sub_langs: $('#s-sub_langs').value, key: $('#s-key').value });
+};
+
+connect(); loadFiles(); setInterval(loadFiles, 60000);
+</script>
+</body>
+</html>
