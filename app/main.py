@@ -601,19 +601,36 @@ async def startup():
     load_settings()
     asyncio.create_task(poller())
     asyncio.create_task(key_refresher())
+    asyncio.create_task(output_refresher())
 
 
 # ---------------------------------------------------------------- API
-def snapshot():
+out_cache = {"dir": str(OUT_FALLBACK), "mounted": False, "free": 0, "stalled": False}
+
+
+def _probe_output():
     d, mounted = out_dir()
-    try:
-        free = shutil.disk_usage(d).free
-    except OSError:
-        free = 0
+    return {"dir": str(d), "mounted": mounted, "free": shutil.disk_usage(d).free, "stalled": False}
+
+
+async def output_refresher():
+    """Ausgabeziel im Hintergrund prüfen – ein hängendes Netzlaufwerk darf die Oberfläche nicht blockieren."""
+    while True:
+        try:
+            out_cache.update(await asyncio.wait_for(asyncio.to_thread(_probe_output), 8))
+        except asyncio.TimeoutError:
+            out_cache["stalled"] = True
+        except OSError:
+            out_cache["stalled"] = True
+        await asyncio.sleep(5)
+
+
+def snapshot():
     return {
         "drives": [dr.public() for dr in drives.values()],
         "settings": settings,
-        "output": {"dir": str(d), "mounted": mounted, "preferred": str(OUT_PREFERRED), "free": free},
+        "output": {"dir": out_cache["dir"], "mounted": out_cache["mounted"], "preferred": str(OUT_PREFERRED),
+                   "free": out_cache["free"], "stalled": out_cache["stalled"]},
         "key": {"custom": bool(settings["key"].strip()), "beta": bool(beta["key"]), "fetched": beta["fetched"], "error": beta["error"]},
         "now": time.time(),
     }

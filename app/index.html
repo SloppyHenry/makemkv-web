@@ -157,7 +157,7 @@ function render(){
   const o = S.output;
   $('#outchip').innerHTML = `<span class="dot ${o.mounted?'ok':'warn'}"></span> Ziel <b>${esc(o.dir)}</b> · ${fmtB(o.free)} frei`;
   $('#filesdir').textContent = o.dir;
-  $('#outwarn').innerHTML = o.mounted ? '' : `<div class="warn-box">⚠ ${esc(o.preferred)} ist nicht eingehängt – es wird vorübergehend lokal auf diesem Server gespeichert (${esc(o.dir)}).</div>`;
+  $('#outwarn').innerHTML = o.stalled ? `<div class="warn-box">⚠ Das Ziel ${esc(o.dir)} antwortet nur sehr langsam (Netzwerk/NAS überlastet?). Rips laufen dadurch langsamer.</div>` : o.mounted ? '' : `<div class="warn-box">⚠ ${esc(o.preferred)} ist nicht eingehängt – es wird vorübergehend lokal auf diesem Server gespeichert (${esc(o.dir)}).</div>`;
 
   const host = $('#drives');
   const ids = S.drives.map(d => d.id);
