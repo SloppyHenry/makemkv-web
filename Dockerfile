@@ -22,7 +22,7 @@ RUN set -e; \
 
 FROM debian:trixie-slim
 RUN apt-get update && apt-get install -y --no-install-recommends \
-      python3 python3-pip python3-venv ca-certificates curl libssl3t64 libexpat1 zlib1g libavcodec61 libavutil59 \
+      python3 python3-pip python3-venv ca-certificates curl libssl3t64 libexpat1 zlib1g ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=build /usr/bin/makemkvcon /usr/bin/makemkvcon
 COPY --from=build /usr/lib/libmakemkv.so.1 /usr/lib/libdriveio.so.0 /usr/lib/libmmbd.so.0 /usr/lib/

@@ -83,6 +83,12 @@ dialog h3{margin:0}
 label.f{display:grid;gap:4px;font-size:13px;color:var(--mute)}
 label.chk{display:flex;gap:10px;align-items:center;color:var(--ink);font-size:15px}
 .hint{font-size:12px;color:var(--mute)}
+.conv{margin-top:16px;padding:14px;border:1px solid var(--line);border-radius:10px;background:var(--bg)}
+.conv label.chk{margin:0}
+.cvgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px 14px;margin-top:12px}
+.cvgrid .wide{grid-column:1/-1}
+select{font:inherit;color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:8px;padding:6px 8px;width:100%}
+@media(max-width:700px){.cvgrid{grid-template-columns:1fr 1fr}}
 @media(max-width:700px){.hide-s{display:none}main{padding:12px}}
 </style>
 </head>
@@ -97,6 +103,10 @@ label.chk{display:flex;gap:10px;align-items:center;color:var(--ink);font-size:15
 <div id="outwarn"></div>
 <main>
   <div id="drives"></div>
+  <section class="card files" id="cvcard" hidden>
+    <div class="hd"><h2>Konvertierung</h2><span class="chip">x265 10-bit · CPU</span></div>
+    <div class="bd" style="padding:6px 10px 10px"><table><tbody id="cvlist"></tbody></table></div>
+  </section>
   <section class="card files" id="upcard" hidden>
     <div class="hd"><h2>Übertragung ins Ziel</h2><span class="chip" id="stagechip"></span></div>
     <div class="bd" style="padding:6px 10px 10px"><table><tbody id="uplist"></tbody></table></div>
@@ -135,7 +145,7 @@ const fmtD = s => { s=Math.max(0,Math.round(s)); const h=Math.floor(s/3600),m=Ma
 const ago = ts => { const s=Date.now()/1000-ts; return s<90?'gerade eben':s<5400?`vor ${Math.round(s/60)} Min.`:s<172800?`vor ${Math.round(s/3600)} Std.`:`vor ${Math.round(s/86400)} Tagen`; };
 
 let S = null;                       // letzter Serverstand
-const ui = { sel:{}, names:{}, folder:{}, open:{}, sig:{}, wasBusy:{} };
+const ui = { sel:{}, names:{}, folder:{}, open:{}, sig:{}, wasBusy:{}, conv:{} };
 const keyOf = d => `${d.id}:${d.scan_id}`;
 
 async function api(path, method='POST', body){
@@ -181,6 +191,7 @@ function render(){
     const was = ui.wasBusy[d.id]; ui.wasBusy[d.id] = !!d.job;
     if(was && !d.job) loadFiles();
   }
+  renderConversions();
   renderUploads();
   document.title = anyPct!==null ? `${anyPct}% – MakeMKV Web` : 'MakeMKV Web';
 }
@@ -194,6 +205,31 @@ function suggestName(disc, t){
   const base = (t.name || '').trim() || `Titel ${t.id+1}`;
   const dup = disc.titles.filter(x => (x.name||'').trim() === base).length > 1;
   return dup ? `${base} - Titel ${String(t.id+1).padStart(2,'0')}` : base;
+}
+// Konvertierungs-Preset je Disc-Art (Blu-ray vorausgewählt), im Browser pro Rip änderbar
+const CV_FALLBACK = {convert:false, rf:21, preset:'slow', tune:'none', extra:'aq-mode=3:no-sao=1', audio:'copy'};
+const discKind = d => /blu/i.test(d.disc.type||'') ? 'bluray' : 'dvd';
+function convOf(d){
+  const k = keyOf(d);
+  if(!ui.conv[k]) ui.conv[k] = {...CV_FALLBACK, ...((S.settings.presets||{})[discKind(d)]||{})};
+  return ui.conv[k];
+}
+const opt = (v, cur, label) => `<option value="${v}" ${String(cur)===String(v)?'selected':''}>${label||v}</option>`;
+function convHtml(d, busy){
+  const c = convOf(d), dis = busy?'disabled':'';
+  const kind = discKind(d)==='bluray' ? 'Blu-rays' : 'DVDs';
+  return `<div class="conv">
+    <label class="chk"><input type="checkbox" data-cv="convert" ${c.convert?'checked':''} ${dis}> <b>Nach dem Rippen konvertieren</b> <span class="hint">x265 10-bit · deutlich kleinere Dateien, sieht aus wie das Original</span></label>
+    <div class="cvgrid" ${c.convert?'':'hidden'}>
+      <label class="f">Qualität (RF) <input type="number" min="14" max="30" step="1" data-cv="rf" value="${c.rf}" ${dis}></label>
+      <label class="f">Preset <select data-cv="preset" ${dis}>${['veryfast','fast','medium','slow','slower'].map(x=>opt(x,c.preset)).join('')}</select></label>
+      <label class="f">Tune <select data-cv="tune" ${dis}>${opt('none',c.tune,'keins')}${opt('grain',c.tune,'grain (körnige Filme)')}${opt('film',c.tune,'film')}${opt('animation',c.tune,'animation')}</select></label>
+      <label class="f">Audio <select data-cv="audio" ${dis}>${opt('copy',c.audio,'Original (Passthrough)')}${opt('ac3',c.audio,'AC3 5.1, 640 kbps')}${opt('eac3',c.audio,'E-AC3 5.1, 640 kbps')}${opt('opus',c.audio,'Opus (nicht überall abspielbar)')}</select></label>
+      <label class="f wide">Zusatz-Optionen x265 <input type="text" data-cv="extra" value="${esc(c.extra)}" placeholder="z. B. aq-mode=3:no-sao=1" ${dis}></label>
+      <div class="hint wide">RF 20 ≈ praktisch transparent · RF 21–22 = guter Kompromiss. Software-Encoding (CPU), Untertitel (PGS) und Kapitel bleiben unverändert, schwarze Balken werden automatisch entfernt.
+        <b>Achtung:</b> x265 rechnet nur auf der CPU. Auf schwachen Rechnern (z. B. 2 Kerne) braucht ein Film mit „slow“ über einen Tag, „fast“ ist etwa 5× schneller. Rippen und Übertragung laufen währenddessen weiter.</div>
+      <div class="wide"><button class="sm" data-act="savepreset" ${dis}>Als Standard für ${kind} speichern</button></div>
+    </div></div>`;
 }
 function selOf(d){
   const k = keyOf(d);
@@ -257,6 +293,7 @@ function discHtml(d, busy){
       <button class="sm" data-pick="main" ${busy?'disabled':''}>Nur lange</button>
       <button class="sm" data-pick="none" ${busy?'disabled':''}>Keine</button></div>
     <table><thead><tr><th></th><th>#</th><th>Dateiname</th><th>Dauer</th><th>Größe</th><th class="hide-s">Kapitel</th><th class="hide-s">Spuren</th></tr></thead><tbody>${rows}</tbody></table>
+    ${convHtml(d, busy)}
     <div class="sum"><div class="row" style="flex:1;min-width:240px"><label class="hint" for="folder">Ordner</label><input type="text" id="folder" data-folder value="${esc(ui.folder[k])}" ${busy?'disabled':''} style="max-width:380px"></div>
       <div class="info" data-summary></div></div>
     <div class="row" style="margin-top:14px;justify-content:flex-end">
@@ -275,6 +312,7 @@ function wire(el, d){
     else if(b.dataset.act==='close') api(`/api/drives/${id}/close`);
     else if(b.dataset.act==='cancel'){ if(confirm('Laufenden Vorgang abbrechen?')) api(`/api/drives/${id}/cancel`); }
     else if(b.dataset.act==='rip') startRip(d, 'mkv');
+    else if(b.dataset.act==='savepreset'){ await api('/api/settings','POST',{presets:{[discKind(d)]: convOf(d)}}); b.textContent='Gespeichert ✓'; }
     else if(b.dataset.act==='backup'){ if(confirm('Komplettes entschlüsseltes Disc-Backup erstellen? Das dauert länger und braucht den vollen Platz der Disc.')) startRip(d,'backup'); }
     else if(b.dataset.pick){
       const sel = selOf(d), main = mainTitleIds(d.disc);
@@ -288,6 +326,12 @@ function wire(el, d){
     if(t.dataset.sel!==undefined){ selOf(d)[t.dataset.sel]=t.checked; t.closest('tr').classList.toggle('off', !t.checked); updateDynamic(el,d); }
     else if(t.dataset.name!==undefined){ (ui.names[k] ||= {})[t.dataset.name]=t.value; }
     else if(t.dataset.folder!==undefined){ ui.folder[k]=t.value; updateDynamic(el,d); }
+    else if(t.dataset.cv!==undefined){
+      const c = convOf(d), f = t.dataset.cv;
+      c[f] = t.type==='checkbox' ? t.checked : f==='rf' ? (+t.value||21) : t.value;
+      if(f==='convert'){ const g = el.querySelector('.cvgrid'); if(g) g.hidden = !t.checked; }
+      updateDynamic(el, d);
+    }
   };
 }
 
@@ -295,7 +339,8 @@ async function startRip(d, mode){
   const k = keyOf(d), sel = selOf(d), names = ui.names[k]||{};
   const titles = mode==='mkv' ? d.disc.titles.filter(t=>sel[t.id]).map(t => ({id:t.id, name:(names[t.id] ?? suggestName(d.disc, t)).trim()})) : [];
   if(mode==='mkv' && !titles.length){ alert('Bitte mindestens einen Titel auswählen.'); return; }
-  await api(`/api/drives/${d.id}/rip`, 'POST', {titles, folder: ui.folder[k]||'', mode});
+  const cv = convOf(d);
+  await api(`/api/drives/${d.id}/rip`, 'POST', {titles, folder: ui.folder[k]||'', mode, convert: (mode==='mkv' && cv.convert) ? cv : null});
 }
 
 function updateDynamic(el, d){
@@ -329,10 +374,29 @@ function updateDynamic(el, d){
   if(sm && d.disc){
     const sel = selOf(d), ts = d.disc.titles.filter(t=>sel[t.id]);
     const bytes = ts.reduce((a,t)=>a+t.bytes,0);
-    sm.innerHTML = `<b>${ts.length}</b> Titel · <b>${fmtB(bytes)}</b> → ${esc(S.output.dir)}/${esc(ui.folder[keyOf(d)]||'')}`;
+    const cvOn = convOf(d).convert;
+    sm.innerHTML = `<b>${ts.length}</b> Titel · <b>${fmtB(bytes)}</b>${cvOn?' <span class="hint">(Rohdaten, wird konvertiert)</span>':''} → ${esc(S.output.dir)}/${esc(ui.folder[keyOf(d)]||'')}`;
     const rip = el.querySelector('[data-act="rip"]'); if(rip && !d.job) rip.disabled = !ts.length;
   }
 }
+
+// ---------- Konvertierung
+function renderConversions(){
+  const list = S.conversions || [];
+  $('#cvcard').hidden = !list.length;
+  const label = {queued:'wartet', running:'konvertiert', done:'fertig ✓', skipped:'übersprungen (Original)', error:'Fehler (Original)'};
+  $('#cvlist').innerHTML = list.map(c => {
+    const pct = c.status==='done' ? 100 : Math.round((c.pct||0)*100);
+    const saved = c.status==='done' && c.size_in ? ` <b style="color:var(--ok)">−${Math.round((1-c.size_out/c.size_in)*100)} %</b>` : '';
+    const sizes = c.status==='done' ? `${fmtB(c.size_in)} → ${fmtB(c.size_out)}${saved}` : c.status==='running' && c.size_out ? `${fmtB(c.size_in)} → ${fmtB(c.size_out)} …` : fmtB(c.size_in);
+    const run = c.status==='running' ? `<div class="hint">${c.fps?c.fps.toFixed(1)+' fps · ':''}${c.speed?c.speed.toFixed(2)+'× Echtzeit · ':''}${c.eta?'Restzeit ca. '+fmtD(c.eta):'berechne Restzeit …'} · RF ${c.cfg.rf}, ${esc(c.cfg.preset)}</div>` : '';
+    const skip = (c.status==='queued'||c.status==='running') ? `<button class="sm" data-skip="${c.id}" title="Konvertierung abbrechen und das Original unverändert übertragen">Überspringen</button>` : '';
+    return `<tr><td>${esc(c.name)}${run}${c.error?`<div class="hint" style="color:var(--err)">${esc(c.error)}</div>`:''}</td>
+      <td class="sz">${sizes}</td><td style="width:170px"><div class="bar thin"><div style="width:${pct}%"></div></div></td>
+      <td class="sz" style="min-width:150px">${label[c.status]||c.status}${c.status==='running'?' '+pct+' %':''}</td><td class="a">${skip}</td></tr>`;
+  }).join('');
+}
+$('#cvlist').onclick = e => { const id = e.target.dataset.skip; if(id && confirm('Konvertierung abbrechen? Das Original wird unverändert übertragen.')) api(`/api/conversions/${id}/skip`); };
 
 // ---------- Übertragung (Zwischenspeicher -> Ziel)
 function renderUploads(){
