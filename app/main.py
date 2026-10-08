@@ -7,6 +7,7 @@
 """
 import asyncio
 import base64
+import copy
 import secrets
 import fcntl
 import glob
@@ -32,6 +33,11 @@ CONFIG = DATA / "config.json"
 BETAKEY = DATA / "betakey.json"
 FORUM_URL = "https://forum.makemkv.com/forum/viewtopic.php?f=5&t=1053"
 
+X265_PRESETS = ("ultrafast", "superfast", "veryfast", "faster", "fast", "medium", "slow", "slower", "veryslow")
+# Vorgaben für „sieht aus wie das Original, braucht aber nur einen Bruchteil des Platzes“
+CONVERT_DEFAULT = {"convert": False, "rf": 21, "preset": "slow", "tune": "none", "extra": "aq-mode=3:no-sao=1", "audio": "copy"}
+PRESET_DEFAULTS = {"bluray": {**CONVERT_DEFAULT, "convert": True}, "dvd": dict(CONVERT_DEFAULT)}
+
 DEFAULTS = {
     "minlength": 120,      # Sekunden, kürzere Titel werden ignoriert
     "auto_scan": True,     # eingelegte Disc sofort analysieren
@@ -39,6 +45,7 @@ DEFAULTS = {
     "audio_langs": "",     # z.B. "deu,eng" – leer = alle
     "sub_langs": "",       # z.B. "deu"     – leer = alle
     "key": "",             # eigener MakeMKV-Key; leer = öffentlicher Beta-Key
+    "presets": PRESET_DEFAULTS,  # Konvertierungs-Preset je Disc-Art (in der Oberfläche änderbar)
 }
 
 CDROM_EJECT, CDROM_CLOSE_TRAY, CDROM_DRIVE_STATUS = 0x5309, 0x5319, 0x5326
@@ -64,18 +71,40 @@ async def basic_auth(request: Request, call_next):
         if not ok:
             return Response(status_code=401, headers={"WWW-Authenticate": 'Basic realm="MakeMKV-Web"'})
     return await call_next(request)
-settings = dict(DEFAULTS)
+settings = copy.deepcopy(DEFAULTS)
 drives: dict[str, "Drive"] = {}
 clients: set[asyncio.Queue] = set()
 beta = {"key": "", "fetched": 0, "error": ""}
 
 
 # ---------------------------------------------------------------- Hilfsfunktionen
+def clean_convert(c: dict) -> dict:
+    """Prüft/ergänzt eine Konvertierungs-Konfiguration (kommt aus dem Browser)."""
+    d = dict(CONVERT_DEFAULT)
+    c = c if isinstance(c, dict) else {}
+    d["convert"] = bool(c.get("convert", d["convert"]))
+    try:
+        d["rf"] = max(14, min(30, int(c.get("rf", d["rf"]))))
+    except (TypeError, ValueError):
+        pass
+    if c.get("preset") in X265_PRESETS:
+        d["preset"] = c["preset"]
+    if c.get("tune") in ("none", "grain", "film", "animation"):
+        d["tune"] = c["tune"]
+    extra = str(c.get("extra", d["extra"])).strip()
+    d["extra"] = extra if re.fullmatch(r"[A-Za-z0-9_=:.,\-]*", extra) else CONVERT_DEFAULT["extra"]
+    if c.get("audio") in ("copy", "ac3", "eac3", "opus"):
+        d["audio"] = c["audio"]
+    return d
+
+
 def load_settings():
     try:
         settings.update({k: v for k, v in json.loads(CONFIG.read_text()).items() if k in DEFAULTS})
     except (OSError, ValueError):
         pass
+    saved = settings.get("presets") if isinstance(settings.get("presets"), dict) else {}
+    settings["presets"] = {k: clean_convert({**PRESET_DEFAULTS[k], **(saved.get(k) or {})}) for k in PRESET_DEFAULTS}
     try:
         beta.update(json.loads(BETAKEY.read_text()))
     except (OSError, ValueError):
@@ -428,6 +457,7 @@ class RipReq(BaseModel):
     titles: list[RipTitle] = []
     folder: str = ""
     mode: str = "mkv"    # mkv | backup
+    convert: dict | None = None   # Konvertierung nach dem Rippen (nur mkv)
 
 
 def unique_path(p: Path) -> Path:
@@ -541,7 +571,20 @@ async def upload_worker():
 def recover_staging():
     """Beim Start: unfertige Arbeitsdateien verwerfen, fertige (noch nicht übertragene) erneut einreihen."""
     shutil.rmtree(WORK, ignore_errors=True)
+    shutil.rmtree(CONV_WORK, ignore_errors=True)
     WORK.mkdir(parents=True, exist_ok=True)
+    if CONVERT.exists():                      # fertig gerippt, Konvertierung war noch offen
+        for folder in sorted(CONVERT.iterdir()):
+            for f in sorted(folder.glob("*.mkv")) if folder.is_dir() else []:
+                side = f.with_name(f.name + ".json")
+                try:
+                    cfg = clean_convert(json.loads(side.read_text()))
+                except (OSError, ValueError):
+                    cfg = None
+                if cfg and cfg["convert"]:
+                    enqueue_convert(f, folder.name, cfg)
+                else:
+                    release_original({"src": str(f), "folder": folder.name, "dev": ""})
     READY.mkdir(parents=True, exist_ok=True)
     for folder in sorted(READY.iterdir()):
         if folder.is_dir():
@@ -553,12 +596,215 @@ def recover_staging():
                 folder.rmdir()
 
 
+
+# ---------------------------------------------------------------- Konvertierung (ffmpeg, x265 10-bit, Software)
+CONVERT, CONV_WORK = STAGING / "convert", STAGING / ".conv"
+conversions: list[dict] = []
+convert_queue: asyncio.Queue = asyncio.Queue()
+conv_procs: dict[int, asyncio.subprocess.Process] = {}
+_cv_seq = 0
+CV_ACTIVE = ("queued", "running")
+
+
+class SkipConversion(Exception):
+    pass
+
+
+def enqueue_convert(src: Path, folder: str, cfg: dict, dev: str = ""):
+    global _cv_seq
+    _cv_seq += 1
+    src.with_name(src.name + ".json").write_text(json.dumps(cfg))
+    conversions.append({"id": _cv_seq, "name": f"{folder}/{src.name}", "folder": folder, "src": str(src), "size_in": src.stat().st_size,
+                        "size_out": 0, "status": "queued", "pct": 0.0, "fps": 0.0, "speed": 0.0, "eta": 0, "error": "",
+                        "cfg": cfg, "dev": dev, "t": time.time(), "started": 0})
+    convert_queue.put_nowait(conversions[-1])
+    broadcast()
+
+
+async def probe(path: Path) -> dict:
+    p = await asyncio.create_subprocess_exec("ffprobe", "-v", "error", "-print_format", "json", "-show_format", "-show_streams", str(path),
+                                             stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+    out, err = await p.communicate()
+    if p.returncode:
+        raise OSError("ffprobe: " + err.decode(errors="replace")[-300:])
+    return json.loads(out)
+
+
+async def detect_crop(src: Path, dur: float, w: int, h: int):
+    """Schwarze Balken automatisch erkennen (5 Stichproben, größter gemeinsamer Bildbereich)."""
+    boxes = []
+    for f in (0.1, 0.3, 0.5, 0.7, 0.9):
+        p = await asyncio.create_subprocess_exec("nice", "-n", "10", "ffmpeg", "-hide_banner", "-nostdin", "-ss", str(int(dur * f)), "-i", str(src),
+                                                 "-t", "8", "-vf", "cropdetect=limit=24:round=2:reset=0", "-an", "-sn", "-f", "null", "-",
+                                                 stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.PIPE)
+        _, err = await p.communicate()
+        m = re.findall(r"crop=(\d+):(\d+):(\d+):(\d+)", err.decode(errors="replace"))
+        if m:
+            boxes.append(tuple(int(x) for x in m[-1]))
+    if not boxes:
+        return None
+    x1, y1 = min(b[2] for b in boxes), min(b[3] for b in boxes)
+    x2, y2 = max(b[2] + b[0] for b in boxes), max(b[3] + b[1] for b in boxes)
+    cw, ch = (x2 - x1) // 2 * 2, (y2 - y1) // 2 * 2
+    if cw <= 0 or ch <= 0 or (cw, ch) == (w, h) or cw * ch < w * h * 0.5:
+        return None
+    return f"crop={cw}:{ch}:{x1}:{y1}"
+
+
+def ffmpeg_args(src: Path, out: Path, cfg: dict, info: dict, crop) -> list[str]:
+    a = ["ffmpeg", "-hide_banner", "-nostdin", "-y", "-i", str(src), "-map", "0:v:0", "-map", "0:a?", "-map", "0:s?", "-map_chapters", "0"]
+    if crop:
+        a += ["-vf", crop]
+    a += ["-c:v", "libx265", "-preset", cfg["preset"], "-crf", str(cfg["rf"]), "-pix_fmt", "yuv420p10le", "-fps_mode", "cfr"]
+    if cfg["tune"] != "none":
+        a += ["-tune", cfg["tune"]]
+    a += ["-x265-params", "log-level=error" + (":" + cfg["extra"] if cfg["extra"] else "")]
+    auds = [x for x in info["streams"] if x["codec_type"] == "audio"]
+    if cfg["audio"] == "copy" or not auds:
+        a += ["-c:a", "copy"]
+    else:
+        for i, st in enumerate(auds):
+            ch = int(st.get("channels") or 2)
+            if cfg["audio"] == "opus":
+                layout = {1: "mono", 2: "stereo", 6: "5.1", 8: "7.1"}.get(ch)
+                a += [f"-c:a:{i}", "libopus", f"-b:a:{i}", "128k" if ch <= 2 else "320k" if ch <= 6 else "448k"]
+                if layout:
+                    a += [f"-filter:a:{i}", f"aformat=channel_layouts={layout}"]
+            else:
+                if ch > 6:
+                    a += [f"-ac:a:{i}", "6"]
+                a += [f"-c:a:{i}", cfg["audio"], f"-b:a:{i}", "192k" if ch <= 2 else "640k"]
+    a += ["-c:s", "copy", "-progress", "pipe:1", "-nostats", str(out)]
+    return a
+
+
+async def convert_one(item: dict) -> Path:
+    src, cfg = Path(item["src"]), item["cfg"]
+    info = await probe(src)
+    dur = float(info["format"]["duration"])
+    v = next(x for x in info["streams"] if x["codec_type"] == "video")
+    item.update(status="running", pct=0.0, fps=0.0, speed=0.0, eta=0, started=time.time())
+    broadcast()
+    crop = await detect_crop(src, dur, int(v["width"]), int(v["height"]))
+    if item["status"] == "skipped":
+        raise SkipConversion()
+    CONV_WORK.mkdir(parents=True, exist_ok=True)
+    out = CONV_WORK / f"{item['id']}.mkv"
+    proc = await asyncio.create_subprocess_exec("nice", "-n", "10", *ffmpeg_args(src, out, cfg, info, crop),
+                                                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, limit=2**20)
+    conv_procs[item["id"]] = proc
+    tail: deque = deque(maxlen=12)
+
+    async def read_err():
+        async for raw in proc.stderr:
+            tail.append(raw.decode(errors="replace").strip())
+
+    err_task = asyncio.create_task(read_err())
+    last = 0.0
+    try:
+        async for raw in proc.stdout:
+            k, _, val = raw.decode(errors="replace").strip().partition("=")
+            if k == "out_time_us" and val.lstrip("-").isdigit():
+                t = int(val) / 1e6
+                item["pct"] = max(0.0, min(0.99, t / dur))
+                if item["speed"] > 0:
+                    item["eta"] = max(0, (dur - t) / item["speed"])
+            elif k == "fps":
+                item["fps"] = float(val or 0)
+            elif k == "speed":
+                try:
+                    item["speed"] = float(val.rstrip("x") or 0)
+                except ValueError:
+                    pass
+            elif k == "total_size" and val.isdigit():
+                item["size_out"] = int(val)
+            if time.monotonic() - last > 0.7:
+                last = time.monotonic()
+                broadcast()
+        rc = await proc.wait()
+    finally:
+        conv_procs.pop(item["id"], None)
+        await err_task
+    if item["status"] == "skipped":
+        out.unlink(missing_ok=True)
+        raise SkipConversion()
+    if rc != 0 or not out.exists():
+        out.unlink(missing_ok=True)
+        raise OSError("ffmpeg fehlgeschlagen: " + " | ".join(list(tail)[-4:]))
+    od = float((await probe(out))["format"]["duration"])
+    if abs(od - dur) > max(2.0, dur * 0.01):
+        out.unlink(missing_ok=True)
+        raise OSError(f"Ergebnis hat falsche Länge ({od:.0f}s statt {dur:.0f}s)")
+    return out
+
+
+def release_original(item: dict):
+    """Original unverändert in die Übertragung geben (Konvertierung übersprungen/fehlgeschlagen) – nichts geht verloren."""
+    src = Path(item["src"])
+    if src.exists():
+        rdir = READY / item["folder"]
+        rdir.mkdir(parents=True, exist_ok=True)
+        final = unique_path(rdir / src.name)
+        os.replace(src, final)
+        enqueue_upload(final, f"{item['folder']}/{final.name}", item["dev"])
+    src.with_name(src.name + ".json").unlink(missing_ok=True)
+    try:
+        src.parent.rmdir()
+    except OSError:
+        pass
+
+
+async def convert_worker():
+    while True:
+        item = await convert_queue.get()
+        dr = drives.get(item["dev"])
+        if item["status"] != "skipped":
+            for attempt in (1, 2):
+                try:
+                    out = await convert_one(item)
+                    src = Path(item["src"])
+                    rdir = READY / item["folder"]
+                    rdir.mkdir(parents=True, exist_ok=True)
+                    final = unique_path(rdir / src.name)
+                    os.replace(out, final)
+                    size_in = item["size_in"]
+                    src.unlink(missing_ok=True)
+                    src.with_name(src.name + ".json").unlink(missing_ok=True)
+                    try:
+                        src.parent.rmdir()
+                    except OSError:
+                        pass
+                    item.update(status="done", pct=1.0, eta=0, size_out=final.stat().st_size, t=time.time())
+                    if dr:
+                        dr.add_log(f"Konvertiert: {final.name} ({fmt_bytes(size_in)} → {fmt_bytes(item['size_out'])})", "ok")
+                    enqueue_upload(final, f"{item['folder']}/{final.name}", item["dev"])
+                    break
+                except SkipConversion:
+                    break
+                except Exception as e:  # noqa: BLE001
+                    item["error"] = str(e)[:400]
+                    if dr:
+                        dr.add_log(f"Konvertierung von {item['name']} fehlgeschlagen: {item['error']}", "error")
+                    if attempt == 1:
+                        item.update(status="queued", pct=0.0)
+                        broadcast()
+        if item["status"] != "done":
+            was_skipped = item["status"] == "skipped"
+            release_original(item)
+            item["status"] = "skipped" if was_skipped else "error"
+            if not was_skipped:
+                item["error"] += " – Original wird unverändert übertragen"
+            if dr:
+                dr.add_log(f"{item['name']}: Original wird unverändert übertragen", "info")
+        broadcast()
+
+
 async def wait_for_space(drive: Drive, job: dict, need: int):
     """Wartet, bis im Zwischenspeicher Platz ist (laufende Übertragungen geben Platz frei)."""
     while staging_free() < need:
-        if not any(u["status"] in ACTIVE for u in uploads):
+        if not any(u["status"] in ACTIVE for u in uploads) and not any(c["status"] in CV_ACTIVE for c in conversions):
             raise OSError(f"Zu wenig Platz im Zwischenspeicher ({STAGING}): {fmt_bytes(staging_free())} frei, {fmt_bytes(need)} nötig")
-        job.update(text="Warte auf Übertragung (Platz im Zwischenspeicher) …", cur=0, total=0)
+        job.update(text="Warte auf Konvertierung/Übertragung (Platz im Zwischenspeicher) …", cur=0, total=0)
         broadcast()
         if drive.cancel:
             return
@@ -570,6 +816,7 @@ async def do_rip(drive: Drive, req: RipReq, dest: Path):
     by_id = {t["id"]: t for t in disc["titles"]}
     todo = [t for t in req.titles if t.id in by_id]
     backup = req.mode == "backup"
+    cfg = clean_convert(req.convert) if (req.convert and not backup and req.convert.get("convert")) else None
     folder = dest.name
     total_bytes = sum(by_id[t.id]["bytes"] for t in todo) or 1
     job = {"kind": "backup" if backup else "rip", "text": "Starte …", "sub": "", "cur": 0, "total": 0,
@@ -650,6 +897,17 @@ async def do_rip(drive: Drive, req: RipReq, dest: Path):
                     continue
                 f = new[0]
                 want = safe_name(t.name, "") if t.name.strip() else ""
+                if cfg:                       # erst konvertieren, dann übertragen
+                    cdir = CONVERT / folder
+                    cdir.mkdir(parents=True, exist_ok=True)
+                    final = unique_path(cdir / ((want or f.stem) + ".mkv"))
+                    os.replace(f, final)
+                    done_bytes += info["bytes"]
+                    job["overall"] = min(1.0, done_bytes / total_bytes)
+                    job["done"].append({"name": final.name, "bytes": final.stat().st_size})
+                    drive.add_log(f"Fertig gerippt: {final.name} ({fmt_bytes(final.stat().st_size)}) – Konvertierung eingereiht", "ok")
+                    enqueue_convert(final, folder, cfg, drive.dev)
+                    continue
                 rdir = READY / folder
                 rdir.mkdir(parents=True, exist_ok=True)
                 final = unique_path(rdir / ((want or f.stem) + ".mkv"))
@@ -742,8 +1000,9 @@ async def startup():
     asyncio.create_task(poller())
     asyncio.create_task(key_refresher())
     asyncio.create_task(output_refresher())
-    await asyncio.to_thread(recover_staging)
+    recover_staging()
     asyncio.create_task(upload_worker())
+    asyncio.create_task(convert_worker())
 
 
 # ---------------------------------------------------------------- API
@@ -775,6 +1034,8 @@ def snapshot():
                    "free": out_cache["free"], "stalled": out_cache["stalled"]},
         "uploads": [{k: u[k] for k in ("id", "name", "size", "copied", "status", "error", "t")} for u in uploads
                     if not (u["status"] == "done" and time.time() - u["t"] > 600)],
+        "conversions": [{k: c[k] for k in ("id", "name", "size_in", "size_out", "status", "pct", "fps", "speed", "eta", "error", "cfg", "t", "started")}
+                        for c in conversions if not (c["status"] in ("done", "skipped") and time.time() - c["t"] > 900)],
         "staging": {"dir": str(STAGING), "free": shutil.disk_usage(STAGING).free if STAGING.exists() else 0},
         "key": {"custom": bool(settings["key"].strip()), "beta": bool(beta["key"]), "fetched": beta["fetched"], "error": beta["error"]},
         "now": time.time(),
@@ -844,7 +1105,8 @@ async def api_rip(n: str, req: RipReq):
         raise HTTPException(507, f"Zu wenig Speicherplatz in {base}")
     biggest = max([t["bytes"] for t in dr.disc["titles"] if t["id"] in {x.id for x in req.titles}] or [0]) if req.mode == "mkv" else 55 * 2**30
     uploading = sum(max(0, u["size"] - u["copied"]) for u in uploads if u["status"] in ACTIVE)
-    if staging_free() + uploading < biggest * 1.05:
+    factor = 1.7 if (req.convert and req.convert.get('convert') and req.mode == 'mkv') else 1.05
+    if staging_free() + uploading < biggest * factor:
         raise HTTPException(507, f"Zu wenig Platz im Zwischenspeicher {STAGING}")
     asyncio.create_task(do_rip(dr, req, dest))
     return {"ok": True, "dest": str(dest)}
@@ -891,17 +1153,37 @@ class SettingsReq(BaseModel):
     audio_langs: str | None = None
     sub_langs: str | None = None
     key: str | None = None
+    presets: dict | None = None
 
 
 @app.post("/api/settings")
 async def api_settings(req: SettingsReq):
     for k, v in req.model_dump(exclude_none=True).items():
+        if k == "presets":
+            for kind in PRESET_DEFAULTS:
+                if isinstance(v.get(kind), dict):
+                    settings["presets"][kind] = clean_convert({**settings["presets"][kind], **v[kind]})
+            continue
         if k == "minlength":
             v = max(0, min(int(v), 36000))
         settings[k] = v.strip() if isinstance(v, str) else v
     save_settings()
     broadcast()
     return settings
+
+
+@app.post("/api/conversions/{cid}/skip")
+async def api_conv_skip(cid: int):
+    item = next((c for c in conversions if c["id"] == cid), None)
+    if not item or item["status"] not in CV_ACTIVE:
+        raise HTTPException(404, "Keine laufende oder wartende Konvertierung")
+    item["status"] = "skipped"
+    item["t"] = time.time()
+    proc = conv_procs.get(cid)
+    if proc:
+        proc.terminate()
+    broadcast()
+    return {"ok": True}
 
 
 @app.post("/api/key/refresh")
