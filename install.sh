@@ -28,6 +28,13 @@ if [ "${ACCEPT_EULA:-}" != "yes" ]; then
 fi
 export ACCEPT_EULA=yes
 
+# laufenden Rip nicht durch einen Neustart des Containers abbrechen
+if [ "${FORCE:-0}" != "1" ] && curl -fs -m 5 "http://localhost:${PORT:-8780}/api/state" 2>/dev/null | grep -qE '"job": ?\{'; then
+  echo "Es läuft gerade ein Rip/Scan. Ein Update würde ihn abbrechen."
+  echo "Später erneut ausführen oder mit FORCE=1 ./install.sh erzwingen."
+  exit 1
+fi
+
 echo "→ Baue Image (lädt die neueste MakeMKV-Version) …"
 docker compose build --pull
 docker compose up -d
