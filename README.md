@@ -9,6 +9,7 @@ passiert im Browser.
 - Titelliste mit Dauer, Größe, Kapiteln, Spuren; Dateinamen und Zielordner editierbar
 - Rippen als MKV oder entschlüsseltes Disc-Backup, Fortschritt mit Restzeit, Abbrechen, Protokoll
 - Sprachfilter für Audio/Untertitel, Auto-Auswerfen, Dateiliste mit Download/Löschen
+- Zwischenspeicher: Jeder Titel wird zuerst lokal gerippt und nach seiner Fertigstellung im Hintergrund ins Ziel (z. B. NAS) übertragen, während schon der nächste Titel läuft – langsames Netz bremst das Rippen nicht
 - Ausgabe in ein eingehängtes Netzlaufwerk (NFS/SMB), sonst lokaler Fallback
 - Übersteht USB-Resets des Laufwerks (wartet und wiederholt den Schritt automatisch)
 
@@ -38,6 +39,7 @@ Aktualisieren (neue MakeMKV-Version, z. B. weil die Beta nach 60 Tagen abläuft)
 | `NAS_MOUNT` | Pfad des eingehängten Ziels auf dem Host |
 | `OUTPUT_DIR` | Ausgabeordner (unter `NAS_MOUNT`); ist `NAS_MOUNT` nicht gemountet, wird lokal in `data/output` gespeichert |
 | `AUTH_USER`/`AUTH_PASS` | Optionaler Passwortschutz (HTTP Basic). Ohne `AUTH_PASS` ist die Oberfläche offen |
+| `STAGING_DIR` | Lokaler Zwischenspeicher (Standard `data/staging`); braucht Platz für den größten Titel (ca. 50 GB bei Blu-ray) |
 | `MKV_VERSION` | `latest` oder feste Version |
 
 NFS-Beispiel (`/etc/fstab`, ohne Automount, damit Docker den Pfad einbinden kann):
