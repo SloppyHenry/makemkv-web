@@ -439,11 +439,138 @@ def unique_path(p: Path) -> Path:
     return p.with_name(f"{p.stem} ({i}){p.suffix}")
 
 
+# ---------------------------------------------------------------- Zwischenspeicher + Übertragung
+STAGING = Path(os.environ.get("STAGING_DIR", str(DATA / "staging")))
+WORK, READY = STAGING / ".work", STAGING / "ready"     # WORK: läuft gerade, READY: fertig, wartet auf Übertragung
+uploads: list[dict] = []
+upload_queue: asyncio.Queue = asyncio.Queue()
+_up_seq = 0
+ACTIVE = ("queued", "copying", "retry")
+
+
+def staging_free() -> int:
+    STAGING.mkdir(parents=True, exist_ok=True)
+    return shutil.disk_usage(STAGING).free
+
+
+def tree_size(p: Path) -> int:
+    if p.is_file():
+        return p.stat().st_size
+    return sum(f.stat().st_size for f in p.rglob("*") if f.is_file())
+
+
+def enqueue_upload(src: Path, rel: str, dev: str = ""):
+    global _up_seq
+    _up_seq += 1
+    item = {"id": _up_seq, "name": rel, "src": str(src), "size": tree_size(src), "copied": 0,
+            "status": "queued", "error": "", "dev": dev, "t": time.time()}
+    uploads.append(item)
+    upload_queue.put_nowait(item)
+    broadcast()
+
+
+def copy_item(item: dict, base: Path, notify):
+    """Kopiert eine fertige Datei (oder einen Ordner) ins Ziel: erst als .part, dann umbenennen, Größe prüfen, Quelle löschen."""
+    src = Path(item["src"])
+    target = base / item["name"]
+    target.parent.mkdir(parents=True, exist_ok=True)
+    if src.is_file():
+        target = unique_path(target)
+        if os.stat(src).st_dev == os.stat(target.parent).st_dev:      # gleiches Dateisystem: nur umbenennen
+            os.replace(src, target)
+            item.update(copied=item["size"], dest=str(target))
+            return
+        files = [(src, target)]
+    else:
+        files = [(f, target / f.relative_to(src)) for f in sorted(src.rglob("*")) if f.is_file()]
+    item["size"], item["copied"] = sum(a.stat().st_size for a, _ in files), 0
+    last = 0.0
+    for a, b in files:
+        b.parent.mkdir(parents=True, exist_ok=True)
+        part = b.with_name(b.name + ".part")
+        with open(a, "rb") as fi, open(part, "wb") as fo:
+            while chunk := fi.read(8 * 2**20):
+                fo.write(chunk)
+                item["copied"] += len(chunk)
+                if time.monotonic() - last > 0.5:
+                    last = time.monotonic()
+                    notify()
+            fo.flush()
+            os.fsync(fo.fileno())
+        if part.stat().st_size != a.stat().st_size:
+            raise OSError(f"Größe von {b.name} stimmt nach dem Kopieren nicht")
+        os.replace(part, b)
+    shutil.rmtree(src) if src.is_dir() else src.unlink()
+    item["dest"] = str(target)
+    try:
+        if src.parent != READY:
+            src.parent.rmdir()
+    except OSError:
+        pass
+
+
+async def upload_worker():
+    loop = asyncio.get_running_loop()
+
+    def notify():
+        loop.call_soon_threadsafe(broadcast)
+
+    while True:
+        item = await upload_queue.get()
+        dr = drives.get(item["dev"])
+        for attempt in range(1, 6):
+            try:
+                base, _ = await asyncio.to_thread(out_dir)
+                item.update(status="copying", error="", copied=0)
+                broadcast()
+                await asyncio.to_thread(copy_item, item, base, notify)
+                item.update(status="done", t=time.time())
+                if dr:
+                    dr.add_log(f"Übertragen: {item['name']} ({fmt_bytes(item['size'])})", "ok")
+                break
+            except Exception as e:  # noqa: BLE001
+                item.update(status="retry" if attempt < 5 else "error", error=str(e))
+                if dr:
+                    dr.add_log(f"Übertragung von {item['name']} fehlgeschlagen: {e}", "error")
+                broadcast()
+                if attempt < 5:
+                    await asyncio.sleep(30 * attempt)
+        broadcast()
+
+
+def recover_staging():
+    """Beim Start: unfertige Arbeitsdateien verwerfen, fertige (noch nicht übertragene) erneut einreihen."""
+    shutil.rmtree(WORK, ignore_errors=True)
+    WORK.mkdir(parents=True, exist_ok=True)
+    READY.mkdir(parents=True, exist_ok=True)
+    for folder in sorted(READY.iterdir()):
+        if folder.is_dir():
+            entries = list(folder.iterdir())
+            for e in entries:
+                if not e.name.endswith(".part"):
+                    enqueue_upload(e, f"{folder.name}/{e.name}")
+            if not entries:
+                folder.rmdir()
+
+
+async def wait_for_space(drive: Drive, job: dict, need: int):
+    """Wartet, bis im Zwischenspeicher Platz ist (laufende Übertragungen geben Platz frei)."""
+    while staging_free() < need:
+        if not any(u["status"] in ACTIVE for u in uploads):
+            raise OSError(f"Zu wenig Platz im Zwischenspeicher ({STAGING}): {fmt_bytes(staging_free())} frei, {fmt_bytes(need)} nötig")
+        job.update(text="Warte auf Übertragung (Platz im Zwischenspeicher) …", cur=0, total=0)
+        broadcast()
+        if drive.cancel:
+            return
+        await asyncio.sleep(5)
+
+
 async def do_rip(drive: Drive, req: RipReq, dest: Path):
     disc = drive.disc
     by_id = {t["id"]: t for t in disc["titles"]}
     todo = [t for t in req.titles if t.id in by_id]
     backup = req.mode == "backup"
+    folder = dest.name
     total_bytes = sum(by_id[t.id]["bytes"] for t in todo) or 1
     job = {"kind": "backup" if backup else "rip", "text": "Starte …", "sub": "", "cur": 0, "total": 0,
            "overall": 0.0, "started": time.time(), "dest": str(dest), "index": 0, "count": 1 if backup else len(todo),
@@ -454,16 +581,25 @@ async def do_rip(drive: Drive, req: RipReq, dest: Path):
     drive.error = ""
     broadcast()
     ok = True
+    work = WORK / f"{int(time.time())}-{Path(drive.dev).name}"
     try:
-        dest.mkdir(parents=True, exist_ok=True)
+        work.mkdir(parents=True, exist_ok=True)
         if backup:
+            await wait_for_space(drive, job, 55 * 2**30)
+            bdir = work / folder
+            bdir.mkdir()
             p = Parser(drive, job)
             tracker = asyncio.create_task(track_overall(job, lambda: job["total"]))
-            rc = await run_makemkv(drive, ["backup", "--decrypt", f"dev:{drive.dev}", str(dest)], p)
+            rc = await run_makemkv(drive, ["backup", "--decrypt", f"dev:{drive.dev}", str(bdir)], p)
             tracker.cancel()
             ok = rc == 0 and not drive.cancel
             if ok:
-                job["done"].append({"name": dest.name + " (Disc-Backup)", "bytes": 0})
+                rd = unique_path(READY / folder)
+                READY.mkdir(parents=True, exist_ok=True)
+                os.replace(bdir, rd)
+                for e in sorted(rd.iterdir()):
+                    enqueue_upload(e, f"{folder}/{e.name}", drive.dev)
+                job["done"].append({"name": folder + " (Disc-Backup)", "bytes": 0})
         else:
             done_bytes = 0
             for i, t in enumerate(todo):
@@ -471,8 +607,13 @@ async def do_rip(drive: Drive, req: RipReq, dest: Path):
                     ok = False
                     break
                 info = by_id[t.id]
+                await wait_for_space(drive, job, int(info["bytes"] * 1.05) + 2 * 2**30)
+                if drive.cancel:
+                    ok = False
+                    break
                 job.update(index=i + 1, title=t.name or info["name"], cur=0, total=0, text=f"Titel {i+1}/{len(todo)}")
-                before = {p.name for p in dest.glob("*.mkv")}
+                for x in work.glob("*.mkv"):
+                    x.unlink(missing_ok=True)
                 p = Parser(drive, job)
                 base = done_bytes
                 w = info["bytes"] or 1
@@ -484,8 +625,8 @@ async def do_rip(drive: Drive, req: RipReq, dest: Path):
 
                 tracker = asyncio.create_task(upd())
                 for attempt in range(3):
-                    rc = await run_makemkv(drive, [f"--minlength={disc['minlength']}", "mkv", f"dev:{drive.dev}", str(t.id), str(dest)], p)
-                    new = sorted(x for x in dest.glob("*.mkv") if x.name not in before)
+                    rc = await run_makemkv(drive, [f"--minlength={disc['minlength']}", "mkv", f"dev:{drive.dev}", str(t.id), str(work)], p)
+                    new = sorted(work.glob("*.mkv"))
                     if drive.cancel or (rc == 0 and new) or attempt == 2 or not device_lost(p, drive):
                         break
                     for x in new:
@@ -498,8 +639,6 @@ async def do_rip(drive: Drive, req: RipReq, dest: Path):
                     p = Parser(drive, job)
                 tracker.cancel()
                 if drive.cancel:
-                    for x in new:
-                        x.unlink(missing_ok=True)
                     ok = False
                     break
                 if rc != 0 or not new:
@@ -511,21 +650,21 @@ async def do_rip(drive: Drive, req: RipReq, dest: Path):
                     continue
                 f = new[0]
                 want = safe_name(t.name, "") if t.name.strip() else ""
-                if want and want + ".mkv" != f.name:
-                    target = unique_path(f.with_name(want + ".mkv"))
-                    f.rename(target)
-                    f = target
+                rdir = READY / folder
+                rdir.mkdir(parents=True, exist_ok=True)
+                final = unique_path(rdir / ((want or f.stem) + ".mkv"))
+                os.replace(f, final)          # fertig -> ab in die Warteschlange, Laufwerk liest schon den nächsten Titel
                 done_bytes += info["bytes"]
                 job["overall"] = min(1.0, done_bytes / total_bytes)
-                job["done"].append({"name": f.name, "bytes": f.stat().st_size})
-                drive.add_log(f"Fertig: {f.name} ({fmt_bytes(f.stat().st_size)})", "ok")
-                broadcast()
+                job["done"].append({"name": final.name, "bytes": final.stat().st_size})
+                drive.add_log(f"Fertig gerippt: {final.name} ({fmt_bytes(final.stat().st_size)}) – Übertragung läuft im Hintergrund", "ok")
+                enqueue_upload(final, f"{folder}/{final.name}", drive.dev)
         if drive.cancel:
             drive.error = "Abgebrochen"
         elif not ok:
             drive.error = "Es sind Fehler aufgetreten – siehe Protokoll"
         else:
-            drive.add_log("Alles fertig.", "ok")
+            drive.add_log("Alles fertig gerippt.", "ok")
     except Exception as e:  # noqa: BLE001
         drive.error = f"Rip fehlgeschlagen: {e}"
         ok = False
@@ -533,6 +672,7 @@ async def do_rip(drive: Drive, req: RipReq, dest: Path):
         was_cancel = drive.cancel
         drive.cancel = False
         drive.job = None
+        shutil.rmtree(work, ignore_errors=True)
         broadcast()
     if ok and not was_cancel and settings["auto_eject"]:
         await asyncio.sleep(1)
@@ -602,6 +742,8 @@ async def startup():
     asyncio.create_task(poller())
     asyncio.create_task(key_refresher())
     asyncio.create_task(output_refresher())
+    await asyncio.to_thread(recover_staging)
+    asyncio.create_task(upload_worker())
 
 
 # ---------------------------------------------------------------- API
@@ -631,6 +773,9 @@ def snapshot():
         "settings": settings,
         "output": {"dir": out_cache["dir"], "mounted": out_cache["mounted"], "preferred": str(OUT_PREFERRED),
                    "free": out_cache["free"], "stalled": out_cache["stalled"]},
+        "uploads": [{k: u[k] for k in ("id", "name", "size", "copied", "status", "error", "t")} for u in uploads
+                    if not (u["status"] == "done" and time.time() - u["t"] > 600)],
+        "staging": {"dir": str(STAGING), "free": shutil.disk_usage(STAGING).free if STAGING.exists() else 0},
         "key": {"custom": bool(settings["key"].strip()), "beta": bool(beta["key"]), "fetched": beta["fetched"], "error": beta["error"]},
         "now": time.time(),
     }
@@ -697,6 +842,10 @@ async def api_rip(n: str, req: RipReq):
     need = sum(t["bytes"] for t in dr.disc["titles"] if t["id"] in {x.id for x in req.titles}) if req.mode == "mkv" else 50 * 2**30
     if shutil.disk_usage(base).free < need * 1.02:
         raise HTTPException(507, f"Zu wenig Speicherplatz in {base}")
+    biggest = max([t["bytes"] for t in dr.disc["titles"] if t["id"] in {x.id for x in req.titles}] or [0]) if req.mode == "mkv" else 55 * 2**30
+    uploading = sum(max(0, u["size"] - u["copied"]) for u in uploads if u["status"] in ACTIVE)
+    if staging_free() + uploading < biggest * 1.05:
+        raise HTTPException(507, f"Zu wenig Platz im Zwischenspeicher {STAGING}")
     asyncio.create_task(do_rip(dr, req, dest))
     return {"ok": True, "dest": str(dest)}
 

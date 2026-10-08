@@ -97,6 +97,10 @@ label.chk{display:flex;gap:10px;align-items:center;color:var(--ink);font-size:15
 <div id="outwarn"></div>
 <main>
   <div id="drives"></div>
+  <section class="card files" id="upcard" hidden>
+    <div class="hd"><h2>Übertragung ins Ziel</h2><span class="chip" id="stagechip"></span></div>
+    <div class="bd" style="padding:6px 10px 10px"><table><tbody id="uplist"></tbody></table></div>
+  </section>
   <section class="card files">
     <div class="hd"><h2>Fertige Dateien</h2><span class="chip" id="filesdir"></span><div class="sp"></div><button class="sm" id="files-reload">Aktualisieren</button></div>
     <div class="bd" style="padding:6px 10px 10px"><table><tbody id="files"></tbody></table><div class="empty" id="nofiles" hidden>Noch nichts im Ausgabeordner.</div></div>
@@ -177,6 +181,7 @@ function render(){
     const was = ui.wasBusy[d.id]; ui.wasBusy[d.id] = !!d.job;
     if(was && !d.job) loadFiles();
   }
+  renderUploads();
   document.title = anyPct!==null ? `${anyPct}% – MakeMKV Web` : 'MakeMKV Web';
 }
 
@@ -327,6 +332,22 @@ function updateDynamic(el, d){
     sm.innerHTML = `<b>${ts.length}</b> Titel · <b>${fmtB(bytes)}</b> → ${esc(S.output.dir)}/${esc(ui.folder[keyOf(d)]||'')}`;
     const rip = el.querySelector('[data-act="rip"]'); if(rip && !d.job) rip.disabled = !ts.length;
   }
+}
+
+// ---------- Übertragung (Zwischenspeicher -> Ziel)
+function renderUploads(){
+  const u = S.uploads || [];
+  $('#upcard').hidden = !u.length;
+  $('#stagechip').textContent = S.staging ? `Zwischenspeicher: ${fmtB(S.staging.free)} frei` : '';
+  const label = {queued:'wartet', copying:'überträgt', retry:'Fehler – neuer Versuch folgt', done:'fertig ✓', error:'Fehler – Datei bleibt im Zwischenspeicher'};
+  $('#uplist').innerHTML = u.map(x => {
+    const pct = x.status==='done' ? 100 : x.size ? Math.round(x.copied/x.size*100) : 0;
+    return `<tr><td>${esc(x.name)}${x.error?`<div class="hint" style="color:var(--err)">${esc(x.error)}</div>`:''}</td>
+      <td class="sz">${fmtB(x.size)}</td><td style="width:180px"><div class="bar thin"><div style="width:${pct}%"></div></div></td>
+      <td class="sz" style="min-width:150px">${label[x.status]||x.status}${x.status==='copying'?' '+pct+' %':''}</td></tr>`;
+  }).join('');
+  const done = u.filter(x => x.status==='done').length;
+  if(done !== ui.upDone){ ui.upDone = done; loadFiles(); }
 }
 
 // ---------- Dateien
