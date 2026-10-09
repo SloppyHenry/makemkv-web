@@ -21,6 +21,7 @@ services:
     volumes:
       - /dev:/dev                                   # Laufwerk darf jederzeit neu angesteckt werden
       - ./data:/data
+      - ${STAGING_PATH:-./data/staging}:/data/staging   # Zwischenspeicher (am besten auf einer großen lokalen Platte)
       - ${NAS_MOUNT:-/mnt/nas}:${NAS_MOUNT:-/mnt/nas}:rslave
     device_cgroup_rules:
       - "b 11:* rmw"                                # /dev/sr*

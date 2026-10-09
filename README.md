@@ -39,7 +39,7 @@ Aktualisieren (neue MakeMKV-Version, z. B. weil die Beta nach 60 Tagen abläuft)
 | `NAS_MOUNT` | Pfad des eingehängten Ziels auf dem Host |
 | `OUTPUT_DIR` | Ausgabeordner (unter `NAS_MOUNT`); ist `NAS_MOUNT` nicht gemountet, wird lokal in `data/output` gespeichert |
 | `AUTH_USER`/`AUTH_PASS` | Optionaler Passwortschutz (HTTP Basic). Ohne `AUTH_PASS` ist die Oberfläche offen |
-| `STAGING_DIR` | Lokaler Zwischenspeicher (Standard `data/staging`); braucht Platz für den größten Titel (ca. 50 GB bei Blu-ray) |
+| `STAGING_PATH` | Lokaler Zwischenspeicher (Standard `data/staging`); braucht Platz für den größten Titel (ca. 50 GB bei Blu-ray, bei Konvertierung mehr) |
 | `MKV_VERSION` | `latest` oder feste Version |
 
 NFS-Beispiel (`/etc/fstab`, ohne Automount, damit Docker den Pfad einbinden kann):
