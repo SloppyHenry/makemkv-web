@@ -19,6 +19,7 @@ import os
 import re
 import shutil
 import time
+import urllib.error
 import urllib.request
 from collections import deque
 from pathlib import Path
@@ -1488,22 +1489,36 @@ def _http_json(url: str, body: dict | None = None, timeout: float = 4.0):
         return json.loads(r.read() or b"{}")
 
 
+PEER_POLL_S = 3.0
+
+
+def _peer_entry(name: str, url: str, d: dict) -> dict:
+    cap = d.get("capacity") or {}
+    jobs = [{"dev": x.get("dev"), "name": x.get("name"), "kind": x["job"].get("kind"), "title": x["job"].get("title") or (x.get("disc") or {}).get("name") or "",
+             "overall": x["job"].get("overall", 0), "total": x["job"].get("total", 0), "bytes": x["job"].get("bytes", 0), "index": x["job"].get("index", 0), "count": x["job"].get("count", 0), "text": x["job"].get("text", ""), "started": x["job"].get("started", 0)}
+            for x in d.get("drives", []) if isinstance(x, dict) and x.get("job")]
+    return {"name": name, "url": url, "reachable": isinstance(d.get("drives"), list) and isinstance(d.get("output"), dict),
+            "instance": cap.get("instance", name), "cores": cap.get("cores", 0), "load": cap.get("load", 0), "conv_active": cap.get("conv_active", 0),
+            "conv_paused": cap.get("conv_paused", False), "has_handover": bool(cap), "now": d.get("now", 0),
+            "conversions": d.get("conversions", []), "uploads": d.get("uploads", []), "jobs": jobs}
+
+
 async def peer_prober():
     peers = parse_peers(PEERS_RAW)
     while True:
+        changed = False
         for name, url in peers.items():
             try:
                 d = await asyncio.to_thread(_http_json, url + "/api/state")
-                cap = d.get("capacity") or {}
-                ok_ = isinstance(d.get("drives"), list) and isinstance(d.get("output"), dict)
-                peers_state[name] = {"name": name, "url": url, "reachable": ok_, "instance": cap.get("instance", name),
-                                     "cores": cap.get("cores", 0), "load": cap.get("load", 0), "conv_active": cap.get("conv_active", 0),
-                                     "conv_paused": cap.get("conv_paused", False), "has_handover": bool(cap)}
+                entry = _peer_entry(name, url, d)
             except Exception:  # noqa: BLE001
-                old = peers_state.get(name, {})
-                peers_state[name] = {**old, "name": name, "url": url, "reachable": False}
-        broadcast()
-        await asyncio.sleep(10)
+                entry = {**peers_state.get(name, {}), "name": name, "url": url, "reachable": False}
+            if json.dumps(entry, sort_keys=True, default=str) != json.dumps(peers_state.get(name), sort_keys=True, default=str):
+                peers_state[name] = entry
+                changed = True
+        if changed:
+            broadcast()
+        await asyncio.sleep(PEER_POLL_S)
 
 
 def work_pending() -> bool:
@@ -1538,6 +1553,33 @@ def skip_conversion(item: dict):
             proc.terminate()
             if conv_state["paused"]:
                 _signal_all([proc], signal.SIGCONT)      # ein angehaltener Prozess nimmt SIGTERM erst nach SIGCONT an
+
+
+PROXY_ERLAUBT = (re.compile(r"library/convert"), re.compile(r"conversions/pause"), re.compile(r"conversions/\d+/skip"))
+
+
+@app.post("/api/peer/{name}/{pfad:path}")
+async def api_peer_proxy(name: str, pfad: str, request: Request):
+    """Aktion auf einem anderen Rechner auslösen (der Browser spricht nur mit diesem Server)."""
+    peer = peers_state.get(name)
+    if not peer or not peer.get("reachable"):
+        raise HTTPException(409, f"{name} ist nicht erreichbar.")
+    if not any(r.fullmatch(pfad) for r in PROXY_ERLAUBT):
+        raise HTTPException(404, "Diese Aktion lässt sich nicht an einen anderen Rechner weiterleiten.")
+    raw = await request.body()
+    body = json.loads(raw) if raw else {}
+    if not isinstance(body, dict):
+        raise HTTPException(400, "Ungültige Anfrage")
+    try:
+        return await asyncio.to_thread(_http_json, f"{peer['url']}/api/{pfad}", body, 30.0)
+    except urllib.error.HTTPError as e:
+        try:
+            detail = json.loads(e.read()).get("detail", str(e))
+        except (ValueError, AttributeError):
+            detail = str(e)
+        raise HTTPException(e.code, detail)
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(502, f"{name} antwortet nicht: {e}")
 
 
 class HandoverReq(BaseModel):
@@ -1783,6 +1825,8 @@ class LibReq(BaseModel):
 async def api_library():
     base, items, locks = await asyncio.to_thread(scan_library)
     active = {c["rel"]: c for c in conversions if c.get("origin") == "library" and c["status"] in CV_ACTIVE}
+    remote = {c["name"]: (pn, c) for pn, pe in peers_state.items() if pe.get("reachable") for c in pe.get("conversions", [])
+              if c.get("origin") == "library" and c.get("status") in CV_ACTIVE}
     done = {u["name"] for u in uploads if u.get("replace") and u["status"] in ACTIVE}
     out = []
     for it in items:
@@ -1799,6 +1843,8 @@ async def api_library():
         job = None
         if rel in active:
             job = {"status": active[rel]["status"], "pct": active[rel]["pct"]}
+        elif rel in remote:
+            job = {"status": remote[rel][1]["status"], "pct": remote[rel][1].get("pct", 0), "host": remote[rel][0]}
         elif rel in done:
             job = {"status": "replacing", "pct": 1.0}
         lk = locks.get(rel)
