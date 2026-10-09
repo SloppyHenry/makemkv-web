@@ -48,6 +48,10 @@ DEFAULTS = {
     "presets": PRESET_DEFAULTS,  # Konvertierungs-Preset je Disc-Art (in der Oberfläche änderbar)
 }
 
+# virtuelle Laufwerke (z. B. CDEmu, VMs) nicht anzeigen; Umgebungsvariable HIDE_DRIVES = Regex, leer = nichts ausblenden
+HIDE_RE = re.compile(os.environ.get("HIDE_DRIVES", r"cdemu|virtual|qemu|vbox"), re.I) if os.environ.get("HIDE_DRIVES", "x") else None
+hidden_drives: set[str] = set()
+
 CDROM_EJECT, CDROM_CLOSE_TRAY, CDROM_DRIVE_STATUS = 0x5309, 0x5319, 0x5326
 CDS_NO_DISC, CDS_TRAY_OPEN, CDS_NOT_READY, CDS_DISC_OK = 1, 2, 3, 4
 
@@ -976,9 +980,14 @@ async def poller():
         try:
             devs = sorted(glob.glob("/dev/sr[0-9]*"))
             changed = False
+            hidden_drives.intersection_update(devs)
             for d in devs:
-                if d not in drives:
-                    drives[d] = Drive(d)
+                if d not in drives and d not in hidden_drives:
+                    dr = Drive(d)
+                    if HIDE_RE and HIDE_RE.search(dr.name):
+                        hidden_drives.add(d)
+                        continue
+                    drives[d] = dr
                     changed = True
             for d, dr in list(drives.items()):
                 if dr.busy:
@@ -1050,7 +1059,7 @@ async def output_refresher():
 
 def snapshot():
     return {
-        "drives": [dr.public() for dr in drives.values()],
+        "drives": [dr.public() for dr in sorted(drives.values(), key=lambda x: (0 if (x.job or x.disc) else 1 if x.status == "ready" else 2, x.dev))],
         "settings": settings,
         "output": {"dir": out_cache["dir"], "mounted": out_cache["mounted"], "preferred": str(OUT_PREFERRED),
                    "free": out_cache["free"], "stalled": out_cache["stalled"]},
