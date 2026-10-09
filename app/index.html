@@ -151,6 +151,7 @@ details[open] summary .chev{transform:rotate(180deg)}
 .empty{padding:26px 16px;text-align:center;color:var(--muted);font-size:12px}
 .toast{position:fixed;bottom:18px;right:20px;padding:12px 16px;border:1px solid #315444;border-radius:9px;background:#11251e;color:#a6f2ce;box-shadow:var(--shadow);display:none;z-index:10;max-width:420px}
 .toast.err{border-color:#5a2a33;background:#2c151c;color:#ffb0b8}
+.btns{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
 .jobtools{display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:10px 16px;border-bottom:1px solid var(--line)}
 .jobtools:not(:has(> :not([hidden]))){display:none}
 .peers{display:grid;gap:8px}
@@ -582,17 +583,22 @@ function jobRow(x, multi){
     return `<div class="job">${icon}<div class="job-main"><strong title="${esc(nm)}">${esc(nm)}${multi ? ` <span class="st">${esc(x.host)}</span>` : ''}</strong><small>${esc(small)}</small>${bar}</div><span class="status ${cls}">${txt}</span></div>`;
   }
   if(x.k === 'c'){
-    if(o.status === 'running' && o.paused){ const p = Math.round(o.pct*100); cls = 'wait'; txt = 'Pausiert'; icon = '<span class="status-check wait">⏸</span>';
+    if(o.cancel && o.status !== 'cancelled'){ cls = 'wait'; txt = 'Bricht ab'; icon = '<span class="status-check wait">…</span>'; small = 'Wird abgebrochen …'; }
+    else if(o.status === 'running' && o.paused){ const p = Math.round(o.pct*100); cls = 'wait'; txt = 'Pausiert'; icon = '<span class="status-check wait">⏸</span>';
       small = `Konvertierung pausiert bei ${p} % – mit „Fortsetzen“ geht es weiter`; bar = `<div class="mini-bar"><div style="width:${p}%"></div></div>`; }
     else if(o.status === 'running'){ const p = Math.round(o.pct*100); cls = 'run'; txt = 'Läuft'; icon = '<span class="status-check run"></span>';
       small = `Konvertierung ${p} %${o.fps ? ` · ${dec(o.fps.toFixed(1))} fps` : ''}${o.speed ? ` · ${dec(o.speed.toFixed(2))}× Echtzeit` : ''}${o.eta ? ` · Restzeit ${fmtD(o.eta)}` : ''}${o.mode ? ` · ${o.mode}` : ''}`;
       bar = `<div class="mini-bar"><div style="width:${p}%"></div></div>`; }
     else if(o.status === 'queued'){ cls = 'wait'; txt = 'Wartet'; icon = '<span class="status-check wait">…</span>'; small = `Konvertierung eingereiht${(x.local ? S.conv_paused : (S.peers||[]).some(p => p.name===x.host && p.conv_paused)) ? ' (pausiert)' : ''} · ${fmtB(o.size_in)}`; }
+    else if(o.status === 'cancelled'){ cls = 'wait'; txt = 'Abgebrochen'; icon = '<span class="status-check skip">✕</span>'; small = o.origin === 'library' ? 'Abgebrochen · Original bleibt unverändert' : 'Abgebrochen · gerippte Datei verworfen'; }
     else if(o.status === 'done') small = `Konvertiert · ${fmtB(o.size_in)} → ${fmtB(o.size_out)} (−${Math.round((1-o.size_out/o.size_in)*100)} %)`;
     else if(o.status === 'skipped'){ icon = '<span class="status-check skip">✓</span>'; small = o.handed ? `An ${o.handed} übergeben` : 'Konvertierung übersprungen · Original'; if(o.handed) txt = 'Übergeben'; }
     else { cls = 'err'; txt = 'Fehler'; icon = '<span class="status-check err">!</span>'; small = o.error || 'Konvertierung fehlgeschlagen'; err = true; }
     if(o.origin === 'library') small += ' · Bibliothek';
-    btn = (o.status==='queued' || o.status==='running') ? `<button class="secondary" data-skip="${o.id}" data-host="${x.local ? '' : esc(x.host)}" title="Konvertierung abbrechen und das Original unverändert behalten bzw. übertragen">Überspringen</button>` : `<button class="icon-btn" data-info="c:${o.id}:${esc(x.host)}" aria-label="Details">›</button>`;
+    const h = x.local ? '' : esc(x.host);
+    btn = ((o.status==='queued' || o.status==='running') && !o.cancel)
+      ? `<span class="btns"><button class="secondary" data-skip="${o.id}" data-host="${h}" title="Ohne Konvertierung weiter: das Original bleibt liegen bzw. wird unverändert übertragen">Überspringen</button><button class="secondary danger" data-cancel="${o.id}" data-host="${h}" data-origin="${esc(o.origin||'')}" title="Auftrag ganz beenden">Abbrechen</button></span>`
+      : `<button class="icon-btn" data-info="c:${o.id}:${esc(x.host)}" aria-label="Details">›</button>`;
   } else {
     const p = o.size ? Math.round(o.copied/o.size*100) : 0;
     if(o.status === 'copying'){ cls = 'run'; txt = 'Läuft'; icon = '<span class="status-check run"></span>';
@@ -628,6 +634,14 @@ function jobsClick(e){
     if(confirm('Konvertierung abbrechen? Das Original bleibt unverändert bzw. wird unverändert übertragen.')){
       const h = sk.dataset.host; api(h ? `/api/peer/${h}/conversions/${sk.dataset.skip}/skip` : `/api/conversions/${sk.dataset.skip}/skip`);
     }
+    return;
+  }
+  const cn = e.target.closest('[data-cancel]');
+  if(cn){
+    const lib = cn.dataset.origin === 'library';
+    const msg = lib ? 'Konvertierung abbrechen? Das Original bleibt unverändert, der Auftrag wird beendet.'
+      : 'Auftrag abbrechen? Die frisch gerippte Datei wird VERWORFEN und müsste neu gerippt werden.\n\n(„Überspringen“ überträgt sie dagegen unkonvertiert ins Ziel.)';
+    if(confirm(msg)){ const h = cn.dataset.host; api(h ? `/api/peer/${h}/conversions/${cn.dataset.cancel}/cancel` : `/api/conversions/${cn.dataset.cancel}/cancel`); }
     return;
   }
   const inf = e.target.closest('[data-info]');
@@ -755,7 +769,7 @@ function fileRow(f){
   const name = editing ? editRow('d', libEdit.value, libEdit.ext) : esc(baseName(f.path));
   return `<tr class="file"><td><input class="check" type="checkbox" data-lsel="${esc(f.path)}" ${libSel.has(f.path)?'checked':''} ${libOk(f)?'':'disabled'} aria-label="${esc(f.path)} auswählen"></td>
     <td><div class="fileindent">${name}</div></td><td class="muted">${vid}</td><td class="muted">${aud}</td><td>${fmtB(f.size)}</td><td>${libStat(f)}</td>
-    <td><button class="secondary" data-rename="${esc(f.path)}" ${(f.job||f.locked||editing)?'disabled':''} title="Datei umbenennen">✎</button> <a class="secondary" href="/api/download?path=${encodeURIComponent(f.path)}">Download</a> <button class="secondary danger" data-del="${esc(f.path)}" ${f.job||f.locked?'disabled':''}>Löschen</button></td></tr>`;
+    <td><button class="secondary" data-rename="${esc(f.path)}" ${(f.job||f.locked||editing)?'disabled':''} title="Datei umbenennen">✎</button> <a class="secondary" href="/api/download?path=${encodeURIComponent(f.path)}">Download</a> <button class="secondary danger" data-del="${esc(f.path)}" ${f.job||f.locked?'disabled':''}>Löschen</button>${f.job && f.job.id && ['queued','running'].includes(f.job.status) ? ` <button class="secondary danger" data-fcancel="${f.job.id}" data-host="${esc(f.job.host||'')}" title="Konvertierung abbrechen – das Original bleibt unverändert">Abbrechen</button>` : ''}</td></tr>`;
 }
 function fillLibTarget(){
   const sel = $('#lib-target'); if(!sel || !S) return;
@@ -814,6 +828,11 @@ $('#liblist').addEventListener('click', async e => {
   const t = e.target;
   const tog = t.closest('[data-ftoggle]');
   if(tog){ const d = tog.dataset.ftoggle; libOpen.has(d) ? libOpen.delete(d) : libOpen.add(d); saveOpen(); renderLibrary(); return; }
+  const fc = t.closest('[data-fcancel]');
+  if(fc){
+    if(confirm('Konvertierung abbrechen? Das Original bleibt unverändert.')){ const h = fc.dataset.host; api(h ? `/api/peer/${h}/conversions/${fc.dataset.fcancel}/cancel` : `/api/conversions/${fc.dataset.fcancel}/cancel`).then(() => loadLibrary()); }
+    return;
+  }
   const rn = t.closest('[data-rename]'); if(rn){ startEdit('file', rn.dataset.rename); return; }
   const fr = t.closest('[data-frename]'); if(fr){ startEdit('folder', fr.dataset.frename); return; }
   if(t.closest('[data-edit-ok]')){ commitEdit(); return; }
