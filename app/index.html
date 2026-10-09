@@ -122,6 +122,8 @@ select{font:inherit;color:var(--ink);background:var(--card);border:1px solid var
     <h3>Einstellungen</h3>
     <label class="chk"><input type="checkbox" id="s-auto_scan"> Eingelegte Disc automatisch analysieren</label>
     <label class="chk"><input type="checkbox" id="s-auto_eject"> Nach erfolgreichem Rip automatisch auswerfen</label>
+    <label class="f">Gleichzeitige Konvertierungen <input type="number" id="s-conv_parallel" min="1" max="8" step="1"></label>
+    <div class="hint" style="margin-top:-8px">x265 nutzt pro Film nur etwa 4–8 Kerne. Auf Rechnern mit vielen Kernen laufen mehrere Filme/Titel gleichzeitig deutlich schneller (jeweils ca. 1,5 GB RAM).</div>
     <label class="f">Minimale Titellänge (Sekunden)<input type="number" id="s-minlength" min="0" step="10"></label>
     <div class="row" style="flex-wrap:nowrap">
       <label class="f" style="flex:1">Audio-Sprachen behalten<input type="text" id="s-audio_langs" placeholder="alle  –  z. B. deu,eng"></label>
@@ -437,7 +439,7 @@ $('#files-reload').onclick = loadFiles;
 const dlg = $('#dlg');
 $('#btn-set').onclick = () => {
   const s = S.settings;
-  $('#s-auto_scan').checked = s.auto_scan; $('#s-auto_eject').checked = s.auto_eject; $('#s-minlength').value = s.minlength;
+  $('#s-auto_scan').checked = s.auto_scan; $('#s-auto_eject').checked = s.auto_eject; $('#s-minlength').value = s.minlength; $('#s-conv_parallel').value = s.conv_parallel;
   $('#s-audio_langs').value = s.audio_langs; $('#s-sub_langs').value = s.sub_langs; $('#s-key').value = s.key;
   const k = S.key;
   $('#keystate').innerHTML = k.custom ? 'Eigener Key wird verwendet.' : k.beta ? `Öffentlicher Beta-Key aktiv (geholt ${ago(k.fetched)}). <button type="button" class="sm" id="keyref">Neu holen</button>` : `Kein Key vorhanden${k.error?': '+esc(k.error):''}. <button type="button" class="sm" id="keyref">Beta-Key holen</button>`;
@@ -447,7 +449,7 @@ $('#btn-set').onclick = () => {
 $('#s-cancel').onclick = () => dlg.close();
 $('#setform').onsubmit = async e => {
   await api('/api/settings', 'POST', {
-    auto_scan: $('#s-auto_scan').checked, auto_eject: $('#s-auto_eject').checked, minlength: +$('#s-minlength').value || 0,
+    auto_scan: $('#s-auto_scan').checked, auto_eject: $('#s-auto_eject').checked, minlength: +$('#s-minlength').value || 0, conv_parallel: +$('#s-conv_parallel').value || 1,
     audio_langs: $('#s-audio_langs').value, sub_langs: $('#s-sub_langs').value, key: $('#s-key').value });
 };
 

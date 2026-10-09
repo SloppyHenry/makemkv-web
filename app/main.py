@@ -45,6 +45,7 @@ DEFAULTS = {
     "audio_langs": "",     # z.B. "deu,eng" – leer = alle
     "sub_langs": "",       # z.B. "deu"     – leer = alle
     "key": "",             # eigener MakeMKV-Key; leer = öffentlicher Beta-Key
+    "conv_parallel": max(1, min(4, (os.cpu_count() or 4) // 8)),   # gleichzeitige Konvertierungen (x265 nutzt pro Film nur ~4-8 Kerne)
     "presets": PRESET_DEFAULTS,  # Konvertierungs-Preset je Disc-Art (in der Oberfläche änderbar)
 }
 
@@ -107,6 +108,7 @@ def load_settings():
         settings.update({k: v for k, v in json.loads(CONFIG.read_text()).items() if k in DEFAULTS})
     except (OSError, ValueError):
         pass
+    settings["conv_parallel"] = max(1, min(int(settings.get("conv_parallel") or 1), 8))
     saved = settings.get("presets") if isinstance(settings.get("presets"), dict) else {}
     settings["presets"] = {k: clean_convert({**PRESET_DEFAULTS[k], **(saved.get(k) or {})}) for k in PRESET_DEFAULTS}
     try:
@@ -780,8 +782,23 @@ def release_original(item: dict):
         pass
 
 
+conv_running = 0
+
+
+def ensure_conv_workers():
+    """So viele Konvertierungs-Worker laufen lassen, wie in den Einstellungen steht."""
+    global conv_running
+    while conv_running < int(settings["conv_parallel"]):
+        conv_running += 1
+        ensure_conv_workers()
+
+
 async def convert_worker():
+    global conv_running
     while True:
+        if conv_running > int(settings["conv_parallel"]):      # Einstellung wurde verkleinert
+            conv_running -= 1
+            return
         item = await convert_queue.get()
         dr = drives.get(item["dev"])
         if item["status"] != "skipped":
@@ -1185,6 +1202,7 @@ class SettingsReq(BaseModel):
     sub_langs: str | None = None
     key: str | None = None
     presets: dict | None = None
+    conv_parallel: int | None = None
 
 
 @app.post("/api/settings")
@@ -1195,10 +1213,13 @@ async def api_settings(req: SettingsReq):
                 if isinstance(v.get(kind), dict):
                     settings["presets"][kind] = clean_convert({**settings["presets"][kind], **v[kind]})
             continue
+        if k == "conv_parallel":
+            v = max(1, min(int(v), 8))
         if k == "minlength":
             v = max(0, min(int(v), 36000))
         settings[k] = v.strip() if isinstance(v, str) else v
     save_settings()
+    ensure_conv_workers()
     broadcast()
     return settings
 
