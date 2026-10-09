@@ -1508,7 +1508,8 @@ def _peer_entry(name: str, url: str, d: dict) -> dict:
     return {"name": name, "url": url, "reachable": isinstance(d.get("drives"), list) and isinstance(d.get("output"), dict),
             "instance": cap.get("instance", name), "cores": cap.get("cores", 0), "load": cap.get("load", 0), "conv_active": cap.get("conv_active", 0),
             "conv_paused": cap.get("conv_paused", False), "has_handover": bool(cap), "now": d.get("now", 0),
-            "conversions": d.get("conversions", []), "uploads": d.get("uploads", []), "jobs": jobs}
+            "conversions": d.get("conversions", []), "uploads": d.get("uploads", []), "jobs": jobs,
+            "drives": d.get("drives", []), "output": d.get("output")}      # Laufwerke samt Disc/Titeln/Protokoll: für die Fernsteuerung
 
 
 async def peer_prober():
@@ -1597,7 +1598,8 @@ def skip_conversion(item: dict):
                 _signal_all([proc], signal.SIGCONT)      # ein angehaltener Prozess nimmt SIGTERM erst nach SIGCONT an
 
 
-PROXY_ERLAUBT = (re.compile(r"library/convert"), re.compile(r"conversions/pause"), re.compile(r"conversions/\d+/skip"), re.compile(r"conversions/\d+/cancel"))
+PROXY_ERLAUBT = (re.compile(r"library/convert"), re.compile(r"conversions/pause"), re.compile(r"conversions/\d+/skip"), re.compile(r"conversions/\d+/cancel"),
+                 re.compile(r"drives/[A-Za-z0-9]+/(scan|rip|eject|close|cancel)"))
 
 
 @app.post("/api/peer/{name}/{pfad:path}")

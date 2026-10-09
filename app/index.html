@@ -294,7 +294,7 @@ const setHtml = (el, h) => { if(el && el.dataset.h !== h){ el.innerHTML = h; el.
 
 let S = null, view = 'drives', selDrive = null, connFailed = false;
 const ui = { sel:{}, names:{}, folder:{}, open:{}, conv:{}, sig:{}, hideShort:false, cvOpen:true, rate:{}, wasBusy:{}, upDone:-1, files:[] };
-const keyOf = d => `${d.id}:${d.scan_id}`;
+const keyOf = d => `${d.host||''}|${d.id}:${d.scan_id}`;
 
 function toast(msg, err=false){
   const el = $('#toast'); el.textContent = msg; el.classList.toggle('err', err); el.style.display = 'block';
@@ -314,10 +314,20 @@ function connect(){
 }
 
 // ---------- Hilfen: Laufwerk, Auswahl, Presets
+const driveUrl = (d, act) => d.host ? `/api/peer/${d.host}/drives/${d.id}/${act}` : `/api/drives/${d.id}/${act}`;
+const nowOf = d => (d.host && d._now) ? d._now : S.now;
+const outDir = d => (d.host && d._out && d._out.dir) || S.output.dir;
+const dkey = d => (d.host || '') + '|' + d.id;
+function allDrives(){          // Laufwerke aller Rechner: zuerst die eigenen, dann die der anderen
+  const list = S.drives.map(d => ({...d, host: ''}));
+  for(const p of (S.peers||[])) if(p.reachable) (p.drives||[]).forEach(d => list.push({...d, host: p.name, _now: p.now, _out: p.output}));
+  return list;
+}
 function curDrive(){
   if(!S) return null;
-  let d = S.drives.find(x => x.id === selDrive);
-  if(!d){ d = S.drives.find(x => x.job || x.disc) || S.drives[0] || null; selDrive = d ? d.id : null; }
+  const all = allDrives();
+  let d = all.find(x => dkey(x) === selDrive);
+  if(!d){ d = all.find(x => !x.host && (x.job || x.disc)) || all.find(x => x.job || x.disc) || all[0] || null; selDrive = d ? dkey(d) : null; }
   return d;
 }
 const mainTitleIds = disc => { const max = Math.max(0, ...disc.titles.map(t=>t.duration)); return disc.titles.filter(t => t.duration >= max*0.5).map(t=>t.id); };
@@ -388,31 +398,32 @@ function renderBanners(){
 
 const STATUSTXT = { empty:'Laufwerk verbunden', open:'Schublade offen', loading:'Laufwerk lädt …', ready:'Disc erkannt', unknown:'…' };
 function renderChips(){
-  const cur = curDrive();
-  if(!S.drives.length){ setHtml($('#drivechips'), '<div class="drive"><span>Kein Laufwerk</span><span class="pill warnpill">● nicht verbunden</span></div>'); return; }
-  setHtml($('#drivechips'), S.drives.map(d => {
+  const cur = curDrive(), all = allDrives();
+  if(!all.length){ setHtml($('#drivechips'), '<div class="drive"><span>Kein Laufwerk</span><span class="pill warnpill">● nicht verbunden</span></div>'); return; }
+  setHtml($('#drivechips'), all.map(d => {
     const busy = d.job ? (d.job.kind==='scan' ? 'analysiert …' : d.job.kind==='backup' ? 'Backup läuft' : 'rippt …') : null;
     const cls = busy ? 'busypill' : (d.status==='open'||d.status==='loading') ? 'warnpill' : 'online';
-    return `<button class="drive ${cur && d.id===cur.id?'sel':''}" data-drive="${d.id}">${esc(d.name)} <span class="pill">${esc(d.dev)}</span><span class="pill ${cls}">● ${busy || STATUSTXT[d.status] || '…'}</span></button>`;
+    return `<button class="drive ${cur && dkey(d)===dkey(cur)?'sel':''}" data-drive="${esc(dkey(d))}">${esc(d.name)} <span class="pill">${esc(d.dev)}</span>${d.host ? `<span class="pill">${esc(d.host)}</span>` : (all.some(x => x.host) ? `<span class="pill">${esc(hostName())}</span>` : '')}<span class="pill ${cls}">● ${busy || STATUSTXT[d.status] || '…'}</span></button>`;
   }).join(''));
 }
 
 function rate(d){        // geglättete Geschwindigkeit aus dem Fortschritt (Bytes/s)
-  const j = d.job, done = (j.overall||0)*(j.bytes||0);
-  let r = ui.rate[d.id];
-  if(!r || r.job !== j.started){ r = ui.rate[d.id] = {job:j.started, t:S.now, b:done, v:0}; }
-  else if(S.now - r.t >= 3){ const inst = Math.max(0,(done-r.b)/(S.now-r.t)); r.v = r.v ? r.v*0.6+inst*0.4 : inst; r.t = S.now; r.b = done; }
+  const j = d.job, done = (j.overall||0)*(j.bytes||0), now = nowOf(d), rk = dkey(d);
+  let r = ui.rate[rk];
+  if(!r || r.job !== j.started){ r = ui.rate[rk] = {job:j.started, t:now, b:done, v:0}; }
+  else if(now - r.t >= 3){ const inst = Math.max(0,(done-r.b)/(now-r.t)); r.v = r.v ? r.v*0.6+inst*0.4 : inst; r.t = now; r.b = done; }
   return r.v;
 }
 
 function renderProgress(d){
   let title, line = '', lineErr = false, pct = null, bar = 0, indet = false, cancel = false, m = ['–','–','–','–'];
+  const remote = d && d.host ? ` · auf ${d.host}` : '';
   if(!d){ title = 'Kein Laufwerk gefunden'; line = 'USB-Laufwerk anstecken – es erscheint hier automatisch.'; }
   else if(d.job && d.job.kind==='scan'){
     const j = d.job; title = 'Disc wird analysiert'; line = j.text || '…'; indet = !(j.total>0); pct = indet ? null : Math.round(j.total*100); bar = pct||0; cancel = true;
-    m = ['–', fmtD(S.now-j.started), '–', '–'];
+    m = ['–', fmtD(nowOf(d)-j.started), '–', '–'];
   } else if(d.job){
-    const j = d.job, el = Math.max(1, S.now-j.started), ov = j.overall||0, v = rate(d);
+    const j = d.job, el = Math.max(1, nowOf(d)-j.started), ov = j.overall||0, v = rate(d);
     title = (d.disc && d.disc.name) || 'Rip';
     line = (j.title ? `Titel ${pad(j.index||0)} von ${j.count}: ${j.title}` : 'Starte …') + (j.text ? ` – ${j.text}` : '');
     pct = Math.round(ov*100); bar = pct; cancel = true;
@@ -427,7 +438,7 @@ function renderProgress(d){
     line = {empty:'Sie wird automatisch erkannt und analysiert.', open:'Disc einlegen oder Schublade schließen.', ready:'Die Analyse startet gleich.'}[d.status] || '';
   }
   const mets = [['◉','Geschwindigkeit'],['◴','Laufzeit'],['◷','Restzeit'],['▤','Titel']];
-  setHtml($('#prog'), `<div class="progress-title"><div><h1>${esc(title)}</h1><p class="${lineErr?'err':''}">${esc(line)}</p></div>
+  setHtml($('#prog'), `<div class="progress-title"><div><h1>${esc(title)}</h1><p class="${lineErr?'err':''}">${esc(line + (line ? remote : ''))}</p></div>
       ${(pct!==null||cancel) ? `<div class="percent">${pct!==null ? pct+' %' : ''}${cancel ? '<button class="secondary danger" data-act="cancel">Abbrechen</button>' : ''}</div>` : ''}</div>
     <div class="progress-track ${indet?'indet':''}" role="progressbar" aria-valuenow="${bar}" aria-valuemin="0" aria-valuemax="100" aria-label="Fortschritt"><div class="progress-fill" style="width:${bar}%"></div></div>
     <div class="metrics">${mets.map(([s,l],i) => `<div class="metric"><span class="symbol">${s}</span><div><strong>${esc(m[i])}</strong><small>${l}</small></div></div>`).join('')}</div>`);
@@ -438,7 +449,7 @@ function renderTitles(d){
   const pn = $('#titlesPanel');
   if(!d || !d.disc){ pn.hidden = true; ui.sig.titles = ''; return; }
   pn.hidden = false;
-  const sig = [d.id, d.scan_id, d.job ? d.job.kind : '', S.output.dir].join('|');
+  const sig = [dkey(d), d.scan_id, d.job ? d.job.kind : '', outDir(d)].join('|');
   if(ui.sig.titles !== sig){ ui.sig.titles = sig; buildTitles(d); } else updateTitlesLive(d);
 }
 function buildTitles(d){
@@ -506,11 +517,11 @@ $('#titlesPanel').addEventListener('keydown', e => { if((e.key==='Enter'||e.key=
 // ---- Aktionsfeld
 function renderAction(d){
   const el = $('#actionPanel'), disc = d && d.disc, busy = !!(d && d.job);
-  const sig = [d?d.id:'', d?d.scan_id:'', busy, d?d.status:'', !!disc, S.output.dir].join('|');
+  const sig = [d?dkey(d):'', d?d.scan_id:'', busy, d?d.status:'', !!disc, d?outDir(d):S.output.dir].join('|');
   if(ui.sig.action !== sig){
     ui.sig.action = sig;
     const k = d && keyOf(d);
-    el.innerHTML = `<div class="destination"><span>♧</span><span><strong id="actionCount">${disc ? '' : 'Keine Disc'}</strong> · ${esc(S.output.dir)}</span></div>
+    el.innerHTML = `<div class="destination"><span>♧</span><span><strong id="actionCount">${disc ? '' : 'Keine Disc'}</strong> · ${esc(d ? outDir(d) : S.output.dir)}${d && d.host ? ` · Laufwerk an ${esc(d.host)}` : ''}</span></div>
       ${disc ? `<div class="folderrow"><label for="folder">Ordner</label><input class="input" id="folder" value="${esc(ui.folder[k]||'')}" ${busy?'disabled':''}></div>` : ''}
       <button class="primary" id="ripBtn" data-act="rip" ${(!disc||busy)?'disabled':''}>${busy ? 'Läuft …' : '▶ &nbsp; Auswahl rippen'}</button>
       <div class="actions2"><button class="secondary" id="backupBtn" data-act="backup" title="Entschlüsselte Kopie der ganzen Disc als Ordner (BDMV/VIDEO_TS), keine MKV-Dateien" ${(!disc||busy)?'disabled':''}>Disc-Backup</button>${d && d.status==='ready' && !busy ? '<button class="secondary" data-act="scan">Neu analysieren</button>' : ''}${d && d.status==='open' ? '<button class="secondary" data-act="close">Schublade schließen</button>' : ''}${d ? `<button class="secondary" data-act="eject" ${busy?'disabled':''}>Auswerfen</button>` : ''}</div>`;
@@ -522,14 +533,14 @@ async function startRip(d, mode){
   const k = keyOf(d), sel = selOf(d), names = ui.names[k]||{}, cv = convOf(d);
   const titles = mode==='mkv' ? d.disc.titles.filter(t => sel[t.id]).map(t => ({id:t.id, name:(names[t.id] ?? suggestName(d.disc, t)).trim()})) : [];
   if(mode==='mkv' && !titles.length){ toast('Bitte mindestens einen Titel auswählen.', true); return; }
-  await api(`/api/drives/${d.id}/rip`, 'POST', {titles, folder: ui.folder[k]||'', mode, convert: (mode==='mkv' && cv.convert) ? cv : null});
+  await api(driveUrl(d, 'rip'), 'POST', {titles, folder: ui.folder[k]||'', mode, convert: (mode==='mkv' && cv.convert) ? cv : null});
 }
 async function driveAction(ev){
   const b = ev.target.closest('[data-act]'); if(!b) return; const d = curDrive(); if(!d) return; const a = b.dataset.act;
-  if(a==='scan') api(`/api/drives/${d.id}/scan`);
-  else if(a==='eject') api(`/api/drives/${d.id}/eject`);
-  else if(a==='close') api(`/api/drives/${d.id}/close`);
-  else if(a==='cancel'){ if(confirm('Laufenden Vorgang abbrechen?')) api(`/api/drives/${d.id}/cancel`); }
+  if(a==='scan') api(driveUrl(d, 'scan'));
+  else if(a==='eject') api(driveUrl(d, 'eject'));
+  else if(a==='close') api(driveUrl(d, 'close'));
+  else if(a==='cancel'){ if(confirm('Laufenden Vorgang abbrechen?')) api(driveUrl(d, 'cancel')); }
   else if(a==='rip') startRip(d, 'mkv');
   else if(a==='backup'){ if(confirm('Disc-Backup = entschlüsselte Kopie der ganzen Disc als Ordner (keine MKV-Dateien). Das braucht den vollen Platz der Disc. Fortfahren?')) startRip(d, 'backup'); }
 }
@@ -558,7 +569,8 @@ function clusterItems(){
     if(!p.reachable) continue;
     (p.conversions||[]).forEach(o => items.push({k:'c', o, host:p.name, local:false}));
     (p.uploads||[]).forEach(o => items.push({k:'u', o, host:p.name, local:false}));
-    (p.jobs||[]).forEach(o => items.push({k:'d', o:{...o, disc:o.title}, host:p.name, local:false}));
+    if(Array.isArray(p.drives)) p.drives.filter(d => d.job).forEach(d => items.push({k:'d', o:{...d.job, dev:d.dev, disc:d.disc && d.disc.name}, host:p.name, local:false}));
+    else (p.jobs||[]).forEach(o => items.push({k:'d', o:{...o, disc:o.title}, host:p.name, local:false}));
   }
   return items;
 }
