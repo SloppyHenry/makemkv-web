@@ -151,6 +151,13 @@ details[open] summary .chev{transform:rotate(180deg)}
 .empty{padding:26px 16px;text-align:center;color:var(--muted);font-size:12px}
 .toast{position:fixed;bottom:18px;right:20px;padding:12px 16px;border:1px solid #315444;border-radius:9px;background:#11251e;color:#a6f2ce;box-shadow:var(--shadow);display:none;z-index:10;max-width:420px}
 .toast.err{border-color:#5a2a33;background:#2c151c;color:#ffb0b8}
+.jobtools{display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:10px 16px;border-bottom:1px solid var(--line)}
+.jobtools:not(:has(> :not([hidden]))){display:none}
+.peers{display:grid;gap:8px}
+.peer{display:flex;align-items:center;gap:12px;padding:10px 12px;border:1px solid var(--line);border-radius:9px;background:#0e141d;cursor:pointer}
+.peer:has(input:checked){border-color:var(--red)}
+.peer.off{opacity:.5;cursor:not-allowed}
+.peer .meta{color:var(--muted);font-size:11px}
 .folder td{background:#0f1520;border-bottom:1px solid #222d3b}
 .foldertoggle{background:transparent;border:0;color:var(--text);font:inherit;display:inline-flex;gap:10px;align-items:center;padding:3px 6px;border-radius:6px;text-align:left}
 .foldertoggle:hover{background:#1a2330}
@@ -198,7 +205,8 @@ dialog h3{margin:0;font-size:16px}
       </section>
       <aside class="right">
         <section class="panel">
-          <div class="panel-head"><span class="brand-mark" style="width:20px;height:20px;border-width:4px"></span><div><h2>Aufträge</h2><span class="sub" id="jobsDest"></span></div><span class="spacer"></span><button class="secondary pause-btn" hidden></button></div>
+          <div class="panel-head"><span class="brand-mark" style="width:20px;height:20px;border-width:4px"></span><div><h2>Aufträge</h2><span class="sub" id="jobsDest"></span></div></div>
+          <div class="jobtools"><span class="pill idle-chip" hidden></span><button class="secondary handover-btn" hidden title="Laufende und wartende Konvertierungen an einen anderen Rechner übergeben, z. B. vor dem Herunterfahren">⇄ Übergabe</button><button class="secondary pause-btn" hidden></button></div>
           <div class="section-content" id="jobs"></div>
         </section>
         <section class="panel">
@@ -239,12 +247,22 @@ dialog h3{margin:0;font-size:16px}
       </div>
     </section>
     <section class="panel" style="margin-top:12px">
-      <div class="panel-head"><span class="brand-mark" style="width:20px;height:20px;border-width:4px"></span><h2>Aufträge</h2><span class="spacer"></span><button class="secondary pause-btn" hidden></button></div>
+      <div class="panel-head"><span class="brand-mark" style="width:20px;height:20px;border-width:4px"></span><h2>Aufträge</h2></div>
+      <div class="jobtools"><span class="pill idle-chip" hidden></span><button class="secondary handover-btn" hidden title="Laufende und wartende Konvertierungen an einen anderen Rechner übergeben, z. B. vor dem Herunterfahren">⇄ Übergabe</button><button class="secondary pause-btn" hidden></button></div>
       <div class="section-content" id="jobs2"></div>
     </section>
   </div>
 </main>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<dialog id="hoDlg">
+  <form method="dialog" id="hoForm" onsubmit="return false">
+    <h3>Übergabe an einen anderen Rechner</h3>
+    <p class="help" id="hoInfo" style="margin:0"></p>
+    <div id="hoPeers" class="peers"></div>
+    <div class="rowend"><button type="button" class="secondary" id="ho-cancel">Abbrechen</button><button type="button" class="primary" style="width:auto" id="ho-go" disabled>Übergeben</button></div>
+  </form>
+</dialog>
 
 <dialog id="dlg">
   <form method="dialog" id="setform">
@@ -538,7 +556,7 @@ function jobRow(x){
       bar = `<div class="mini-bar"><div style="width:${p}%"></div></div>`; }
     else if(o.status === 'queued'){ cls = 'wait'; txt = 'Wartet'; icon = '<span class="status-check wait">…</span>'; small = `Konvertierung eingereiht${S.conv_paused ? ' (pausiert)' : ''} · ${fmtB(o.size_in)}`; }
     else if(o.status === 'done') small = `Konvertiert · ${fmtB(o.size_in)} → ${fmtB(o.size_out)} (−${Math.round((1-o.size_out/o.size_in)*100)} %)`;
-    else if(o.status === 'skipped'){ icon = '<span class="status-check skip">✓</span>'; small = 'Konvertierung übersprungen · Original'; }
+    else if(o.status === 'skipped'){ icon = '<span class="status-check skip">✓</span>'; small = o.handed ? `An ${o.handed} übergeben` : 'Konvertierung übersprungen · Original'; if(o.handed) txt = 'Übergeben'; }
     else { cls = 'err'; txt = 'Fehler'; icon = '<span class="status-check err">!</span>'; small = o.error || 'Konvertierung fehlgeschlagen'; err = true; }
     if(o.origin === 'library') small += ' · Bibliothek';
     btn = (o.status==='queued' || o.status==='running') ? `<button class="secondary" data-skip="${o.id}" title="Konvertierung abbrechen und das Original unverändert behalten bzw. übertragen">Überspringen</button>` : `<button class="icon-btn" data-info="c:${o.id}" aria-label="Details">›</button>`;
@@ -556,6 +574,7 @@ function jobRow(x){
   return `<div class="job">${icon}<div class="job-main"><strong title="${esc(o.name)}">${esc(name)}</strong><small class="${err?'err':''}">${esc(small)}</small>${bar}</div><span class="status ${cls}">${txt}</span>${btn}</div>`;
 }
 function renderJobs(){
+  if(hoDlg.open) fillHandover();
   const items = [];
   (S.conversions||[]).forEach(c => items.push({k:'c', o:c})); (S.uploads||[]).forEach(u => items.push({k:'u', o:u}));
   const act = x => x.k==='c' ? ['queued','running'].includes(x.o.status) : ['queued','copying','retry'].includes(x.o.status);
@@ -564,7 +583,10 @@ function renderJobs(){
   ['#jobs','#jobs2'].forEach(id => { const e = $(id); if(e && !e.closest('[hidden]')) setHtml(e, h); });
   $('#jobsDest').textContent = `Ziel: ${S.output.dir}`;
   const aktiv = (S.conversions||[]).some(c => c.status==='queued' || c.status==='running'), p = !!S.conv_paused;
-  document.querySelectorAll('.pause-btn').forEach(b => { b.hidden = !(aktiv || p); b.textContent = p ? '▶ Konvertierung fortsetzen' : '⏸ Konvertierung pausieren'; b.dataset.paused = p ? '1' : ''; });
+  const hatPeers = (S.peers||[]).length > 0;
+  document.querySelectorAll('.handover-btn').forEach(b => { b.hidden = !hatPeers; });
+  document.querySelectorAll('.idle-chip').forEach(c => { c.hidden = !hatPeers; c.textContent = S.idle ? '✓ bereit zum Herunterfahren' : 'Arbeit läuft'; c.className = 'pill idle-chip ' + (S.idle ? 'online' : 'busypill'); });
+  document.querySelectorAll('.pause-btn').forEach(b => { b.hidden = !(aktiv || p); b.textContent = p ? '▶ Fortsetzen' : '⏸ Pausieren'; b.dataset.paused = p ? '1' : ''; });
 }
 function jobsClick(e){
   const sk = e.target.closest('[data-skip]');
@@ -573,6 +595,37 @@ function jobsClick(e){
   if(inf){ const [k,id] = inf.dataset.info.split(':'), o = (k==='c' ? S.conversions : S.uploads).find(x => x.id === +id);
     if(o) toast(`${o.name}${o.error ? ' – ' + o.error : ''}`, !!o.error); }
 }
+// ---------- Übergabe an einen anderen Rechner
+const hoDlg = $('#hoDlg');
+function peerOption(p, checked){
+  const usable = p.reachable && p.has_handover;
+  const why = !p.reachable ? 'nicht erreichbar' : !p.has_handover ? 'ältere Version – erst aktualisieren' : `${p.cores} Threads · Last ${dec((p.load||0).toFixed(1))} · ${p.conv_active} Auftrag${p.conv_active===1?'':'e'}${p.conv_paused ? ' · pausiert' : ''}`;
+  return `<label class="peer ${usable?'':'off'}"><input type="radio" name="hopeer" value="${esc(p.name)}" ${checked?'checked':''} ${usable?'':'disabled'}><div><strong>${esc(p.name)}</strong><div class="meta">${esc(why)}</div></div></label>`;
+}
+function fillHandover(){
+  const act = (S.conversions||[]).filter(c => c.status==='queued' || c.status==='running'), running = act.filter(c => c.status==='running').length;
+  const busy = S.drives.some(d => d.job);
+  $('#hoInfo').textContent = busy ? 'Auf diesem Rechner läuft ein Rip, ein Backup oder eine Analyse – das Laufwerk hängt hier und lässt sich nicht übergeben. Bitte erst abwarten oder abbrechen.'
+    : act.length ? `${act.length} Konvertierung${act.length===1?'':'en'} werden übergeben${running ? ` (${running} laufend – ihr Fortschritt geht verloren, der andere Rechner beginnt von vorn)` : ''}. Dateien, die noch lokal zwischengespeichert sind, werden zuerst ins NAS übertragen und dann dort konvertiert – bitte so lange nicht herunterfahren (oben steht, wann es soweit ist).`
+    : 'Hier liegt keine Konvertierung an, die sich übergeben ließe.';
+  const usable = (S.peers||[]).filter(p => p.reachable && p.has_handover);
+  const best = usable.slice().sort((a,b) => (a.load/(a.cores||1)) - (b.load/(b.cores||1)))[0];
+  const chosen = ($('#hoPeers input:checked')||{}).value || (best && best.name);
+  $('#hoPeers').innerHTML = (S.peers||[]).map(p => peerOption(p, p.name === chosen)).join('') || '<div class="empty">Keine anderen Rechner eingetragen (PEERS in der .env).</div>';
+  $('#ho-go').disabled = busy || !act.length || !usable.length;
+}
+document.querySelectorAll('.handover-btn').forEach(b => b.addEventListener('click', () => { fillHandover(); hoDlg.showModal(); }));
+$('#ho-cancel').addEventListener('click', () => hoDlg.close());
+$('#ho-go').addEventListener('click', async () => {
+  const t = ($('#hoPeers input:checked')||{}).value; if(!t) return;
+  $('#ho-go').disabled = true;
+  try{
+    const r = await api('/api/handover', 'POST', {target: t});
+    hoDlg.close();
+    if(r.errors.length) alert(`${r.handed.length} übergeben, ${r.errors.length} nicht:\n` + r.errors.map(x => '• ' + x).join('\n'));
+    else toast(`${r.handed.length} Auftrag${r.handed.length===1?'':'e'} an ${t} übergeben.`);
+  }catch{ $('#ho-go').disabled = false; }
+});
 document.addEventListener('click', e => {
   const b = e.target.closest('.pause-btn'); if(!b) return;
   api('/api/conversions/pause', 'POST', {paused: !b.dataset.paused}).then(() => toast(b.dataset.paused ? 'Konvertierung läuft weiter.' : 'Konvertierung pausiert – Prozesse sind angehalten.'));

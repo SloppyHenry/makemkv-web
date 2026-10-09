@@ -15,6 +15,7 @@ services:
     environment:
       TZ: ${TZ:-Europe/Berlin}
       INSTANCE_NAME: ${INSTANCE_NAME:-makemkv-web}
+      PEERS: ${PEERS:-}
       HIDE_DRIVES: ${HIDE_DRIVES-cdemu|virtual|qemu|vbox}
       OUTPUT_MOUNT: ${NAS_MOUNT:-/mnt/nas}
       AUTH_USER: ${AUTH_USER:-}

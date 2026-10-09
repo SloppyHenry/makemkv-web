@@ -8,6 +8,7 @@
 import asyncio
 import base64
 import copy
+import errno
 import secrets
 import signal
 import socket
@@ -31,6 +32,7 @@ OUT_PREFERRED = Path(os.environ.get("OUTPUT_DIR", "/mnt/nas/rips"))
 OUT_MOUNT = os.environ.get("OUTPUT_MOUNT", "/mnt/nas")
 OUT_FALLBACK = Path(os.environ.get("FALLBACK_DIR", str(DATA / "output")))
 INSTANCE = os.environ.get("INSTANCE_NAME") or socket.gethostname()
+PEERS_RAW = os.environ.get("PEERS", "")      # „name=http://host:8780,name=…“ – die anderen MakeMKV-Web-Rechner (für die Übergabe)
 MKV_DIR = DATA / ".MakeMKV"
 CONFIG = DATA / "config.json"
 BETAKEY = DATA / "betakey.json"
@@ -526,11 +528,11 @@ def tree_size(p: Path) -> int:
     return sum(f.stat().st_size for f in p.rglob("*") if f.is_file())
 
 
-def enqueue_upload(src: Path, rel: str, dev: str = "", replace: bool = False, lock: str = "", orig_size: int = 0):
+def enqueue_upload(src: Path, rel: str, dev: str = "", replace: bool = False, lock: str = "", orig_size: int = 0, then_convert: dict | None = None):
     global _up_seq
     _up_seq += 1
     item = {"id": _up_seq, "name": rel, "src": str(src), "size": tree_size(src), "copied": 0, "speed": 0.0, "eta": 0,
-            "status": "queued", "error": "", "dev": dev, "t": time.time(), "replace": replace, "lock": lock, "orig_size": orig_size}
+            "status": "queued", "error": "", "dev": dev, "t": time.time(), "replace": replace, "lock": lock, "orig_size": orig_size, "then_convert": then_convert}
     uploads.append(item)
     upload_queue.put_nowait(item)
     broadcast()
@@ -571,10 +573,14 @@ def copy_item(item: dict, base: Path, notify):
         if not replace:
             target = unique_path(target)
         if os.stat(src).st_dev == os.stat(target.parent).st_dev:      # gleiches Dateisystem: nur umbenennen
-            os.replace(src, target)
-            open_perms(target, False)
-            item.update(copied=item["size"], dest=str(target))
-            return
+            try:
+                os.replace(src, target)
+                open_perms(target, False)
+                item.update(copied=item["size"], dest=str(target))
+                return
+            except OSError as e:
+                if e.errno != errno.EXDEV:                              # zwei Einhängungen desselben Dateisystems: dann kopieren
+                    raise
         files = [(src, target)]
     else:
         files = [(f, target / f.relative_to(src)) for f in sorted(src.rglob("*")) if f.is_file()]
@@ -630,6 +636,8 @@ async def upload_worker():
                     dr.add_log(f"Übertragen: {item['name']} ({fmt_bytes(item['size'])})", "ok")
                 if item.get("lock"):
                     release_lock(item["lock"])
+                if item.get("then_convert"):
+                    await hand_to_peer_after_upload(item, base, dr)
                 break
             except Exception as e:  # noqa: BLE001
                 item.update(status="retry" if attempt < 5 else "error", error=str(e), speed=0.0, eta=0)
@@ -717,7 +725,7 @@ def enqueue_convert(src: Path, folder: str, cfg: dict, dev: str = ""):
     src.with_name(src.name + ".json").write_text(json.dumps(cfg))
     conversions.append({"id": _cv_seq, "name": f"{folder}/{src.name}", "folder": folder, "src": str(src), "size_in": src.stat().st_size,
                         "size_out": 0, "status": "queued", "pct": 0.0, "fps": 0.0, "speed": 0.0, "eta": 0, "error": "",
-                        "cfg": cfg, "dev": dev, "t": time.time(), "started": 0, "mode": "", "origin": "", "paused": False})
+                        "cfg": cfg, "dev": dev, "t": time.time(), "started": 0, "mode": "", "origin": "", "paused": False, "handed": ""})
     convert_queue.put_nowait(conversions[-1])
     broadcast()
 
@@ -984,7 +992,7 @@ def lock_path(p: Path) -> Path:
     return p.with_name("." + p.name + ".mkw-lock")
 
 
-def acquire_lock(p: Path) -> str:
+def acquire_lock(p: Path, takeover_from: str = "") -> str:
     """Sperrdatei neben der Datei anlegen (damit nicht zwei Instanzen dieselbe Datei umbauen). Rückgabe: '' = gesperrt, sonst Name des Besitzers."""
     lp = lock_path(p)
     for _ in range(2):
@@ -996,6 +1004,9 @@ def acquire_lock(p: Path) -> str:
                     lp.unlink(missing_ok=True)
                     continue
                 owner = json.loads(lp.read_text()).get("inst", "andere Instanz")
+                if takeover_from and owner.lower() == takeover_from.lower():      # Übergabe: der bisherige Besitzer gibt ab
+                    lp.unlink(missing_ok=True)
+                    continue
             except (OSError, ValueError):
                 owner = "andere Instanz"
             return owner
@@ -1008,6 +1019,8 @@ def acquire_lock(p: Path) -> str:
 
 
 def release_lock(lp: str):
+    if not lp:                       # Sperre wurde bei einer Übergabe abgegeben
+        return
     held_locks.discard(lp)
     try:
         Path(lp).unlink(missing_ok=True)
@@ -1105,7 +1118,9 @@ def release_original(item: dict):
         rdir.mkdir(parents=True, exist_ok=True)
         final = unique_path(rdir / src.name)
         os.replace(src, final)
-        enqueue_upload(final, f"{item['folder']}/{final.name}", item["dev"])
+        handover = item.get("handover")
+        then = {**handover, "cfg": item["cfg"]} if handover else None     # nach der Übertragung beim anderen Rechner anmelden
+        enqueue_upload(final, f"{item['folder']}/{final.name}", item["dev"], then_convert=then)
     src.with_name(src.name + ".json").unlink(missing_ok=True)
     try:
         src.parent.rmdir()
@@ -1403,6 +1418,8 @@ async def startup():
         pass
     asyncio.create_task(lib_probe_worker())
     asyncio.create_task(lock_heartbeat())
+    if parse_peers(PEERS_RAW):
+        asyncio.create_task(peer_prober())
     asyncio.create_task(upload_worker())
     asyncio.create_task(convert_worker())
 
@@ -1428,6 +1445,126 @@ async def output_refresher():
         await asyncio.sleep(5)
 
 
+# ---------------------------------------------------------------- Peers und Übergabe
+peers_state: dict[str, dict] = {}
+
+
+def parse_peers(raw: str) -> dict[str, str]:
+    out: dict[str, str] = {}
+    for part in raw.split(","):
+        name, _, url = part.strip().partition("=")
+        name, url = name.strip(), url.strip().rstrip("/")
+        if name and re.fullmatch(r"https?://[A-Za-z0-9.\-\[\]:]+", url) and name.lower() != INSTANCE.lower():
+            out[name] = url
+    return out
+
+
+def capacity() -> dict:
+    try:
+        load = os.getloadavg()[0]
+    except OSError:
+        load = 0.0
+    return {"instance": INSTANCE, "cores": os.cpu_count() or 1, "load": round(load, 2),
+            "conv_active": sum(1 for c in conversions if c["status"] in CV_ACTIVE), "conv_paused": conv_state["paused"]}
+
+
+def _http_json(url: str, body: dict | None = None, timeout: float = 4.0):
+    req = urllib.request.Request(url, data=json.dumps(body).encode() if body is not None else None,
+                                 headers={"Content-Type": "application/json"}, method="POST" if body is not None else "GET")
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        return json.loads(r.read() or b"{}")
+
+
+async def peer_prober():
+    peers = parse_peers(PEERS_RAW)
+    while True:
+        for name, url in peers.items():
+            try:
+                d = await asyncio.to_thread(_http_json, url + "/api/state")
+                cap = d.get("capacity") or {}
+                ok_ = isinstance(d.get("drives"), list) and isinstance(d.get("output"), dict)
+                peers_state[name] = {"name": name, "url": url, "reachable": ok_, "instance": cap.get("instance", name),
+                                     "cores": cap.get("cores", 0), "load": cap.get("load", 0), "conv_active": cap.get("conv_active", 0),
+                                     "conv_paused": cap.get("conv_paused", False), "has_handover": bool(cap)}
+            except Exception:  # noqa: BLE001
+                old = peers_state.get(name, {})
+                peers_state[name] = {**old, "name": name, "url": url, "reachable": False}
+        broadcast()
+        await asyncio.sleep(10)
+
+
+def work_pending() -> bool:
+    """Läuft hier noch Arbeit (Rip, Konvertierung, Übertragung)? Wenn nicht, darf der Rechner heruntergefahren werden."""
+    return (any(d.job for d in drives.values()) or any(c["status"] in CV_ACTIVE for c in conversions)
+            or any(u["status"] in ACTIVE for u in uploads))
+
+
+async def hand_to_peer_after_upload(item: dict, base: Path, dr):
+    """Übergabe einer frisch ins NAS übertragenen Datei: der andere Rechner konvertiert sie als Bibliotheks-Auftrag."""
+    t = item["then_convert"]
+    try:
+        rel = str(Path(item["dest"]).relative_to(base.resolve())) if item.get("dest") else item["name"]
+        r = await asyncio.to_thread(_http_json, t["url"] + "/api/library/convert", {"paths": [rel], "convert": t["cfg"]}, 15.0)
+        ok_ = rel in r.get("started", [])
+        msg = f"Zur Konvertierung an {t['name']} übergeben: {rel}" if ok_ else f"{t['name']} hat {rel} nicht angenommen: {r.get('skipped')}"
+        if dr:
+            dr.add_log(msg, "ok" if ok_ else "error")
+        if not ok_:
+            item["error"] = msg
+    except Exception as e:  # noqa: BLE001
+        item["error"] = f"Übergabe an {t['name']} fehlgeschlagen: {e}"
+        if dr:
+            dr.add_log(item["error"] + " – die Datei liegt unverändert im Ziel (Bibliothek → konvertieren).", "error")
+
+
+def skip_conversion(item: dict):
+    item["status"] = "skipped"
+    item["t"] = time.time()
+    for proc in conv_procs.get(item["id"], []):
+        if proc.returncode is None:
+            proc.terminate()
+            if conv_state["paused"]:
+                _signal_all([proc], signal.SIGCONT)      # ein angehaltener Prozess nimmt SIGTERM erst nach SIGCONT an
+
+
+class HandoverReq(BaseModel):
+    target: str
+
+
+@app.post("/api/handover")
+async def api_handover(req: HandoverReq):
+    peer = peers_state.get(req.target)
+    if not peer or not peer.get("reachable"):
+        raise HTTPException(409, f"{req.target} ist nicht erreichbar.")
+    if not peer.get("has_handover"):
+        raise HTTPException(409, f"{req.target} läuft noch mit einer älteren Version ohne Übergabe – dort zuerst aktualisieren.")
+    if any(d.job for d in drives.values()):
+        raise HTTPException(409, "Ein Rip, Backup oder eine Analyse läuft – das Laufwerk hängt an diesem Rechner. Erst abwarten oder abbrechen.")
+    handed, errors = [], []
+    for c in [c for c in conversions if c["status"] in CV_ACTIVE]:
+        label = c["name"]
+        if c.get("origin") == "library":
+            # Der andere Rechner übernimmt die Sperre (gleicher Besitzer), ich gebe sie nur auf, ohne die Datei freizugeben.
+            try:
+                r = await asyncio.to_thread(_http_json, peer["url"] + "/api/library/convert",
+                                            {"paths": [c["rel"]], "convert": c["cfg"], "takeover_from": INSTANCE}, 15.0)
+            except Exception as e:  # noqa: BLE001
+                errors.append(f"{label}: {e}")
+                continue
+            if c["rel"] not in r.get("started", []):
+                errors.append(f"{label}: {r.get('skipped')}")
+                continue
+            held_locks.discard(c["lock"])
+            c["lock"] = ""
+        else:
+            c["handover"] = {"url": peer["url"], "name": req.target}     # Original geht erst ins NAS, dann zum anderen Rechner
+        c["handed"] = req.target
+        skip_conversion(c)
+        handed.append(label)
+    broadcast()
+    return {"ok": not errors, "handed": handed, "errors": errors, "target": req.target}
+
+
 def snapshot():
     return {
         "drives": [dr.public() for dr in sorted(drives.values(), key=lambda x: (0 if (x.job or x.disc) else 1 if x.status == "ready" else 2, x.dev))],
@@ -1436,9 +1573,12 @@ def snapshot():
                    "free": out_cache["free"], "stalled": out_cache["stalled"]},
         "uploads": [{k: u[k] for k in ("id", "name", "size", "copied", "status", "error", "t", "speed", "eta", "replace")} for u in uploads
                     if not (u["status"] == "done" and time.time() - u["t"] > 600)],
-        "conversions": [{k: c[k] for k in ("id", "name", "size_in", "size_out", "status", "pct", "fps", "speed", "eta", "error", "cfg", "t", "started", "mode", "origin", "paused")}
+        "conversions": [{k: c[k] for k in ("id", "name", "size_in", "size_out", "status", "pct", "fps", "speed", "eta", "error", "cfg", "t", "started", "mode", "origin", "paused", "handed")}
                         for c in conversions if not (c["status"] in ("done", "skipped") and time.time() - c["t"] > 900)],
         "conv_paused": conv_state["paused"],
+        "capacity": capacity(),
+        "peers": sorted(peers_state.values(), key=lambda x: x["name"]),
+        "idle": not work_pending(),
         "staging": {"dir": str(STAGING), "free": shutil.disk_usage(STAGING).free if STAGING.exists() else 0},
         "key": {"custom": bool(settings["key"].strip()), "beta": bool(beta["key"]), "fetched": beta["fetched"], "error": beta["error"]},
         "now": time.time(),
@@ -1598,13 +1738,7 @@ async def api_conv_skip(cid: int):
     item = next((c for c in conversions if c["id"] == cid), None)
     if not item or item["status"] not in CV_ACTIVE:
         raise HTTPException(404, "Keine laufende oder wartende Konvertierung")
-    item["status"] = "skipped"
-    item["t"] = time.time()
-    for proc in conv_procs.get(cid, []):
-        if proc.returncode is None:
-            proc.terminate()
-            if conv_state["paused"]:
-                _signal_all([proc], signal.SIGCONT)      # ein angehaltener Prozess nimmt SIGTERM erst nach SIGCONT an
+    skip_conversion(item)
     broadcast()
     return {"ok": True}
 
@@ -1629,6 +1763,7 @@ def inside_out(rel: str) -> Path:
 class LibReq(BaseModel):
     paths: list[str] = []
     convert: dict = {}
+    takeover_from: str = ""          # Übergabe: Name der Instanz, die die Sperre gerade hält und abgibt
 
 
 @app.get("/api/library")
@@ -1694,7 +1829,7 @@ async def api_library_convert(req: LibReq):
         if state != "ok":
             skipped.append({"path": rel, "why": {"hevc": "ist bereits HEVC", "hdr": "HDR – wird nicht umkodiert"}.get(state, "Codec wird nicht unterstützt")})
             continue
-        owner = acquire_lock(p)
+        owner = acquire_lock(p, req.takeover_from)
         if owner:
             skipped.append({"path": rel, "why": f"wird gerade von „{owner}“ bearbeitet"})
             continue
@@ -1702,7 +1837,7 @@ async def api_library_convert(req: LibReq):
         _cv_seq += 1
         conversions.append({"id": _cv_seq, "name": rel, "folder": str(Path(rel).parent), "src": str(p), "size_in": st.st_size, "size_out": 0,
                             "status": "queued", "pct": 0.0, "fps": 0.0, "speed": 0.0, "eta": 0, "error": "", "cfg": cfg, "dev": "",
-                            "t": time.time(), "started": 0, "mode": "", "origin": "library", "rel": rel, "lock": str(lock_path(p)), "paused": False})
+                            "t": time.time(), "started": 0, "mode": "", "origin": "library", "rel": rel, "lock": str(lock_path(p)), "paused": False, "handed": ""})
         convert_queue.put_nowait(conversions[-1])
         started.append(rel)
     save_libcache()
