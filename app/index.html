@@ -492,8 +492,8 @@ function renderAction(d){
     const k = d && keyOf(d);
     el.innerHTML = `<div class="destination"><span>♧</span><span><strong id="actionCount">${disc ? '' : 'Keine Disc'}</strong> · ${esc(S.output.dir)}</span></div>
       ${disc ? `<div class="folderrow"><label for="folder">Ordner</label><input class="input" id="folder" value="${esc(ui.folder[k]||'')}" ${busy?'disabled':''}></div>` : ''}
-      <button class="primary" id="ripBtn" data-act="rip" ${(!disc||busy)?'disabled':''}>${busy ? 'Läuft …' : '▶ &nbsp; Auswahl rippen'}</button>
-      <div class="actions2">${d && d.status==='ready' && !busy ? '<button class="secondary" data-act="scan">Neu analysieren</button>' : ''}${disc && !busy ? '<button class="secondary" data-act="backup" title="Entschlüsselte Kopie der ganzen Disc (BDMV/VIDEO_TS-Ordner)">Disc-Backup</button>' : ''}${d && d.status==='open' ? '<button class="secondary" data-act="close">Schublade schließen</button>' : ''}${d ? `<button class="secondary" data-act="eject" ${busy?'disabled':''}>Auswerfen</button>` : ''}</div>`;
+      <button class="primary" id="backupBtn" data-act="backup" title="Entschlüsselte Kopie der ganzen Disc (BDMV/VIDEO_TS-Ordner) – danach lässt sich in Ruhe konvertieren" ${(!disc||busy)?'disabled':''}>${busy ? 'Läuft …' : '⏺ &nbsp; Disc-Backup'}</button>
+      <div class="actions2"><button class="secondary" id="ripBtn" data-act="rip" ${(!disc||busy)?'disabled':''}>▶ Auswahl rippen</button>${d && d.status==='ready' && !busy ? '<button class="secondary" data-act="scan">Neu analysieren</button>' : ''}${d && d.status==='open' ? '<button class="secondary" data-act="close">Schublade schließen</button>' : ''}${d ? `<button class="secondary" data-act="eject" ${busy?'disabled':''}>Auswerfen</button>` : ''}</div>`;
   }
   if(disc) updateTitlesLive(d);
 }
@@ -511,7 +511,7 @@ async function driveAction(ev){
   else if(a==='close') api(`/api/drives/${d.id}/close`);
   else if(a==='cancel'){ if(confirm('Laufenden Vorgang abbrechen?')) api(`/api/drives/${d.id}/cancel`); }
   else if(a==='rip') startRip(d, 'mkv');
-  else if(a==='backup'){ if(confirm('Komplettes entschlüsseltes Disc-Backup erstellen? Das dauert länger und braucht den vollen Platz der Disc.')) startRip(d, 'backup'); }
+  else if(a==='backup') startRip(d, 'backup');
 }
 $('#actionPanel').addEventListener('click', driveAction);
 $('#prog').addEventListener('click', driveAction);
