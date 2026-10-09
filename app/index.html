@@ -335,7 +335,8 @@ const CV_FALLBACK = {convert:false, rf:21, preset:'slow', tune:'none', extra:'aq
 const discKind = d => /blu/i.test(d.disc.type||'') ? 'bluray' : 'dvd';
 function convOf(d){
   const k = keyOf(d);
-  if(!ui.conv[k]) ui.conv[k] = {...CV_FALLBACK, ...((S.settings.presets||{})[discKind(d)]||{})};
+  // Einstellungen (RF, Preset …) kommen aus dem gespeicherten Standard, der Haken „konvertieren“ ist bei jeder Disc zuerst AUS
+  if(!ui.conv[k]) ui.conv[k] = {...CV_FALLBACK, ...((S.settings.presets||{})[discKind(d)]||{}), convert:false};
   return ui.conv[k];
 }
 const PRESETS = ['ultrafast','fast','medium','slow','slower','veryslow'];

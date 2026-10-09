@@ -67,7 +67,7 @@ def choose_segments(dur: float) -> tuple[int, str]:
 X265_PRESETS = ("ultrafast", "superfast", "veryfast", "faster", "fast", "medium", "slow", "slower", "veryslow")
 # Vorgaben für „sieht aus wie das Original, braucht aber nur einen Bruchteil des Platzes“
 CONVERT_DEFAULT = {"convert": False, "rf": 21, "preset": "slow", "tune": "none", "extra": "aq-mode=3:no-sao=1", "audio": "copy"}
-PRESET_DEFAULTS = {"bluray": {**CONVERT_DEFAULT, "convert": True}, "dvd": dict(CONVERT_DEFAULT)}
+PRESET_DEFAULTS = {"bluray": dict(CONVERT_DEFAULT), "dvd": dict(CONVERT_DEFAULT)}      # „konvertieren“ ist standardmäßig aus; die Oberfläche startet es bei jeder Disc ebenfalls aus
 
 DEFAULTS = {
     "minlength": 120,      # Sekunden, kürzere Titel werden ignoriert
