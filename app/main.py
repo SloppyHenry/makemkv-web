@@ -499,15 +499,36 @@ def enqueue_upload(src: Path, rel: str, dev: str = ""):
     broadcast()
 
 
+def open_perms(p: Path, is_dir: bool):
+    """Neu angelegte Dateien/Ordner für alle Nutzer lesbar/schreibbar machen (NFS- und SMB-Clients teilen sich das NAS,
+    z. B. SMB-Gast `nobody` und NFS-Benutzer – sonst kann der jeweils andere sie nicht löschen)."""
+    try:
+        os.chmod(p, 0o777 if is_dir else 0o666)
+    except OSError:
+        pass
+
+
+def mkdir_open(path: Path, base: Path):
+    missing = []
+    p = path
+    while p != base and p != p.parent and not p.exists():
+        missing.append(p)
+        p = p.parent
+    path.mkdir(parents=True, exist_ok=True)
+    for m in missing:
+        open_perms(m, True)
+
+
 def copy_item(item: dict, base: Path, notify):
     """Kopiert eine fertige Datei (oder einen Ordner) ins Ziel: erst als .part, dann umbenennen, Größe prüfen, Quelle löschen."""
     src = Path(item["src"])
     target = base / item["name"]
-    target.parent.mkdir(parents=True, exist_ok=True)
+    mkdir_open(target.parent, base)
     if src.is_file():
         target = unique_path(target)
         if os.stat(src).st_dev == os.stat(target.parent).st_dev:      # gleiches Dateisystem: nur umbenennen
             os.replace(src, target)
+            open_perms(target, False)
             item.update(copied=item["size"], dest=str(target))
             return
         files = [(src, target)]
@@ -516,7 +537,7 @@ def copy_item(item: dict, base: Path, notify):
     item["size"], item["copied"] = sum(a.stat().st_size for a, _ in files), 0
     last = 0.0
     for a, b in files:
-        b.parent.mkdir(parents=True, exist_ok=True)
+        mkdir_open(b.parent, base)
         part = b.with_name(b.name + ".part")
         with open(a, "rb") as fi, open(part, "wb") as fo:
             while chunk := fi.read(8 * 2**20):
@@ -530,6 +551,7 @@ def copy_item(item: dict, base: Path, notify):
         if part.stat().st_size != a.stat().st_size:
             raise OSError(f"Größe von {b.name} stimmt nach dem Kopieren nicht")
         os.replace(part, b)
+        open_perms(b, False)
     shutil.rmtree(src) if src.is_dir() else src.unlink()
     item["dest"] = str(target)
     try:
@@ -1236,7 +1258,13 @@ def api_delete(path: str):
     p = inside_out(path)
     if not p.is_file():
         raise HTTPException(404)
-    p.unlink()
+    try:
+        p.unlink()
+    except PermissionError:
+        raise HTTPException(403, "Keine Berechtigung zum Löschen: Datei oder Ordner gehört auf dem NAS einem anderen Benutzer. "
+                                 "Auf dem NAS die Rechte öffnen (chmod a+rwX) oder die Datei dort löschen.")
+    except OSError as e:
+        raise HTTPException(500, f"Löschen fehlgeschlagen: {e}")
     parent = p.parent
     base, _ = out_dir()
     if parent.resolve() != base.resolve():
