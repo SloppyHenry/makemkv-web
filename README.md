@@ -10,6 +10,9 @@ passiert im Browser.
 - Rippen als MKV oder entschlüsseltes Disc-Backup, Fortschritt mit Restzeit, Abbrechen, Protokoll
 - Sprachfilter für Audio/Untertitel, Auto-Auswerfen, Dateiliste mit Download/Löschen
 - Zwischenspeicher: Jeder Titel wird zuerst lokal gerippt und nach seiner Fertigstellung im Hintergrund ins Ziel (z. B. NAS) übertragen, während schon der nächste Titel läuft – langsames Netz bremst das Rippen nicht
+- Konvertierung nach dem Rippen (x265 10-bit, ffmpeg): Preset je Disc-Art (Blu-ray vorausgewählt), im Browser änderbar; große Filme werden automatisch nach freien Kernen/RAM in Segmente geteilt und parallel kodiert
+- Tab „Bibliothek“: vorhandene Dateien im Ziel nachträglich konvertieren – das Original wird nach bestandener Prüfung ersetzt; Sperrdateien verhindern, dass zwei Instanzen dieselbe Datei bearbeiten
+- Übertragungs-Kachel mit Geschwindigkeit und Restzeit
 - Ausgabe in ein eingehängtes Netzlaufwerk (NFS/SMB), sonst lokaler Fallback
 - Übersteht USB-Resets des Laufwerks (wartet und wiederholt den Schritt automatisch)
 
@@ -41,6 +44,7 @@ Aktualisieren (neue MakeMKV-Version, z. B. weil die Beta nach 60 Tagen abläuft)
 | `AUTH_USER`/`AUTH_PASS` | Optionaler Passwortschutz (HTTP Basic). Ohne `AUTH_PASS` ist die Oberfläche offen |
 | `STAGING_PATH` | Lokaler Zwischenspeicher (Standard `data/staging`); braucht Platz für den größten Titel (ca. 50 GB bei Blu-ray, bei Konvertierung mehr) |
 | `HIDE_DRIVES` | Regex für Laufwerke, die nicht angezeigt werden (Standard: `cdemu\|virtual\|qemu\|vbox`, leer = alle zeigen) |
+| `INSTANCE_NAME` | Name dieser Instanz (erscheint in Sperrdateien; `install.sh` setzt den Hostnamen) |
 | `MKV_VERSION` | `latest` oder feste Version |
 
 NFS-Beispiel (`/etc/fstab`, ohne Automount, damit Docker den Pfad einbinden kann):

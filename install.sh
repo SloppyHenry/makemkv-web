@@ -16,6 +16,7 @@ if [ ! -f .env ]; then
   sed -i.bak "s/^PUID=.*/PUID=$(id -u)/; s/^PGID=.*/PGID=$(id -g)/; s/^CDROM_GID=.*/CDROM_GID=$(getent group cdrom | cut -d: -f3 || echo 24)/" .env && rm -f .env.bak
   echo "→ .env angelegt – bei Bedarf anpassen (Ausgabeordner, Port)"
 fi
+grep -q "^INSTANCE_NAME=" .env || echo "INSTANCE_NAME=$(hostname)" >> .env    # Name dieser Instanz (für Sperrdateien)
 set -a; . ./.env; set +a
 mkdir -p data "${STAGING_PATH:-data/staging}"
 [ -d "${NAS_MOUNT:-/mnt/nas}" ] || { echo "→ Lege ${NAS_MOUNT:-/mnt/nas} an"; $SUDO mkdir -p "${NAS_MOUNT:-/mnt/nas}"; }
