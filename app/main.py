@@ -123,11 +123,11 @@ def clean_convert(c: dict) -> dict:
         pass
     if c.get("preset") in X265_PRESETS:
         d["preset"] = c["preset"]
-    if c.get("tune") in ("none", "grain", "film", "animation"):
+    if c.get("tune") in ("none", "grain", "film", "animation", "stillimage"):
         d["tune"] = c["tune"]
     extra = str(c.get("extra", d["extra"])).strip()
     d["extra"] = extra if re.fullmatch(r"[A-Za-z0-9_=:.,\-]*", extra) else CONVERT_DEFAULT["extra"]
-    if c.get("audio") in ("copy", "ac3", "eac3", "opus"):
+    if c.get("audio") in ("copy", "ac3", "eac3", "aac", "opus"):
         d["audio"] = c["audio"]
     return d
 
@@ -727,7 +727,7 @@ async def detect_crop(src: Path, dur: float, w: int, h: int):
 
 def x265_args(cfg: dict, pools: int = 0) -> list[str]:
     a = ["-c:v", "libx265", "-preset", cfg["preset"], "-crf", str(cfg["rf"]), "-pix_fmt", "yuv420p10le"]
-    if cfg["tune"] != "none":
+    if cfg["tune"] in ("grain", "animation"):          # film/stillimage: x265 kennt dazu keinen Tune -> keiner gesetzt
         a += ["-tune", cfg["tune"]]
     params = ["log-level=error"] + ([f"pools={pools}"] if pools else []) + ([cfg["extra"]] if cfg["extra"] else [])
     return a + ["-x265-params", ":".join(params)]
@@ -740,7 +740,14 @@ def audio_args(cfg: dict, info: dict) -> list[str]:
     a: list[str] = []
     for i, st in enumerate(auds):
         ch = int(st.get("channels") or 2)
-        if cfg["audio"] == "opus":
+        if cfg["audio"] == "aac":
+            if ch > 6:
+                a += [f"-ac:a:{i}", "6"]
+            a += [f"-c:a:{i}", "aac", f"-b:a:{i}", "160k" if ch <= 2 else "256k"]
+            layout = {1: "mono", 2: "stereo", 6: "5.1"}.get(min(ch, 6))
+            if layout:
+                a += [f"-filter:a:{i}", f"aformat=channel_layouts={layout}"]
+        elif cfg["audio"] == "opus":
             layout = {1: "mono", 2: "stereo", 6: "5.1", 8: "7.1"}.get(ch)
             a += [f"-c:a:{i}", "libopus", f"-b:a:{i}", "128k" if ch <= 2 else "320k" if ch <= 6 else "448k"]
             if layout:
