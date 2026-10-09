@@ -425,7 +425,11 @@ async function loadFiles(){
 }
 $('#files').onclick = async e => {
   const p = e.target.dataset.del; if(!p) return;
-  if(confirm(`„${p}“ endgültig löschen?`)){ await fetch('/api/files?path='+encodeURIComponent(p), {method:'DELETE'}); loadFiles(); }
+  if(confirm(`„${p}“ endgültig löschen?`)){
+    const r = await fetch('/api/files?path='+encodeURIComponent(p), {method:'DELETE'});
+    if(!r.ok){ let m='Löschen fehlgeschlagen'; try{ m=(await r.json()).detail||m }catch{} alert(m); }
+    loadFiles();
+  }
 };
 $('#files-reload').onclick = loadFiles;
 
