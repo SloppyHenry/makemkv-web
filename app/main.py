@@ -334,6 +334,7 @@ class Parser:
         self.d, self.job = drive, job
         self.cinfo, self.tinfo, self.sinfo = {}, {}, {}
         self.saved = None
+        self.disc_index = None
         self.errors = []
 
     def line(self, line: str):
@@ -362,9 +363,11 @@ class Parser:
             if m:
                 job["text" if line[3] == "T" else "sub"] = m.group(1)
         elif line.startswith("DRV:"):
-            m = re.match(r'^DRV:\d+,\d+,\d+,\d+,"[^"]*","([^"]*)","([^"]*)"$', line)
-            if m and m.group(2) == d.dev and m.group(1):
-                d.label = m.group(1)
+            m = re.match(r'^DRV:(\d+),\d+,\d+,\d+,"[^"]*","([^"]*)","([^"]*)"$', line)
+            if m and m.group(3) == d.dev:
+                self.disc_index = int(m.group(1))
+                if m.group(2):
+                    d.label = m.group(2)
         elif line.startswith("CINFO:"):
             m = INFO_RE["C"].match(line)
             if m:
@@ -377,6 +380,9 @@ class Parser:
             m = INFO_RE["S"].match(line)
             if m:
                 self.sinfo.setdefault((int(m.group(1)), int(m.group(2))), {})[int(m.group(3))] = m.group(5)
+        elif line.strip() and not line.startswith(("MSG:", "DRV:", "PRG", "TCOUNT:", "CINFO:", "TINFO:", "SINFO:")):   # Klartext-Fehler von makemkvcon
+            self.errors.append(line.strip())
+            d.add_log(line.strip(), "error")
 
     def disc(self, minlength: int):
         titles = []
@@ -1242,8 +1248,15 @@ async def do_rip(drive: Drive, req: RipReq, dest: Path):
             bdir = work / folder
             bdir.mkdir()
             p = Parser(drive, job)
+            await run_makemkv(drive, ["info", "disc:9999"], p)      # Laufwerksliste -> disc:N (backup kennt kein dev:)
+            idx = p.disc_index
+            if idx is None:
+                raise RuntimeError(f"Laufwerk {drive.dev} wurde von MakeMKV nicht gefunden")
+            drive.log.clear()
+            drive.last_msg = ("", 0)
+            p = Parser(drive, job)
             tracker = asyncio.create_task(track_overall(job, lambda: job["total"]))
-            rc = await run_makemkv(drive, ["backup", "--decrypt", f"dev:{drive.dev}", str(bdir)], p)
+            rc = await run_makemkv(drive, ["backup", "--decrypt", f"disc:{idx}", str(bdir)], p)
             tracker.cancel()
             ok = rc == 0 and not drive.cancel
             if ok:
