@@ -9,6 +9,7 @@ import asyncio
 import base64
 import copy
 import secrets
+import socket
 import fcntl
 import glob
 import json
@@ -28,6 +29,7 @@ DATA = Path(os.environ.get("DATA_DIR", "/data"))
 OUT_PREFERRED = Path(os.environ.get("OUTPUT_DIR", "/mnt/nas/rips"))
 OUT_MOUNT = os.environ.get("OUTPUT_MOUNT", "/mnt/nas")
 OUT_FALLBACK = Path(os.environ.get("FALLBACK_DIR", str(DATA / "output")))
+INSTANCE = os.environ.get("INSTANCE_NAME") or socket.gethostname()
 MKV_DIR = DATA / ".MakeMKV"
 CONFIG = DATA / "config.json"
 BETAKEY = DATA / "betakey.json"
@@ -523,11 +525,11 @@ def tree_size(p: Path) -> int:
     return sum(f.stat().st_size for f in p.rglob("*") if f.is_file())
 
 
-def enqueue_upload(src: Path, rel: str, dev: str = ""):
+def enqueue_upload(src: Path, rel: str, dev: str = "", replace: bool = False, lock: str = "", orig_size: int = 0):
     global _up_seq
     _up_seq += 1
-    item = {"id": _up_seq, "name": rel, "src": str(src), "size": tree_size(src), "copied": 0,
-            "status": "queued", "error": "", "dev": dev, "t": time.time()}
+    item = {"id": _up_seq, "name": rel, "src": str(src), "size": tree_size(src), "copied": 0, "speed": 0.0, "eta": 0,
+            "status": "queued", "error": "", "dev": dev, "t": time.time(), "replace": replace, "lock": lock, "orig_size": orig_size}
     uploads.append(item)
     upload_queue.put_nowait(item)
     broadcast()
@@ -557,9 +559,16 @@ def copy_item(item: dict, base: Path, notify):
     """Kopiert eine fertige Datei (oder einen Ordner) ins Ziel: erst als .part, dann umbenennen, Größe prüfen, Quelle löschen."""
     src = Path(item["src"])
     target = base / item["name"]
+    replace = bool(item.get("replace"))
+    if replace:                                       # Bibliothek: konvertierte Datei ersetzt das Original (nur wenn es unverändert ist)
+        if not target.is_file():
+            raise OSError("Das Original ist nicht mehr vorhanden – Ergebnis bleibt im Zwischenspeicher")
+        if item.get("orig_size") and target.stat().st_size != item["orig_size"]:
+            raise OSError("Das Original wurde zwischenzeitlich verändert – es wird nicht ersetzt")
     mkdir_open(target.parent, base)
     if src.is_file():
-        target = unique_path(target)
+        if not replace:
+            target = unique_path(target)
         if os.stat(src).st_dev == os.stat(target.parent).st_dev:      # gleiches Dateisystem: nur umbenennen
             os.replace(src, target)
             open_perms(target, False)
@@ -569,7 +578,7 @@ def copy_item(item: dict, base: Path, notify):
     else:
         files = [(f, target / f.relative_to(src)) for f in sorted(src.rglob("*")) if f.is_file()]
     item["size"], item["copied"] = sum(a.stat().st_size for a, _ in files), 0
-    last = 0.0
+    last, t_start, win = 0.0, time.monotonic(), deque([(time.monotonic(), 0)], maxlen=8)
     for a, b in files:
         mkdir_open(b.parent, base)
         part = b.with_name(b.name + ".part")
@@ -579,6 +588,11 @@ def copy_item(item: dict, base: Path, notify):
                 item["copied"] += len(chunk)
                 if time.monotonic() - last > 0.5:
                     last = time.monotonic()
+                    win.append((last, item["copied"]))          # gleitendes Fenster -> aktuelle Geschwindigkeit
+                    dt = win[-1][0] - win[0][0]
+                    if dt > 0:
+                        item["speed"] = (win[-1][1] - win[0][1]) / dt
+                        item["eta"] = (item["size"] - item["copied"]) / item["speed"] if item["speed"] > 0 else 0
                     notify()
             fo.flush()
             os.fsync(fo.fileno())
@@ -610,12 +624,16 @@ async def upload_worker():
                 item.update(status="copying", error="", copied=0)
                 broadcast()
                 await asyncio.to_thread(copy_item, item, base, notify)
-                item.update(status="done", t=time.time())
+                item.update(status="done", t=time.time(), speed=0.0, eta=0)
                 if dr:
                     dr.add_log(f"Übertragen: {item['name']} ({fmt_bytes(item['size'])})", "ok")
+                if item.get("lock"):
+                    release_lock(item["lock"])
                 break
             except Exception as e:  # noqa: BLE001
-                item.update(status="retry" if attempt < 5 else "error", error=str(e))
+                item.update(status="retry" if attempt < 5 else "error", error=str(e), speed=0.0, eta=0)
+                if attempt == 5 and item.get("lock"):
+                    release_lock(item["lock"])
                 if dr:
                     dr.add_log(f"Übertragung von {item['name']} fehlgeschlagen: {e}", "error")
                 broadcast()
@@ -672,7 +690,7 @@ def enqueue_convert(src: Path, folder: str, cfg: dict, dev: str = ""):
     src.with_name(src.name + ".json").write_text(json.dumps(cfg))
     conversions.append({"id": _cv_seq, "name": f"{folder}/{src.name}", "folder": folder, "src": str(src), "size_in": src.stat().st_size,
                         "size_out": 0, "status": "queued", "pct": 0.0, "fps": 0.0, "speed": 0.0, "eta": 0, "error": "",
-                        "cfg": cfg, "dev": dev, "t": time.time(), "started": 0, "mode": ""})
+                        "cfg": cfg, "dev": dev, "t": time.time(), "started": 0, "mode": "", "origin": ""})
     convert_queue.put_nowait(conversions[-1])
     broadcast()
 
@@ -887,6 +905,8 @@ async def convert_one(item: dict) -> Path:
     crop = await detect_crop(src, dur, int(v["width"]), int(v["height"]))
     if item["status"] == "skipped":
         raise SkipConversion()
+    if item.get("origin") == "library" and staging_free() < item["size_in"]:
+        raise OSError(f"Zu wenig Platz im Zwischenspeicher für das Ergebnis ({fmt_bytes(staging_free())} frei)")
     nseg, why = choose_segments(dur) if item.get("attempt", 1) == 1 else (1, "zweiter Versuch")
     item["mode"] = (f"{nseg} Segmente parallel" if nseg > 1 else "ein Prozess") + f" ({why})"
     CONV_WORK.mkdir(parents=True, exist_ok=True)
@@ -895,11 +915,145 @@ async def convert_one(item: dict) -> Path:
         await convert_segments(item, src, cfg, info, dur, crop, nseg, out)
     else:
         await convert_single(item, src, cfg, info, dur, crop, out)
-    od = float((await probe(out))["format"]["duration"])
+    oi = await probe(out)
+    od = float(oi["format"]["duration"])
     if abs(od - dur) > max(2.0, dur * 0.01):
         out.unlink(missing_ok=True)
         raise OSError(f"Ergebnis hat falsche Länge ({od:.0f}s statt {dur:.0f}s)")
+    cnt = lambda pr, t: sum(1 for x in pr["streams"] if x["codec_type"] == t)      # noqa: E731
+    if (cnt(info, "audio"), cnt(info, "subtitle")) != (cnt(oi, "audio"), cnt(oi, "subtitle")):
+        out.unlink(missing_ok=True)
+        raise OSError("Anzahl der Audio-/Untertitelspuren weicht vom Original ab")
     return out
+
+
+# ---------------------------------------------------------------- Bibliothek (nachträglich konvertieren, Original ersetzen)
+REPLACE_DIR = STAGING / "replace"        # fertig konvertiert, wartet auf das Zurückspielen (ersetzt das Original)
+LIB_EXT = (".mkv", ".iso", ".m2ts")
+LIB_CODECS = ("h264", "vc1", "mpeg2video", "mpeg4", "wmv3")     # diese werden als „Original“ angeboten
+LOCK_TTL = 300                                                  # Sekunden ohne Herzschlag, danach gilt eine Sperre als verwaist
+lib_cache: dict[str, dict] = {}
+lib_probe_queue: asyncio.Queue = asyncio.Queue()
+lib_probing: set[str] = set()
+held_locks: set[str] = set()
+LIBCACHE = DATA / "library.json"
+
+
+def lock_path(p: Path) -> Path:
+    return p.with_name("." + p.name + ".mkw-lock")
+
+
+def acquire_lock(p: Path) -> str:
+    """Sperrdatei neben der Datei anlegen (damit nicht zwei Instanzen dieselbe Datei umbauen). Rückgabe: '' = gesperrt, sonst Name des Besitzers."""
+    lp = lock_path(p)
+    for _ in range(2):
+        try:
+            fd = os.open(lp, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o666)
+        except FileExistsError:
+            try:
+                if time.time() - lp.stat().st_mtime > LOCK_TTL:      # verwaist -> übernehmen
+                    lp.unlink(missing_ok=True)
+                    continue
+                owner = json.loads(lp.read_text()).get("inst", "andere Instanz")
+            except (OSError, ValueError):
+                owner = "andere Instanz"
+            return owner
+        with os.fdopen(fd, "w") as f:
+            json.dump({"inst": INSTANCE, "t": time.time()}, f)
+        open_perms(lp, False)
+        held_locks.add(str(lp))
+        return ""
+    return "andere Instanz"
+
+
+def release_lock(lp: str):
+    held_locks.discard(lp)
+    try:
+        Path(lp).unlink(missing_ok=True)
+    except OSError:
+        pass
+
+
+async def lock_heartbeat():
+    while True:
+        await asyncio.sleep(60)
+        for lp in list(held_locks):
+            try:
+                os.utime(lp)
+            except OSError:
+                pass
+
+
+def lib_info(pr: dict) -> dict:
+    v = next((x for x in pr["streams"] if x["codec_type"] == "video"), {})
+    auds = [x for x in pr["streams"] if x["codec_type"] == "audio"]
+    return {"codec": v.get("codec_name", ""), "w": v.get("width", 0), "h": v.get("height", 0), "pix": v.get("pix_fmt", ""),
+            "hdr": v.get("color_transfer") in ("smpte2084", "arib-std-b67"),
+            "dur": float(pr["format"].get("duration") or 0),
+            "audio": [f'{a.get("codec_name", "?")} {a.get("channels", "?")}ch {a.get("tags", {}).get("language", "")}'.strip() for a in auds],
+            "subs": sum(1 for x in pr["streams"] if x["codec_type"] == "subtitle")}
+
+
+def lib_state(info) -> str:
+    if info is None:
+        return "unknown"
+    if info["hdr"]:
+        return "hdr"
+    if info["codec"] == "hevc":
+        return "hevc"
+    return "ok" if info["codec"] in LIB_CODECS else "other"
+
+
+def save_libcache():
+    try:
+        LIBCACHE.write_text(json.dumps(lib_cache))
+    except OSError:
+        pass
+
+
+async def lib_probe_worker():
+    n = 0
+    while True:
+        rel = await lib_probe_queue.get()
+        try:
+            p = Path(out_cache["dir"]) / rel
+            st = p.stat()
+            try:
+                lib_cache[rel] = {"size": st.st_size, "mtime": st.st_mtime, "info": lib_info(await probe(p))}
+            except Exception as e:  # noqa: BLE001
+                lib_cache[rel] = {"size": st.st_size, "mtime": st.st_mtime, "info": None, "err": str(e)[:120]}
+            n += 1
+            if n % 10 == 0 or lib_probe_queue.empty():
+                save_libcache()
+        except OSError:
+            pass
+        finally:
+            lib_probing.discard(rel)
+
+
+def scan_library():
+    base, _ = out_dir()
+    items, locks = [], {}
+    for root, dirs, files in os.walk(base):
+        dirs[:] = [d for d in dirs if not d.startswith(".")]
+        if len(Path(root).relative_to(base).parts) >= 4:
+            dirs[:] = []
+        for f in files:
+            full = Path(root) / f
+            if f.startswith(".") and f.endswith(".mkw-lock"):
+                try:
+                    locks[str((Path(root) / f[1:-len(".mkw-lock")]).relative_to(base))] = (full.stat().st_mtime, full)
+                except OSError:
+                    pass
+                continue
+            if f.startswith(".") or not f.lower().endswith(LIB_EXT):
+                continue
+            try:
+                st = full.stat()
+            except OSError:
+                continue
+            items.append({"path": str(full.relative_to(base)), "size": st.st_size, "mtime": st.st_mtime})
+    return str(base), items, locks
 
 
 def release_original(item: dict):
@@ -942,6 +1096,13 @@ async def convert_worker():
                 try:
                     item["attempt"] = attempt
                     out = await convert_one(item)
+                    if item.get("origin") == "library":          # Ergebnis ersetzt später das Original auf dem NAS
+                        REPLACE_DIR.mkdir(parents=True, exist_ok=True)
+                        dest_f = REPLACE_DIR / f"{item['id']}-{Path(item['rel']).name}"
+                        os.replace(out, dest_f)
+                        item.update(status="done", pct=1.0, eta=0, size_out=dest_f.stat().st_size, t=time.time())
+                        enqueue_upload(dest_f, item["rel"], "", replace=True, lock=item["lock"], orig_size=item["size_in"])
+                        break
                     src = Path(item["src"])
                     rdir = READY / item["folder"]
                     rdir.mkdir(parents=True, exist_ok=True)
@@ -970,6 +1131,13 @@ async def convert_worker():
                         broadcast()
         if item["status"] != "done":
             was_skipped = item["status"] == "skipped"
+            if item.get("origin") == "library":              # Original liegt unverändert auf dem NAS
+                release_lock(item["lock"])
+                item["status"] = "skipped" if was_skipped else "error"
+                if not was_skipped:
+                    item["error"] += " – Original bleibt unverändert"
+                broadcast()
+                continue
             release_original(item)
             item["status"] = "skipped" if was_skipped else "error"
             if not was_skipped:
@@ -1186,6 +1354,12 @@ async def startup():
     asyncio.create_task(key_refresher())
     asyncio.create_task(output_refresher())
     recover_staging()
+    try:
+        lib_cache.update(json.loads(LIBCACHE.read_text()))
+    except (OSError, ValueError):
+        pass
+    asyncio.create_task(lib_probe_worker())
+    asyncio.create_task(lock_heartbeat())
     asyncio.create_task(upload_worker())
     asyncio.create_task(convert_worker())
 
@@ -1217,9 +1391,9 @@ def snapshot():
         "settings": settings,
         "output": {"dir": out_cache["dir"], "mounted": out_cache["mounted"], "preferred": str(OUT_PREFERRED),
                    "free": out_cache["free"], "stalled": out_cache["stalled"]},
-        "uploads": [{k: u[k] for k in ("id", "name", "size", "copied", "status", "error", "t")} for u in uploads
+        "uploads": [{k: u[k] for k in ("id", "name", "size", "copied", "status", "error", "t", "speed", "eta", "replace")} for u in uploads
                     if not (u["status"] == "done" and time.time() - u["t"] > 600)],
-        "conversions": [{k: c[k] for k in ("id", "name", "size_in", "size_out", "status", "pct", "fps", "speed", "eta", "error", "cfg", "t", "started", "mode")}
+        "conversions": [{k: c[k] for k in ("id", "name", "size_in", "size_out", "status", "pct", "fps", "speed", "eta", "error", "cfg", "t", "started", "mode", "origin")}
                         for c in conversions if not (c["status"] in ("done", "skipped") and time.time() - c["t"] > 900)],
         "staging": {"dir": str(STAGING), "free": shutil.disk_usage(STAGING).free if STAGING.exists() else 0},
         "key": {"custom": bool(settings["key"].strip()), "beta": bool(beta["key"]), "fetched": beta["fetched"], "error": beta["error"]},
@@ -1395,6 +1569,90 @@ def inside_out(rel: str) -> Path:
     return p
 
 
+class LibReq(BaseModel):
+    paths: list[str] = []
+    convert: dict = {}
+
+
+@app.get("/api/library")
+async def api_library():
+    base, items, locks = await asyncio.to_thread(scan_library)
+    active = {c["rel"]: c for c in conversions if c.get("origin") == "library" and c["status"] in CV_ACTIVE}
+    done = {u["name"] for u in uploads if u.get("replace") and u["status"] in ACTIVE}
+    out = []
+    for it in items:
+        rel = it["path"]
+        c = lib_cache.get(rel)
+        fresh = c and c["size"] == it["size"] and c["mtime"] == it["mtime"]
+        if fresh:
+            info, state = c["info"], lib_state(c["info"])
+        else:
+            info, state = None, "probing" if rel.lower().endswith(".mkv") else "other"
+            if rel.lower().endswith(".mkv") and rel not in lib_probing:
+                lib_probing.add(rel)
+                lib_probe_queue.put_nowait(rel)
+        job = None
+        if rel in active:
+            job = {"status": active[rel]["status"], "pct": active[rel]["pct"]}
+        elif rel in done:
+            job = {"status": "replacing", "pct": 1.0}
+        lk = locks.get(rel)
+        locked = None
+        if lk and str(lk[1]) not in held_locks and time.time() - lk[0] < LOCK_TTL:
+            try:
+                locked = json.loads(lk[1].read_text()).get("inst", "andere Instanz")
+            except (OSError, ValueError):
+                locked = "andere Instanz"
+        out.append({**it, "state": state, "info": info, "job": job, "locked": locked,
+                    "dev_err": (c or {}).get("err", "") if not fresh or not c.get("info") else ""})
+    out.sort(key=lambda x: -x["mtime"])
+    return {"dir": base, "files": out[:1500], "probing": len(lib_probing), "instance": INSTANCE}
+
+
+@app.post("/api/library/convert")
+async def api_library_convert(req: LibReq):
+    cfg = clean_convert({**req.convert, "convert": True})
+    base, _ = out_dir()
+    started, skipped = [], []
+    for rel in req.paths[:300]:
+        p = inside_out(rel)
+        if not p.is_file():
+            skipped.append({"path": rel, "why": "nicht gefunden"})
+            continue
+        if any(c.get("origin") == "library" and c["rel"] == rel and c["status"] in CV_ACTIVE for c in conversions):
+            skipped.append({"path": rel, "why": "bereits in der Warteschlange"})
+            continue
+        st = p.stat()
+        c = lib_cache.get(rel)
+        if c and c["size"] == st.st_size and c["mtime"] == st.st_mtime and c["info"]:
+            info = c["info"]
+        else:
+            try:
+                info = lib_info(await probe(p))
+            except Exception as e:  # noqa: BLE001
+                skipped.append({"path": rel, "why": f"nicht lesbar: {str(e)[:80]}"})
+                continue
+            lib_cache[rel] = {"size": st.st_size, "mtime": st.st_mtime, "info": info}
+        state = lib_state(info)
+        if state != "ok":
+            skipped.append({"path": rel, "why": {"hevc": "ist bereits HEVC", "hdr": "HDR – wird nicht umkodiert"}.get(state, "Codec wird nicht unterstützt")})
+            continue
+        owner = acquire_lock(p)
+        if owner:
+            skipped.append({"path": rel, "why": f"wird gerade von „{owner}“ bearbeitet"})
+            continue
+        global _cv_seq
+        _cv_seq += 1
+        conversions.append({"id": _cv_seq, "name": rel, "folder": str(Path(rel).parent), "src": str(p), "size_in": st.st_size, "size_out": 0,
+                            "status": "queued", "pct": 0.0, "fps": 0.0, "speed": 0.0, "eta": 0, "error": "", "cfg": cfg, "dev": "",
+                            "t": time.time(), "started": 0, "mode": "", "origin": "library", "rel": rel, "lock": str(lock_path(p))})
+        convert_queue.put_nowait(conversions[-1])
+        started.append(rel)
+    save_libcache()
+    broadcast()
+    return {"started": started, "skipped": skipped}
+
+
 @app.get("/api/files")
 def api_files():
     base, _ = out_dir()
@@ -1428,6 +1686,9 @@ def api_delete(path: str):
     p = inside_out(path)
     if not p.is_file():
         raise HTTPException(404)
+    lp = lock_path(p)
+    if lp.exists() and time.time() - lp.stat().st_mtime < LOCK_TTL:
+        raise HTTPException(409, "Die Datei wird gerade konvertiert und kann jetzt nicht gelöscht werden.")
     try:
         p.unlink()
     except PermissionError:

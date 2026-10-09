@@ -83,6 +83,11 @@ dialog h3{margin:0}
 label.f{display:grid;gap:4px;font-size:13px;color:var(--mute)}
 label.chk{display:flex;gap:10px;align-items:center;color:var(--ink);font-size:15px}
 .hint{font-size:12px;color:var(--mute)}
+.tabs{display:flex;gap:4px;background:var(--chip);padding:3px;border-radius:10px}
+.tabs button{border:0;background:transparent;padding:5px 14px}
+.tabs button.on{background:var(--card);font-weight:600;box-shadow:0 1px 2px rgba(0,0,0,.15)}
+.st{font-size:12px;padding:2px 8px;border-radius:99px;background:var(--chip);color:var(--mute);white-space:nowrap}
+.st.ok{background:rgba(31,157,85,.15);color:var(--ok)}.st.busy{background:rgba(229,72,77,.14);color:var(--acc)}.st.warn{background:rgba(194,124,14,.15);color:var(--warn)}
 .conv{margin-top:16px;padding:14px;border:1px solid var(--line);border-radius:10px;background:var(--bg)}
 .conv label.chk{margin:0}
 .cvgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px 14px;margin-top:12px}
@@ -96,6 +101,7 @@ select{font:inherit;color:var(--ink);background:var(--card);border:1px solid var
 <header>
   <div class="logo"><i></i> MakeMKV Web</div>
   <span class="chip" id="conn"><span class="dot"></span><span>verbinde …</span></span>
+  <nav class="tabs"><button data-tab="drives" class="on">Laufwerke</button><button data-tab="lib">Bibliothek</button></nav>
   <div class="sp"></div>
   <span class="chip" id="outchip"></span>
   <button id="btn-set">Einstellungen</button>
@@ -111,9 +117,19 @@ select{font:inherit;color:var(--ink);background:var(--card);border:1px solid var
     <div class="hd"><h2>Übertragung ins Ziel</h2><span class="chip" id="stagechip"></span></div>
     <div class="bd" style="padding:6px 10px 10px"><table><tbody id="uplist"></tbody></table></div>
   </section>
-  <section class="card files">
-    <div class="hd"><h2>Fertige Dateien</h2><span class="chip" id="filesdir"></span><div class="sp"></div><button class="sm" id="files-reload">Aktualisieren</button></div>
-    <div class="bd" style="padding:6px 10px 10px"><table><tbody id="files"></tbody></table><div class="empty" id="nofiles" hidden>Noch nichts im Ausgabeordner.</div></div>
+  <section class="card" id="libtab" hidden>
+    <div class="hd"><h2>Bibliothek</h2><span class="chip" id="filesdir"></span><span class="chip" id="libinfo"></span><div class="sp"></div>
+      <input type="text" id="libfilter" placeholder="Filtern …" style="width:200px"><button class="sm" id="lib-reload">Aktualisieren</button></div>
+    <div class="bd">
+      <div class="conv" style="margin:0 0 14px">
+        <b>Nachträglich konvertieren</b> <span class="hint">– das Original wird nach erfolgreicher Prüfung (Länge, Spurzahl) durch die kleinere x265-Datei ersetzt. Gelesen wird direkt vom NAS, das Ergebnis liegt zuerst lokal.</span>
+        <div class="cvgrid" id="libcv"></div>
+        <div class="row" style="margin-top:12px"><button class="pri" id="lib-go" disabled>Auswahl konvertieren</button>
+          <button class="sm" id="lib-allok">Alle „Original“ wählen</button><button class="sm" id="lib-none">Keine</button><span class="hint" id="lib-sel"></span></div>
+      </div>
+      <table><thead><tr><th></th><th>Datei</th><th class="hide-s">Video</th><th class="hide-s">Audio</th><th>Größe</th><th>Status</th><th></th></tr></thead><tbody id="liblist"></tbody></table>
+      <div class="empty" id="nolib" hidden>Keine Videodateien im Ausgabeordner.</div>
+    </div>
   </section>
 </main>
 
@@ -396,7 +412,7 @@ function renderConversions(){
     const sizes = c.status==='done' ? `${fmtB(c.size_in)} → ${fmtB(c.size_out)}${saved}` : c.status==='running' && c.size_out ? `${fmtB(c.size_in)} → ${fmtB(c.size_out)} …` : fmtB(c.size_in);
     const run = c.status==='running' ? `<div class="hint">${c.fps?c.fps.toFixed(1)+' fps · ':''}${c.speed?c.speed.toFixed(2)+'× Echtzeit · ':''}${c.eta?'Restzeit ca. '+fmtD(c.eta):'berechne Restzeit …'} · RF ${c.cfg.rf}, ${esc(c.cfg.preset)}${c.mode?' · '+esc(c.mode):''}</div>` : '';
     const skip = (c.status==='queued'||c.status==='running') ? `<button class="sm" data-skip="${c.id}" title="Konvertierung abbrechen und das Original unverändert übertragen">Überspringen</button>` : '';
-    return `<tr><td>${esc(c.name)}${run}${c.error?`<div class="hint" style="color:var(--err)">${esc(c.error)}</div>`:''}</td>
+    return `<tr><td>${esc(c.name)}${c.origin==='library'?' <span class="st">Bibliothek</span>':''}${run}${c.error?`<div class="hint" style="color:var(--err)">${esc(c.error)}</div>`:''}</td>
       <td class="sz">${sizes}</td><td style="width:170px"><div class="bar thin"><div style="width:${pct}%"></div></div></td>
       <td class="sz" style="min-width:150px">${label[c.status]||c.status}${c.status==='running'?' '+pct+' %':''}</td><td class="a">${skip}</td></tr>`;
   }).join('');
@@ -411,32 +427,88 @@ function renderUploads(){
   const label = {queued:'wartet', copying:'überträgt', retry:'Fehler – neuer Versuch folgt', done:'fertig ✓', error:'Fehler – Datei bleibt im Zwischenspeicher'};
   $('#uplist').innerHTML = u.map(x => {
     const pct = x.status==='done' ? 100 : x.size ? Math.round(x.copied/x.size*100) : 0;
-    return `<tr><td>${esc(x.name)}${x.error?`<div class="hint" style="color:var(--err)">${esc(x.error)}</div>`:''}</td>
+    return `<tr><td>${esc(x.name)}${x.replace?' <span class="st warn">ersetzt Original</span>':''}${x.error?`<div class="hint" style="color:var(--err)">${esc(x.error)}</div>`:''}</td>
       <td class="sz">${fmtB(x.size)}</td><td style="width:180px"><div class="bar thin"><div style="width:${pct}%"></div></div></td>
-      <td class="sz" style="min-width:150px">${label[x.status]||x.status}${x.status==='copying'?' '+pct+' %':''}</td></tr>`;
+      <td class="sz" style="min-width:190px">${label[x.status]||x.status}${x.status==='copying'?' '+pct+' %':''}${x.status==='copying'&&x.speed>0?`<div class="hint">${fmtB(x.speed)}/s${x.eta>1?' · noch '+fmtD(x.eta):''}</div>`:''}</td></tr>`;
   }).join('');
   const done = u.filter(x => x.status==='done').length;
   if(done !== ui.upDone){ ui.upDone = done; loadFiles(); }
 }
 
-// ---------- Dateien
-async function loadFiles(){
-  try{
-    const r = await (await fetch('/api/files')).json();
-    $('#nofiles').hidden = r.files.length>0;
-    $('#files').innerHTML = r.files.map(f => `<tr><td>${esc(f.path)}</td><td class="sz">${fmtB(f.size)}</td><td class="sz hide-s">${ago(f.mtime)}</td>
-      <td class="a"><a class="btn sm" href="/api/download?path=${encodeURIComponent(f.path)}">Download</a> <button class="sm danger" data-del="${esc(f.path)}">Löschen</button></td></tr>`).join('');
-  }catch{}
+// ---------- Tabs
+let tab = 'drives';
+function setTab(t){
+  tab = t;
+  document.querySelectorAll('.tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab===t));
+  $('#drives').hidden = t!=='drives'; $('#libtab').hidden = t!=='lib';
+  if(t==='lib'){ libInit(); loadLibrary(); }
 }
-$('#files').onclick = async e => {
+document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => setTab(b.dataset.tab));
+
+// ---------- Bibliothek
+const libSel = new Set();
+let lib = {files:[], probing:0, dir:'', instance:''}, libCv = null, libFilter = '';
+function libInit(){
+  if(libCv) return;
+  libCv = {...CV_FALLBACK, ...((S&&S.settings.presets||{}).bluray||{}), convert:true};
+  const c = libCv;
+  $('#libcv').innerHTML = `
+    <label class="f">Qualität (RF) <input type="number" min="14" max="30" data-lcv="rf" value="${c.rf}"></label>
+    <label class="f">Preset <select data-lcv="preset">${['veryfast','fast','medium','slow','slower'].map(x=>opt(x,c.preset)).join('')}</select></label>
+    <label class="f">Tune <select data-lcv="tune">${opt('none',c.tune,'keins')}${opt('grain',c.tune,'grain (körnige Filme)')}${opt('film',c.tune,'film')}${opt('animation',c.tune,'animation')}</select></label>
+    <label class="f">Audio <select data-lcv="audio">${opt('copy',c.audio,'Original (Passthrough)')}${opt('ac3',c.audio,'AC3 5.1, 640 kbps')}${opt('eac3',c.audio,'E-AC3 5.1, 640 kbps')}${opt('opus',c.audio,'Opus (nicht überall abspielbar)')}</select></label>
+    <label class="f wide">Zusatz-Optionen x265 <input type="text" data-lcv="extra" value="${esc(c.extra)}"></label>`;
+}
+$('#libcv').oninput = e => { const f = e.target.dataset.lcv; if(f) libCv[f] = f==='rf' ? (+e.target.value||21) : e.target.value; };
+async function loadLibrary(){
+  try{ lib = await (await fetch('/api/library')).json(); renderLibrary(); }catch{}
+}
+const loadFiles = () => { if(tab==='lib') loadLibrary(); };
+setInterval(() => { if(tab==='lib') loadLibrary(); }, 4000);
+$('#lib-reload').onclick = loadLibrary;
+$('#libfilter').oninput = e => { libFilter = e.target.value.toLowerCase(); renderLibrary(); };
+const libOk = f => f.state==='ok' && !f.job && !f.locked;
+$('#lib-allok').onclick = () => { lib.files.filter(libOk).filter(f=>f.path.toLowerCase().includes(libFilter)).forEach(f=>libSel.add(f.path)); renderLibrary(); };
+$('#lib-none').onclick = () => { libSel.clear(); renderLibrary(); };
+function renderLibrary(){
+  $('#filesdir').textContent = lib.dir || '';
+  $('#libinfo').textContent = `${lib.files.length} Dateien${lib.probing?' · '+lib.probing+' werden geprüft …':''}`;
+  const stat = f => {
+    if(f.job) return f.job.status==='replacing' ? '<span class="st busy">ersetzt Original …</span>' : f.job.status==='running' ? `<span class="st busy">konvertiert ${Math.round(f.job.pct*100)} %</span>` : '<span class="st busy">in Warteschlange</span>';
+    if(f.locked) return `<span class="st warn">gesperrt (${esc(f.locked)})</span>`;
+    return {ok:'<span class="st ok">Original</span>', hevc:'<span class="st">bereits HEVC</span>', hdr:'<span class="st warn">HDR – nicht umkodiert</span>',
+            probing:'<span class="st">wird geprüft …</span>', other:'<span class="st">—</span>', unknown:`<span class="st warn" title="${esc(f.dev_err||'')}">nicht lesbar</span>`}[f.state] || '';
+  };
+  const vid = f => f.info ? `${esc(f.info.codec)} ${f.info.w}×${f.info.h}${f.info.pix?' · '+esc(f.info.pix):''}` : '';
+  const aud = f => f.info ? esc((f.info.audio[0]||'') + (f.info.audio.length>1 ? ` (+${f.info.audio.length-1})` : '')) : '';
+  const rows = lib.files.filter(f => f.path.toLowerCase().includes(libFilter));
+  $('#nolib').hidden = rows.length>0;
+  $('#liblist').innerHTML = rows.map(f => `<tr>
+    <td><input type="checkbox" data-lsel="${esc(f.path)}" ${libSel.has(f.path)?'checked':''} ${libOk(f)?'':'disabled'}></td>
+    <td>${esc(f.path)}</td><td class="hide-s num">${vid(f)}</td><td class="hide-s">${aud(f)}</td><td class="sz num">${fmtB(f.size)}</td><td>${stat(f)}</td>
+    <td class="a"><a class="btn sm" href="/api/download?path=${encodeURIComponent(f.path)}">Download</a> <button class="sm danger" data-del="${esc(f.path)}" ${f.job||f.locked?'disabled':''}>Löschen</button></td></tr>`).join('');
+  const n = [...libSel].filter(p => lib.files.some(f => f.path===p && libOk(f))).length;
+  $('#lib-go').disabled = !n; $('#lib-go').textContent = n ? `${n} Datei${n>1?'en':''} konvertieren` : 'Auswahl konvertieren';
+  const tot = lib.files.filter(f => libSel.has(f.path)).reduce((a,f)=>a+f.size,0);
+  $('#lib-sel').textContent = n ? `${fmtB(tot)} Originale – danach ersetzt durch die kleinere Datei` : '';
+}
+$('#liblist').onchange = e => { const p = e.target.dataset.lsel; if(p===undefined) return; e.target.checked ? libSel.add(p) : libSel.delete(p); renderLibrary(); };
+$('#liblist').onclick = async e => {
   const p = e.target.dataset.del; if(!p) return;
   if(confirm(`„${p}“ endgültig löschen?`)){
     const r = await fetch('/api/files?path='+encodeURIComponent(p), {method:'DELETE'});
     if(!r.ok){ let m='Löschen fehlgeschlagen'; try{ m=(await r.json()).detail||m }catch{} alert(m); }
-    loadFiles();
+    loadLibrary();
   }
 };
-$('#files-reload').onclick = loadFiles;
+$('#lib-go').onclick = async () => {
+  const paths = [...libSel];
+  if(!confirm(`${paths.length} Datei(en) konvertieren?\n\nDas Original wird nach bestandener Prüfung GELÖSCHT und durch die konvertierte Datei ersetzt.`)) return;
+  const r = await api('/api/library/convert', 'POST', {paths, convert: libCv});
+  libSel.clear();
+  if(r.skipped && r.skipped.length) alert(`${r.started.length} gestartet, ${r.skipped.length} übersprungen:\n` + r.skipped.map(x => `• ${x.path}: ${x.why}`).join('\n'));
+  loadLibrary();
+};
 
 // ---------- Einstellungen
 const dlg = $('#dlg');
@@ -456,7 +528,7 @@ $('#setform').onsubmit = async e => {
     audio_langs: $('#s-audio_langs').value, sub_langs: $('#s-sub_langs').value, key: $('#s-key').value });
 };
 
-connect(); loadFiles(); setInterval(loadFiles, 60000);
+connect();
 </script>
 </body>
 </html>
