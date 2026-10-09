@@ -9,6 +9,7 @@ import asyncio
 import base64
 import copy
 import secrets
+import signal
 import socket
 import fcntl
 import glob
@@ -676,6 +677,32 @@ CONVERT, CONV_WORK = STAGING / "convert", STAGING / ".conv"
 conversions: list[dict] = []
 convert_queue: asyncio.Queue = asyncio.Queue()
 conv_procs: dict[int, list] = {}
+conv_state = {"paused": False}      # Konvertierung angehalten (ffmpeg per SIGSTOP, Warteschlange wartet)
+
+
+def _signal_all(procs: list, sig: int):
+    for pr in procs:
+        if pr.returncode is None:
+            try:
+                pr.send_signal(sig)
+            except ProcessLookupError:
+                pass
+
+
+def set_conv_paused(paused: bool):
+    """Alle laufenden ffmpeg-Prozesse anhalten bzw. fortsetzen; neue Aufträge starten erst nach dem Fortsetzen."""
+    conv_state["paused"] = paused
+    for procs in conv_procs.values():
+        _signal_all(procs, signal.SIGSTOP if paused else signal.SIGCONT)
+    for c in conversions:
+        if c["status"] == "running":
+            c["paused"] = paused
+
+
+def apply_pause(procs: list):
+    """Frisch gestartete Prozesse sofort anhalten, wenn gerade pausiert ist."""
+    if conv_state["paused"]:
+        _signal_all(procs, signal.SIGSTOP)
 _cv_seq = 0
 CV_ACTIVE = ("queued", "running")
 
@@ -690,7 +717,7 @@ def enqueue_convert(src: Path, folder: str, cfg: dict, dev: str = ""):
     src.with_name(src.name + ".json").write_text(json.dumps(cfg))
     conversions.append({"id": _cv_seq, "name": f"{folder}/{src.name}", "folder": folder, "src": str(src), "size_in": src.stat().st_size,
                         "size_out": 0, "status": "queued", "pct": 0.0, "fps": 0.0, "speed": 0.0, "eta": 0, "error": "",
-                        "cfg": cfg, "dev": dev, "t": time.time(), "started": 0, "mode": "", "origin": ""})
+                        "cfg": cfg, "dev": dev, "t": time.time(), "started": 0, "mode": "", "origin": "", "paused": False})
     convert_queue.put_nowait(conversions[-1])
     broadcast()
 
@@ -795,6 +822,10 @@ async def aggregate(item: dict, state: dict, dur: float):
     """Fortschritt aller (Teil-)Prozesse zu einer Anzeige zusammenfassen."""
     t0 = time.monotonic()
     while True:
+        if conv_state["paused"]:                      # Pausenzeit zählt nicht zur Laufzeit (Tempo/Restzeit)
+            t0 += 0.8
+            await asyncio.sleep(0.8)
+            continue
         done = sum(s["t"] for s in state.values())
         el = max(1.0, time.monotonic() - t0)
         speed = done / el
@@ -812,6 +843,7 @@ async def spawn(args: list[str]):
 async def convert_single(item, src, cfg, info, dur, crop, out):
     proc = await spawn(ffmpeg_args(src, out, cfg, info, crop))
     conv_procs[item["id"]] = [proc]
+    apply_pause([proc])
     state, tail = {0: {"t": 0.0, "fps": 0.0, "size": 0}}, deque(maxlen=12)
     agg = asyncio.create_task(aggregate(item, state, dur))
     try:
@@ -853,6 +885,7 @@ async def convert_segments(item, src, cfg, info, dur, crop, nseg, out):
             tails.append(deque(maxlen=8))
             state[i] = {"t": 0.0, "fps": 0.0, "size": 0}
         conv_procs[item["id"]] = procs
+        apply_pause(procs)
         agg = asyncio.create_task(aggregate(item, state, dur))
         try:
             rcs = await asyncio.gather(*[pump(p, state, i, tails[i]) for i, p in enumerate(procs)])
@@ -878,6 +911,7 @@ async def convert_segments(item, src, cfg, info, dur, crop, nseg, out):
               ["-c:s", "copy", str(out)]
         p = await spawn(mux)
         conv_procs[item["id"]] = [p]
+        apply_pause([p])
         _, err = await p.communicate()
         conv_procs.pop(item["id"], None)
         if item["status"] == "skipped":
@@ -1098,6 +1132,8 @@ async def convert_worker():
             return
         item = await convert_queue.get()
         dr = drives.get(item["dev"])
+        while conv_state["paused"] and item["status"] == "queued":      # pausiert: nichts Neues starten
+            await asyncio.sleep(1)
         if item["status"] != "skipped":
             for attempt in (1, 2):
                 try:
@@ -1400,8 +1436,9 @@ def snapshot():
                    "free": out_cache["free"], "stalled": out_cache["stalled"]},
         "uploads": [{k: u[k] for k in ("id", "name", "size", "copied", "status", "error", "t", "speed", "eta", "replace")} for u in uploads
                     if not (u["status"] == "done" and time.time() - u["t"] > 600)],
-        "conversions": [{k: c[k] for k in ("id", "name", "size_in", "size_out", "status", "pct", "fps", "speed", "eta", "error", "cfg", "t", "started", "mode", "origin")}
+        "conversions": [{k: c[k] for k in ("id", "name", "size_in", "size_out", "status", "pct", "fps", "speed", "eta", "error", "cfg", "t", "started", "mode", "origin", "paused")}
                         for c in conversions if not (c["status"] in ("done", "skipped") and time.time() - c["t"] > 900)],
+        "conv_paused": conv_state["paused"],
         "staging": {"dir": str(STAGING), "free": shutil.disk_usage(STAGING).free if STAGING.exists() else 0},
         "key": {"custom": bool(settings["key"].strip()), "beta": bool(beta["key"]), "fetched": beta["fetched"], "error": beta["error"]},
         "now": time.time(),
@@ -1545,6 +1582,17 @@ async def api_settings(req: SettingsReq):
     return settings
 
 
+class PauseReq(BaseModel):
+    paused: bool
+
+
+@app.post("/api/conversions/pause")
+async def api_conv_pause(req: PauseReq):
+    set_conv_paused(req.paused)
+    broadcast()
+    return {"ok": True, "paused": conv_state["paused"]}
+
+
 @app.post("/api/conversions/{cid}/skip")
 async def api_conv_skip(cid: int):
     item = next((c for c in conversions if c["id"] == cid), None)
@@ -1555,6 +1603,8 @@ async def api_conv_skip(cid: int):
     for proc in conv_procs.get(cid, []):
         if proc.returncode is None:
             proc.terminate()
+            if conv_state["paused"]:
+                _signal_all([proc], signal.SIGCONT)      # ein angehaltener Prozess nimmt SIGTERM erst nach SIGCONT an
     broadcast()
     return {"ok": True}
 
@@ -1652,12 +1702,113 @@ async def api_library_convert(req: LibReq):
         _cv_seq += 1
         conversions.append({"id": _cv_seq, "name": rel, "folder": str(Path(rel).parent), "src": str(p), "size_in": st.st_size, "size_out": 0,
                             "status": "queued", "pct": 0.0, "fps": 0.0, "speed": 0.0, "eta": 0, "error": "", "cfg": cfg, "dev": "",
-                            "t": time.time(), "started": 0, "mode": "", "origin": "library", "rel": rel, "lock": str(lock_path(p))})
+                            "t": time.time(), "started": 0, "mode": "", "origin": "library", "rel": rel, "lock": str(lock_path(p)), "paused": False})
         convert_queue.put_nowait(conversions[-1])
         started.append(rel)
     save_libcache()
     broadcast()
     return {"started": started, "skipped": skipped}
+
+
+class RenameReq(BaseModel):
+    path: str
+    name: str
+
+
+def valid_name(name: str) -> str:
+    """Neuer Datei-/Ordnername: nur ein Name (kein Pfad), nicht versteckt, keine Steuerzeichen."""
+    n = name.strip()
+    if not n or n in (".", "..") or "/" in n or "\\" in n or n.startswith(".") or len(n) > 200 or re.search(r"[\x00-\x1f]", n):
+        raise HTTPException(400, "Ungültiger Name (kein Pfad, nicht leer, nicht mit Punkt beginnend, höchstens 200 Zeichen).")
+    return n
+
+
+def move_cache(old: str, new: str):
+    for k in [k for k in lib_cache if k == old or k.startswith(old + "/")]:
+        lib_cache[new + k[len(old):]] = lib_cache.pop(k)
+    save_libcache()
+
+
+def busy_reason(rel: str, is_dir: bool, abs_path: Path) -> str:
+    """Warum etwas gerade nicht umbenannt werden darf ('' = darf)."""
+    hit = (lambda r: r.startswith(rel + "/")) if is_dir else (lambda r: r == rel)
+    if any(c.get("origin") == "library" and c["status"] in CV_ACTIVE and hit(c["rel"]) for c in conversions):
+        return "wird gerade konvertiert"
+    if any(u["status"] in ACTIVE and (hit(u["name"]) or (is_dir and u["name"].startswith(rel + "/"))) for u in uploads):
+        return "wird gerade übertragen"
+    if is_dir and any(d.job and str(d.job.get("dest", "")).startswith(str(abs_path)) for d in drives.values()):
+        return "wird gerade von einem Rip beschrieben"
+    return ""
+
+
+def fresh_lock_in(p: Path, is_dir: bool) -> bool:
+    paths = [p] if not is_dir else [f for f in p.rglob("*") if f.is_file() and f.name.endswith(".mkw-lock")]
+    for f in paths:
+        lp = f if is_dir else lock_path(p)
+        try:
+            if time.time() - lp.stat().st_mtime < LOCK_TTL and str(lp) not in held_locks:
+                return True
+        except OSError:
+            continue
+    return False
+
+
+@app.post("/api/library/rename")
+async def api_lib_rename(req: RenameReq):
+    src = inside_out(req.path)
+    if not src.is_file():
+        raise HTTPException(404, "Datei nicht gefunden")
+    name = valid_name(req.name)
+    if Path(name).suffix.lower() != src.suffix.lower():
+        name += src.suffix                                   # Endung bleibt erhalten
+    dst = src.with_name(name)
+    base = Path(out_cache["dir"]).resolve()
+    rel_old, rel_new = str(src.relative_to(base)), str(dst.relative_to(base))
+    if dst == src:
+        return {"ok": True, "path": rel_old}
+    if why := busy_reason(rel_old, False, src):
+        raise HTTPException(409, f"Die Datei {why} und kann jetzt nicht umbenannt werden.")
+    if fresh_lock_in(src, False):
+        raise HTTPException(409, "Die Datei ist von einer anderen Instanz gesperrt.")
+    if dst.exists():
+        raise HTTPException(409, f"„{name}“ gibt es in diesem Ordner schon.")
+    try:
+        os.rename(src, dst)
+    except PermissionError:
+        raise HTTPException(403, "Keine Berechtigung zum Umbenennen (Ordner gehört auf dem NAS einem anderen Benutzer).")
+    except OSError as e:
+        raise HTTPException(500, f"Umbenennen fehlgeschlagen: {e}")
+    move_cache(rel_old, rel_new)
+    broadcast()
+    return {"ok": True, "path": rel_new}
+
+
+@app.post("/api/library/rename-folder")
+async def api_lib_rename_folder(req: RenameReq):
+    src = inside_out(req.path)
+    base = Path(out_cache["dir"]).resolve()
+    if not src.is_dir() or src == base:
+        raise HTTPException(404, "Ordner nicht gefunden")
+    name = valid_name(req.name)
+    dst = src.with_name(name)
+    rel_old, rel_new = str(src.relative_to(base)), str(dst.relative_to(base))
+    if dst == src:
+        return {"ok": True, "path": rel_old}
+    if why := busy_reason(rel_old, True, src):
+        raise HTTPException(409, f"Im Ordner {why}; er kann jetzt nicht umbenannt werden.")
+    if fresh_lock_in(src, True):
+        raise HTTPException(409, "Im Ordner ist eine Datei von einer anderen Instanz gesperrt.")
+    if dst.exists():
+        raise HTTPException(409, f"„{name}“ gibt es hier schon.")
+    try:
+        os.rename(src, dst)
+    except PermissionError:
+        raise HTTPException(403, "Keine Berechtigung zum Umbenennen (gehört auf dem NAS einem anderen Benutzer).")
+    except OSError as e:
+        raise HTTPException(500, f"Umbenennen fehlgeschlagen: {e}")
+    move_cache(rel_old, rel_new)
+    broadcast()
+    return {"ok": True, "path": rel_new}
 
 
 @app.get("/api/files")

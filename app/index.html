@@ -151,6 +151,14 @@ details[open] summary .chev{transform:rotate(180deg)}
 .empty{padding:26px 16px;text-align:center;color:var(--muted);font-size:12px}
 .toast{position:fixed;bottom:18px;right:20px;padding:12px 16px;border:1px solid #315444;border-radius:9px;background:#11251e;color:#a6f2ce;box-shadow:var(--shadow);display:none;z-index:10;max-width:420px}
 .toast.err{border-color:#5a2a33;background:#2c151c;color:#ffb0b8}
+.folder td{background:#0f1520;border-bottom:1px solid #222d3b}
+.foldertoggle{background:transparent;border:0;color:var(--text);font:inherit;display:inline-flex;gap:10px;align-items:center;padding:3px 6px;border-radius:6px;text-align:left}
+.foldertoggle:hover{background:#1a2330}
+.chevb{display:inline-block;transition:transform .15s;color:var(--muted)}
+.chevb.open{transform:rotate(90deg)}
+.fileindent{padding-left:34px;display:flex;align-items:center;gap:8px;min-width:0}
+.editrow{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+tr.file td:first-child{padding-left:30px}
 .lib-body{padding:14px 16px}
 .st{font-size:11px;padding:3px 8px;border-radius:99px;background:#202938;color:#9aa9c1;white-space:nowrap}
 .st.ok{background:#153328;color:#75e6b3}.st.busy{background:#351b24;color:#ff8791}.st.warn{background:#38301a;color:#f0c36a}
@@ -190,7 +198,7 @@ dialog h3{margin:0;font-size:16px}
       </section>
       <aside class="right">
         <section class="panel">
-          <div class="panel-head"><span class="brand-mark" style="width:20px;height:20px;border-width:4px"></span><div><h2>Aufträge</h2><span class="sub" id="jobsDest"></span></div></div>
+          <div class="panel-head"><span class="brand-mark" style="width:20px;height:20px;border-width:4px"></span><div><h2>Aufträge</h2><span class="sub" id="jobsDest"></span></div><span class="spacer"></span><button class="secondary pause-btn" hidden></button></div>
           <div class="section-content" id="jobs"></div>
         </section>
         <section class="panel">
@@ -231,7 +239,7 @@ dialog h3{margin:0;font-size:16px}
       </div>
     </section>
     <section class="panel" style="margin-top:12px">
-      <div class="panel-head"><span class="brand-mark" style="width:20px;height:20px;border-width:4px"></span><h2>Aufträge</h2></div>
+      <div class="panel-head"><span class="brand-mark" style="width:20px;height:20px;border-width:4px"></span><h2>Aufträge</h2><span class="spacer"></span><button class="secondary pause-btn" hidden></button></div>
       <div class="section-content" id="jobs2"></div>
     </section>
   </div>
@@ -523,10 +531,12 @@ const baseName = p => String(p).split('/').pop();
 function jobRow(x){
   const o = x.o; let cls = '', txt = 'Fertig', icon = '<span class="status-check">✓</span>', small = '', err = false, bar = '', btn;
   if(x.k === 'c'){
-    if(o.status === 'running'){ const p = Math.round(o.pct*100); cls = 'run'; txt = 'Läuft'; icon = '<span class="status-check run"></span>';
+    if(o.status === 'running' && o.paused){ const p = Math.round(o.pct*100); cls = 'wait'; txt = 'Pausiert'; icon = '<span class="status-check wait">⏸</span>';
+      small = `Konvertierung pausiert bei ${p} % – mit „Fortsetzen“ geht es weiter`; bar = `<div class="mini-bar"><div style="width:${p}%"></div></div>`; }
+    else if(o.status === 'running'){ const p = Math.round(o.pct*100); cls = 'run'; txt = 'Läuft'; icon = '<span class="status-check run"></span>';
       small = `Konvertierung ${p} %${o.fps ? ` · ${dec(o.fps.toFixed(1))} fps` : ''}${o.speed ? ` · ${dec(o.speed.toFixed(2))}× Echtzeit` : ''}${o.eta ? ` · Restzeit ${fmtD(o.eta)}` : ''}${o.mode ? ` · ${o.mode}` : ''}`;
       bar = `<div class="mini-bar"><div style="width:${p}%"></div></div>`; }
-    else if(o.status === 'queued'){ cls = 'wait'; txt = 'Wartet'; icon = '<span class="status-check wait">…</span>'; small = `Konvertierung eingereiht · ${fmtB(o.size_in)}`; }
+    else if(o.status === 'queued'){ cls = 'wait'; txt = 'Wartet'; icon = '<span class="status-check wait">…</span>'; small = `Konvertierung eingereiht${S.conv_paused ? ' (pausiert)' : ''} · ${fmtB(o.size_in)}`; }
     else if(o.status === 'done') small = `Konvertiert · ${fmtB(o.size_in)} → ${fmtB(o.size_out)} (−${Math.round((1-o.size_out/o.size_in)*100)} %)`;
     else if(o.status === 'skipped'){ icon = '<span class="status-check skip">✓</span>'; small = 'Konvertierung übersprungen · Original'; }
     else { cls = 'err'; txt = 'Fehler'; icon = '<span class="status-check err">!</span>'; small = o.error || 'Konvertierung fehlgeschlagen'; err = true; }
@@ -553,6 +563,8 @@ function renderJobs(){
   const h = items.slice(0,10).map(jobRow).join('') || '<div class="empty">Keine Aufträge.</div>';
   ['#jobs','#jobs2'].forEach(id => { const e = $(id); if(e && !e.closest('[hidden]')) setHtml(e, h); });
   $('#jobsDest').textContent = `Ziel: ${S.output.dir}`;
+  const aktiv = (S.conversions||[]).some(c => c.status==='queued' || c.status==='running'), p = !!S.conv_paused;
+  document.querySelectorAll('.pause-btn').forEach(b => { b.hidden = !(aktiv || p); b.textContent = p ? '▶ Konvertierung fortsetzen' : '⏸ Konvertierung pausieren'; b.dataset.paused = p ? '1' : ''; });
 }
 function jobsClick(e){
   const sk = e.target.closest('[data-skip]');
@@ -561,6 +573,10 @@ function jobsClick(e){
   if(inf){ const [k,id] = inf.dataset.info.split(':'), o = (k==='c' ? S.conversions : S.uploads).find(x => x.id === +id);
     if(o) toast(`${o.name}${o.error ? ' – ' + o.error : ''}`, !!o.error); }
 }
+document.addEventListener('click', e => {
+  const b = e.target.closest('.pause-btn'); if(!b) return;
+  api('/api/conversions/pause', 'POST', {paused: !b.dataset.paused}).then(() => toast(b.dataset.paused ? 'Konvertierung läuft weiter.' : 'Konvertierung pausiert – Prozesse sind angehalten.'));
+});
 $('#jobs').addEventListener('click', jobsClick); $('#jobs2').addEventListener('click', jobsClick);
 
 // ---- Fertige Dateien (kompakt)
@@ -604,30 +620,99 @@ $('#libfilter').addEventListener('input', e => { libFilter = e.target.value.toLo
 const libOk = f => f.state==='ok' && !f.job && !f.locked;
 $('#lib-allok').addEventListener('click', () => { lib.files.filter(libOk).filter(f => f.path.toLowerCase().includes(libFilter)).forEach(f => libSel.add(f.path)); renderLibrary(); });
 $('#lib-none').addEventListener('click', () => { libSel.clear(); renderLibrary(); });
-function renderLibrary(){
+let libEdit = null;                       // laufendes Umbenennen: {kind:'file'|'folder', path, value, ext?}
+const libOpen = new Set((() => { try{ return JSON.parse(localStorage.getItem('libOpen') || '[]'); }catch{ return []; } })());
+const saveOpen = () => { try{ localStorage.setItem('libOpen', JSON.stringify([...libOpen])); }catch{} };
+const dirOf = p => p.includes('/') ? p.slice(0, p.lastIndexOf('/')) : '';
+const matches = f => f.path.toLowerCase().includes(libFilter);
+function libGroups(files){
+  const m = new Map();
+  for(const f of files){ const d = dirOf(f.path); if(!m.has(d)) m.set(d, []); m.get(d).push(f); }
+  m.forEach(v => v.sort((a,b) => baseName(a.path).localeCompare(baseName(b.path), 'de')));
+  return [...m.entries()].sort((a,b) => a[0].localeCompare(b[0], 'de'));
+}
+function libStat(f){
+  if(f.job) return f.job.status==='replacing' ? '<span class="st busy">ersetzt Original …</span>' : f.job.status==='running' ? `<span class="st busy">konvertiert ${Math.round(f.job.pct*100)} %</span>` : '<span class="st busy">in Warteschlange</span>';
+  if(f.locked) return `<span class="st warn">gesperrt (${esc(f.locked)})</span>`;
+  return {ok:'<span class="st ok">Original</span>', hevc:'<span class="st">bereits HEVC</span>', hdr:'<span class="st warn">HDR – nicht umkodiert</span>', probing:'<span class="st">wird geprüft …</span>', other:'<span class="st">—</span>',
+          unknown:`<span class="st warn" title="${esc(f.dev_err||'')}">nicht lesbar</span>`}[f.state] || '';
+}
+const editRow = (id, value, suffix) => `<div class="editrow"><input class="input" id="lib-edit" value="${esc(value)}" aria-label="Neuer Name" style="min-width:220px;height:30px">${suffix ? `<span class="muted">${esc(suffix)}</span>` : ''}<button class="primary" style="width:auto;padding:6px 12px" data-edit-ok>OK</button><button class="secondary" data-edit-cancel>Abbrechen</button></div>`;
+function folderRow(dir, fs){
+  const open = libOpen.has(dir) || !!libFilter, ok = fs.filter(libOk), sel = ok.filter(f => libSel.has(f.path)).length;
+  const count = {}; fs.forEach(f => { const k = f.job ? 'busy' : f.state; count[k] = (count[k]||0)+1; });
+  const names = {ok:'Original', hevc:'HEVC', hdr:'HDR', busy:'in Arbeit', other:'andere', probing:'wird geprüft', unknown:'nicht lesbar'};
+  const sum = Object.entries(count).map(([k,n]) => `${n} ${names[k]||k}`).join(' · ');
+  const editing = libEdit && libEdit.kind==='folder' && libEdit.path===dir;
+  const label = dir ? dir.split('/').join(' / ') : '(Hauptordner)';
+  const head = editing ? editRow('f', libEdit.value, '') : `<button class="foldertoggle" data-ftoggle="${esc(dir)}" aria-expanded="${open}"><span class="chevb ${open?'open':''}">▸</span><strong>${esc(label)}</strong><span class="pill">${fs.length} Datei${fs.length===1?'':'en'}</span></button>`;
+  return `<tr class="folder"><td><input class="check" type="checkbox" data-fsel="${esc(dir)}" data-state="${ok.length && sel===ok.length ? 'all' : sel ? 'some' : 'none'}" ${ok.length && sel===ok.length ? 'checked' : ''} ${ok.length?'':'disabled'} aria-label="Alle Original-Dateien in ${esc(label)} wählen"></td>
+    <td colspan="3">${head}</td><td>${fmtB(fs.reduce((a,f) => a+f.size, 0))}</td><td class="muted">${esc(sum)}</td>
+    <td>${dir ? `<button class="secondary" data-frename="${esc(dir)}" ${editing?'disabled':''} title="Ordner umbenennen">✎ Umbenennen</button>` : ''}</td></tr>`;
+}
+function fileRow(f){
+  const editing = libEdit && libEdit.kind==='file' && libEdit.path===f.path;
+  const vid = f.info ? `${esc(f.info.codec)} ${f.info.w}×${f.info.h}${f.info.pix ? ' · '+esc(f.info.pix) : ''}` : '';
+  const aud = f.info ? esc((f.info.audio[0]||'') + (f.info.audio.length>1 ? ` (+${f.info.audio.length-1})` : '')) : '';
+  const name = editing ? editRow('d', libEdit.value, libEdit.ext) : esc(baseName(f.path));
+  return `<tr class="file"><td><input class="check" type="checkbox" data-lsel="${esc(f.path)}" ${libSel.has(f.path)?'checked':''} ${libOk(f)?'':'disabled'} aria-label="${esc(f.path)} auswählen"></td>
+    <td><div class="fileindent">${name}</div></td><td class="muted">${vid}</td><td class="muted">${aud}</td><td>${fmtB(f.size)}</td><td>${libStat(f)}</td>
+    <td><button class="secondary" data-rename="${esc(f.path)}" ${(f.job||f.locked||editing)?'disabled':''} title="Datei umbenennen">✎</button> <a class="secondary" href="/api/download?path=${encodeURIComponent(f.path)}">Download</a> <button class="secondary danger" data-del="${esc(f.path)}" ${f.job||f.locked?'disabled':''}>Löschen</button></td></tr>`;
+}
+function renderLibrary(force=false){
+  if(libEdit && !force) return;           // beim Umbenennen nicht neu zeichnen (sonst ginge die Eingabe verloren)
   $('#filesdir').textContent = lib.dir || '';
   $('#libinfo').textContent = `${lib.files.length} Dateien${lib.probing ? ' · '+lib.probing+' werden geprüft …' : ''}`;
-  const stat = f => {
-    if(f.job) return f.job.status==='replacing' ? '<span class="st busy">ersetzt Original …</span>' : f.job.status==='running' ? `<span class="st busy">konvertiert ${Math.round(f.job.pct*100)} %</span>` : '<span class="st busy">in Warteschlange</span>';
-    if(f.locked) return `<span class="st warn">gesperrt (${esc(f.locked)})</span>`;
-    return {ok:'<span class="st ok">Original</span>', hevc:'<span class="st">bereits HEVC</span>', hdr:'<span class="st warn">HDR – nicht umkodiert</span>', probing:'<span class="st">wird geprüft …</span>', other:'<span class="st">—</span>',
-            unknown:`<span class="st warn" title="${esc(f.dev_err||'')}">nicht lesbar</span>`}[f.state] || '';
-  };
-  const vid = f => f.info ? `${esc(f.info.codec)} ${f.info.w}×${f.info.h}${f.info.pix ? ' · '+esc(f.info.pix) : ''}` : '';
-  const aud = f => f.info ? esc((f.info.audio[0]||'') + (f.info.audio.length>1 ? ` (+${f.info.audio.length-1})` : '')) : '';
-  const rows = lib.files.filter(f => f.path.toLowerCase().includes(libFilter));
+  const rows = lib.files.filter(matches), groups = libGroups(rows);
   $('#nolib').hidden = rows.length > 0;
-  setHtml($('#liblist'), rows.map(f => `<tr><td><input class="check" type="checkbox" data-lsel="${esc(f.path)}" ${libSel.has(f.path)?'checked':''} ${libOk(f)?'':'disabled'} aria-label="${esc(f.path)} auswählen"></td>
-    <td>${esc(f.path)}</td><td class="muted">${vid(f)}</td><td class="muted">${aud(f)}</td><td>${fmtB(f.size)}</td><td>${stat(f)}</td>
-    <td><a class="secondary" href="/api/download?path=${encodeURIComponent(f.path)}">Download</a> <button class="secondary danger" data-del="${esc(f.path)}" ${f.job||f.locked?'disabled':''}>Löschen</button></td></tr>`).join(''));
+  $('#liblist').innerHTML = groups.map(([dir, fs]) => folderRow(dir, fs) + ((libOpen.has(dir) || libFilter) ? fs.map(fileRow).join('') : '')).join('');
+  $('#liblist').querySelectorAll('[data-state="some"]').forEach(c => c.indeterminate = true);
   const n = [...libSel].filter(p => lib.files.some(f => f.path===p && libOk(f))).length;
   $('#lib-go').disabled = !n; $('#lib-go').textContent = n ? `${n} Datei${n>1?'en':''} konvertieren` : 'Auswahl konvertieren';
   const tot = lib.files.filter(f => libSel.has(f.path)).reduce((a,f) => a+f.size, 0);
   $('#lib-sel').textContent = n ? `${fmtB(tot)} Originale – danach ersetzt durch die kleinere Datei` : '';
+  if(libEdit){ const i = $('#lib-edit'); if(i && document.activeElement !== i){ i.focus(); i.select(); } }
 }
-$('#liblist').addEventListener('change', e => { const p = e.target.dataset.lsel; if(p === undefined) return; e.target.checked ? libSel.add(p) : libSel.delete(p); renderLibrary(); });
+function startEdit(kind, path){
+  if(kind === 'file'){ const nm = baseName(path), i = nm.lastIndexOf('.'); libEdit = {kind, path, value: i > 0 ? nm.slice(0, i) : nm, ext: i > 0 ? nm.slice(i) : ''}; }
+  else libEdit = {kind, path, value: baseName(path)};
+  renderLibrary(true);
+}
+function stopEdit(){ libEdit = null; renderLibrary(true); }
+async function commitEdit(){
+  const e = libEdit; if(!e) return;
+  const value = e.value.trim(); if(!value || value === (e.kind==='file' ? baseName(e.path).replace(/\.[^.]*$/, '') : baseName(e.path))){ stopEdit(); return; }
+  try{
+    const r = await api(e.kind==='file' ? '/api/library/rename' : '/api/library/rename-folder', 'POST', {path: e.path, name: value});
+    const old = e.path, neu = r.path;                       // Auswahl und Ordnerzustand auf den neuen Pfad umstellen
+    [...libSel].forEach(p => { if(p === old || p.startsWith(old + '/')){ libSel.delete(p); libSel.add(neu + p.slice(old.length)); } });
+    [...libOpen].forEach(p => { if(p === old || p.startsWith(old + '/')){ libOpen.delete(p); libOpen.add(neu + p.slice(old.length)); } }); saveOpen();
+    toast(e.kind==='file' ? 'Datei umbenannt ✓' : 'Ordner umbenannt ✓');
+    libEdit = null; await loadLibrary(); loadFiles(); renderLibrary(true);
+  }catch{ /* api() zeigt die Meldung; die Eingabe bleibt zum Korrigieren offen */ }
+}
+$('#liblist').addEventListener('change', e => {
+  const t = e.target;
+  if(t.dataset.lsel !== undefined){ t.checked ? libSel.add(t.dataset.lsel) : libSel.delete(t.dataset.lsel); renderLibrary(); }
+  else if(t.dataset.fsel !== undefined){
+    lib.files.filter(f => dirOf(f.path) === t.dataset.fsel && libOk(f) && matches(f)).forEach(f => t.checked ? libSel.add(f.path) : libSel.delete(f.path));
+    renderLibrary();
+  }
+});
+$('#liblist').addEventListener('input', e => { if(e.target.id === 'lib-edit' && libEdit) libEdit.value = e.target.value; });
+$('#liblist').addEventListener('keydown', e => {
+  if(e.target.id !== 'lib-edit') return;
+  if(e.key === 'Enter'){ e.preventDefault(); commitEdit(); } else if(e.key === 'Escape'){ e.preventDefault(); stopEdit(); }
+});
 $('#liblist').addEventListener('click', async e => {
-  const p = e.target.dataset.del; if(!p) return;
+  const t = e.target;
+  const tog = t.closest('[data-ftoggle]');
+  if(tog){ const d = tog.dataset.ftoggle; libOpen.has(d) ? libOpen.delete(d) : libOpen.add(d); saveOpen(); renderLibrary(); return; }
+  const rn = t.closest('[data-rename]'); if(rn){ startEdit('file', rn.dataset.rename); return; }
+  const fr = t.closest('[data-frename]'); if(fr){ startEdit('folder', fr.dataset.frename); return; }
+  if(t.closest('[data-edit-ok]')){ commitEdit(); return; }
+  if(t.closest('[data-edit-cancel]')){ stopEdit(); return; }
+  const p = t.dataset.del; if(!p) return;
   if(confirm(`„${p}“ endgültig löschen?`)){
     const r = await fetch('/api/files?path='+encodeURIComponent(p), {method:'DELETE'});
     if(!r.ok){ let m = 'Löschen fehlgeschlagen'; try{ m = (await r.json()).detail || m }catch{} toast(m, true); }
