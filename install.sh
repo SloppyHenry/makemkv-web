@@ -5,11 +5,11 @@ cd "$(dirname "$0")"
 
 command -v docker >/dev/null || { echo "Docker fehlt (https://docs.docker.com/engine/install/)"; exit 1; }
 docker compose version >/dev/null 2>&1 || { echo "Docker Compose Plugin fehlt"; exit 1; }
-SUDO=""; [ "$(id -u)" -eq 0 ] || SUDO="sudo"
+SUDO=""; [ "$(id -u)" -eq 0 ] || SUDO="sudo -n"      # ohne Passwort-Abfrage; Root-Teile erledigt scripts/setup-host.sh
 
 echo "→ Kernelmodule sg + sr_mod laden und beim Boot aktivieren"
-$SUDO modprobe sg sr_mod || true
-printf 'sg\nsr_mod\n' | $SUDO tee /etc/modules-load.d/makemkv.conf >/dev/null
+{ $SUDO modprobe sg sr_mod && printf 'sg\nsr_mod\n' | $SUDO tee /etc/modules-load.d/makemkv.conf >/dev/null; } 2>/dev/null \
+  || echo "   (übersprungen – keine Root-Rechte; einmalig sudo ./scripts/setup-host.sh ausführen)"
 
 if [ ! -f .env ]; then
   cp .env.example .env
@@ -19,7 +19,7 @@ fi
 grep -q "^INSTANCE_NAME=" .env || echo "INSTANCE_NAME=$(hostname)" >> .env    # Name dieser Instanz (für Sperrdateien)
 set -a; . ./.env; set +a
 mkdir -p data "${STAGING_PATH:-data/staging}"
-[ -d "${NAS_MOUNT:-/mnt/nas}" ] || { echo "→ Lege ${NAS_MOUNT:-/mnt/nas} an"; $SUDO mkdir -p "${NAS_MOUNT:-/mnt/nas}"; }
+[ -d "${NAS_MOUNT:-/mnt/nas}" ] || { echo "→ Lege ${NAS_MOUNT:-/mnt/nas} an"; $SUDO mkdir -p "${NAS_MOUNT:-/mnt/nas}" 2>/dev/null || echo "   (Ordner fehlt – einmalig sudo ./scripts/setup-host.sh ausführen)"; }
 
 if [ "${ACCEPT_EULA:-}" != "yes" ]; then
   echo
