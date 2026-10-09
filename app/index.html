@@ -2,232 +2,309 @@
 <html lang="de">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <title>MakeMKV Web</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%23e5484d'/%3E%3Ccircle cx='16' cy='16' r='5' fill='%23fff'/%3E%3Ccircle cx='16' cy='16' r='2' fill='%23e5484d'/%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%23f04452'/%3E%3Ccircle cx='16' cy='16' r='5' fill='%23fff'/%3E%3Ccircle cx='16' cy='16' r='2' fill='%23f04452'/%3E%3C/svg%3E">
 <style>
 :root{
-  --bg:#f4f5f7;--card:#fff;--ink:#16181d;--mute:#6b7280;--line:#e3e5ea;--acc:#e5484d;--acc-ink:#fff;
-  --ok:#1f9d55;--warn:#c27c0e;--err:#d03b3b;--chip:#eef0f4;--bar:#e6e8ee;--log:#0f1115;--logink:#c9d1d9;
+  color-scheme:dark;--bg:#0b0e13;--panel:#111720;--panel2:#0e141d;--line:#253041;
+  --text:#edf2fa;--muted:#91a0b6;--red:#f04452;--red2:#c92e3c;--green:#36c98b;--blue:#9cb8e8;--amber:#e0a23c;
+  --radius:12px;--shadow:0 10px 35px #0002;
 }
-@media (prefers-color-scheme:dark){:root{
-  --bg:#0e1013;--card:#171a20;--ink:#e8eaee;--mute:#8b93a1;--line:#272b33;--chip:#222730;--bar:#262b35;--log:#0a0c0f;
-}}
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif}
-header{display:flex;align-items:center;gap:14px;padding:14px 20px;border-bottom:1px solid var(--line);background:var(--card);position:sticky;top:0;z-index:5;flex-wrap:wrap}
-.logo{display:flex;align-items:center;gap:10px;font-weight:700;font-size:17px;letter-spacing:.2px}
-.logo i{width:22px;height:22px;border-radius:50%;background:radial-gradient(circle,var(--card) 0 2px,var(--acc) 2.5px 5px,var(--card) 5.5px 7px,var(--acc) 7.5px);display:inline-block}
-.sp{flex:1}
-.chip{display:inline-flex;align-items:center;gap:6px;background:var(--chip);border-radius:99px;padding:3px 11px;font-size:13px;color:var(--mute);white-space:nowrap}
-.chip b{color:var(--ink);font-weight:600}
-.dot{width:8px;height:8px;border-radius:50%;background:var(--mute);display:inline-block}
-.dot.ok{background:var(--ok)}.dot.warn{background:var(--warn)}.dot.err{background:var(--err)}
-.dot.live{background:var(--ok);box-shadow:0 0 0 0 rgba(31,157,85,.6);animation:pulse 2s infinite}
-@keyframes pulse{70%{box-shadow:0 0 0 7px rgba(31,157,85,0)}100%{box-shadow:0 0 0 0 rgba(31,157,85,0)}}
-main{max-width:1100px;margin:0 auto;padding:20px;display:grid;gap:18px}
-.card{background:var(--card);border:1px solid var(--line);border-radius:14px;overflow:hidden}
-.card>.hd{display:flex;align-items:center;gap:12px;padding:14px 18px;border-bottom:1px solid var(--line);flex-wrap:wrap}
-.card>.hd h2{margin:0;font-size:16px}
-.card>.bd{padding:18px}
-.badge{font-size:12px;font-weight:600;padding:3px 10px;border-radius:99px;background:var(--chip);color:var(--mute)}
-.badge.ok{background:rgba(31,157,85,.15);color:var(--ok)}
-.badge.busy{background:rgba(229,72,77,.14);color:var(--acc)}
-.badge.warn{background:rgba(194,124,14,.15);color:var(--warn)}
-button,.btn{font:inherit;border:1px solid var(--line);background:var(--card);color:var(--ink);padding:7px 14px;border-radius:9px;cursor:pointer;text-decoration:none;display:inline-block}
-button:hover:not(:disabled){border-color:var(--mute)}
-button:disabled{opacity:.45;cursor:not-allowed}
-button.pri{background:var(--acc);color:var(--acc-ink);border-color:var(--acc);font-weight:600}
-button.pri:hover:not(:disabled){filter:brightness(1.08)}
-button.sm{padding:3px 10px;font-size:13px}
-button.danger{color:var(--err)}
-input[type=text],input[type=number],textarea{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:6px 10px;width:100%}
-input:focus{outline:2px solid var(--acc);outline-offset:-1px}
-.empty{text-align:center;padding:34px 10px;color:var(--mute)}
-.empty .disc{width:84px;height:84px;margin:0 auto 14px;border-radius:50%;border:2px dashed var(--line);display:grid;place-items:center;font-size:30px}
-.disc-hd{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px}
-.disc-hd h3{margin:0;font-size:18px}
-.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
-.bar{height:12px;border-radius:99px;background:var(--bar);overflow:hidden}
-.bar>div{height:100%;background:var(--acc);border-radius:99px;transition:width .35s}
-.bar.thin{height:6px}
-.bar.indet>div{width:35%!important;animation:ind 1.2s infinite ease-in-out}
+body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}
+button,input,select{font:inherit}
+button{cursor:pointer}
+button:disabled{cursor:not-allowed;opacity:.5}
+button:focus-visible,input:focus-visible,select:focus-visible,[role=button]:focus-visible{outline:2px solid #f04452;outline-offset:2px}
+a{color:inherit}
+.topbar{height:62px;display:flex;align-items:center;gap:24px;padding:0 24px;border-bottom:1px solid var(--line);background:#0d121a;position:sticky;top:0;z-index:5}
+.brand{display:flex;align-items:center;gap:10px;font-size:20px;font-weight:750;white-space:nowrap;letter-spacing:-.5px}
+.brand-mark{width:27px;height:27px;border:5px solid var(--red);border-radius:50%;position:relative;flex:none}
+.brand-mark:after{content:"";position:absolute;width:7px;height:7px;right:-2px;top:-3px;border-radius:50%;background:var(--red)}
+.drives{display:flex;gap:8px;min-width:0;overflow-x:auto}
+.drive{display:flex;align-items:center;gap:10px;padding:8px 12px;border:1px solid var(--line);border-radius:9px;color:#d9e2f1;background:#121a25;white-space:nowrap;text-align:left}
+.drive.sel{border-color:#3a4a62}
+.drive:not(.sel){opacity:.75}
+.pill{font-size:11px;color:var(--muted);background:#202938;border-radius:99px;padding:4px 8px;white-space:nowrap}
+.online{color:#75e6b3;background:#153328}
+.warnpill{color:#f0c36a;background:#38301a}
+.busypill{color:#ff8791;background:#351b24}
+.top-spacer{flex:1}
+.icon-btn{border:0;background:transparent;color:#b8c5d8;padding:8px;border-radius:8px}
+.icon-btn:hover{background:#1a2330}
+.menuwrap{position:relative}
+.menu{position:absolute;right:0;top:44px;min-width:190px;background:#121a25;border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow);padding:6px;z-index:8}
+.menu button{display:block;width:100%;text-align:left;border:0;background:transparent;color:var(--text);padding:9px 12px;border-radius:7px}
+.menu button:hover{background:#1a2330}
+.menu button.on{color:var(--red);font-weight:650}
+.banner{padding:9px 24px;font-size:12px;border-bottom:1px solid var(--line)}
+.banner.warn{background:#2a2412;color:#f0c36a}
+.banner.err{background:#2c151c;color:#ff8791}
+main{max-width:1540px;margin:0 auto;padding:16px 24px 28px}
+.layout{display:grid;grid-template-columns:minmax(0,1.8fr) minmax(330px,.92fr);gap:16px;align-items:start}
+.left,.right{min-width:0;display:flex;flex-direction:column;gap:12px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow)}
+.panel-head{display:flex;align-items:center;gap:10px;padding:13px 16px;border-bottom:1px solid var(--line)}
+.panel-head h2{margin:0;font-size:14px;font-weight:700;letter-spacing:-.15px}
+.panel-head .sub{color:var(--muted);font-size:12px}
+.panel-head .spacer{flex:1}
+.mini-icon{width:27px;height:27px;border-radius:7px;background:#202a39;display:grid;place-items:center;color:#c6d5ed;font-size:16px;flex:none}
+.progress-panel{padding:17px 20px 15px}
+.progress-title{display:flex;align-items:flex-start;gap:18px}
+.progress-title h1{font-size:18px;margin:0 0 2px;letter-spacing:-.3px;overflow-wrap:anywhere}
+.progress-title p{margin:0;color:var(--muted);font-size:12px}
+.progress-title p.err{color:#ff8791}
+.percent{margin-left:auto;color:var(--red);font-size:20px;font-weight:750;white-space:nowrap;display:flex;align-items:center;gap:12px}
+.progress-track{height:9px;background:#252e3d;border-radius:20px;overflow:hidden;margin:13px 0 16px}
+.progress-fill{height:100%;width:0;background:var(--red);border-radius:20px;transition:width .3s}
+.progress-track.indet .progress-fill{width:35%!important;animation:ind 1.2s infinite ease-in-out}
 @keyframes ind{0%{margin-left:-35%}100%{margin-left:100%}}
-.stats{display:flex;gap:22px;flex-wrap:wrap;color:var(--mute);font-size:13px;margin-top:8px}
-.stats b{color:var(--ink)}
-table{width:100%;border-collapse:collapse}
-th{font-size:12px;text-transform:uppercase;letter-spacing:.4px;color:var(--mute);text-align:left;padding:6px 8px;font-weight:600}
-td{padding:7px 8px;border-top:1px solid var(--line);vertical-align:middle}
-td.n{color:var(--mute);width:34px}
-td.num{white-space:nowrap;font-variant-numeric:tabular-nums}
-tr.off td:not(:first-child){opacity:.55}
-tr.tr td{border-top:0;padding:0 8px 10px 50px;color:var(--mute);font-size:13px}
-.trk{display:grid;grid-template-columns:70px 1fr 90px;gap:2px 12px;padding:6px 10px;background:var(--bg);border-radius:8px}
-.tag{font-size:11px;font-weight:700;padding:1px 7px;border-radius:5px;background:rgba(229,72,77,.14);color:var(--acc);margin-left:6px;vertical-align:middle}
-.sum{display:flex;gap:12px;align-items:center;flex-wrap:wrap;justify-content:space-between;margin-top:16px;padding-top:16px;border-top:1px solid var(--line)}
-.sum .info{color:var(--mute);font-size:14px}
-.err-box{background:rgba(208,59,59,.1);border:1px solid rgba(208,59,59,.35);color:var(--err);padding:11px 14px;border-radius:10px;margin-bottom:14px}
-.ok-box{background:rgba(31,157,85,.1);border:1px solid rgba(31,157,85,.35);color:var(--ok);padding:11px 14px;border-radius:10px;margin-bottom:14px}
-.warn-box{background:rgba(194,124,14,.12);border:1px solid rgba(194,124,14,.4);color:var(--warn);padding:8px 14px;font-size:14px}
-details.log{margin-top:16px}
-details.log summary{cursor:pointer;color:var(--mute);font-size:13px}
-.logbox{background:var(--log);color:var(--logink);font:12px/1.5 ui-monospace,Menlo,Consolas,monospace;padding:10px 12px;border-radius:9px;max-height:240px;overflow:auto;margin-top:8px;white-space:pre-wrap;word-break:break-word}
-.logbox .error{color:#ff7b7b}.logbox .ok{color:#6ee7a0}.logbox span.t{color:#6b7280}
-.files td.sz{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
-.files td.a{text-align:right;white-space:nowrap}
-.files a{color:var(--ink)}
-dialog{border:1px solid var(--line);border-radius:14px;background:var(--card);color:var(--ink);padding:0;width:min(520px,94vw)}
-dialog::backdrop{background:rgba(0,0,0,.5)}
+.metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr))}
+.metric{padding:0 14px;border-left:1px solid var(--line);display:flex;gap:10px;align-items:flex-start}
+.metric:first-child{padding-left:0;border-left:0}
+.metric .symbol{color:#a9bddf;font-size:17px}
+.metric strong{display:block;font-size:12px;font-weight:650}
+.metric small{display:block;color:var(--muted);font-size:11px;margin-top:2px}
+.table-wrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;white-space:nowrap}
+th{height:34px;text-align:left;font-size:10px;letter-spacing:.06em;font-weight:650;color:var(--muted);text-transform:uppercase;background:#101620}
+th,td{padding:9px 12px;border-bottom:1px solid #222d3b}
+td{font-size:12px}
+tbody tr:last-child td{border-bottom:0}
+tbody tr:hover{background:#151e2a}
+th:first-child,td:first-child{padding-left:17px;width:38px}
+.check{accent-color:var(--red);width:15px;height:15px;vertical-align:middle}
+.num{color:var(--muted);width:28px}
+.muted{color:var(--muted)}
+.tag{font-size:10px;border-radius:99px;padding:3px 7px;background:#202938;color:#9aa9c1;margin-left:7px}
+.tag.red{background:#351b24;color:#ff7480}
+.row-action{border:0;background:transparent;color:#9fb4d7;font-size:12px}
+.namecell{display:flex;align-items:center;gap:2px}
+.namecell .tag{flex:none}
+.nameedit{background:transparent;border:1px solid transparent;color:var(--text);font:inherit;font-size:12px;flex:1 1 300px;min-width:130px;padding:3px 6px;border-radius:6px}
+.nameedit:hover{border-color:#2b3748}
+.nameedit:focus{border-color:#3a4a62;background:#0c121a;outline:0}
+tr.trk td{padding:0 12px 10px 55px;border-bottom:1px solid #222d3b;background:#0e141d}
+.trkgrid{display:grid;grid-template-columns:80px minmax(0,1fr) 110px;gap:3px 14px;padding:8px 12px;color:var(--muted);font-size:11px;white-space:normal}
+.settings{margin:10px 13px 13px;border:1px solid #2b384a;border-radius:10px;overflow:hidden;background:var(--panel2)}
+.settings.flat{margin:0 0 14px}
+.settings-toggle{width:100%;display:flex;align-items:center;gap:10px;text-align:left;padding:12px 13px;background:#131b27;color:var(--text);border:0;cursor:pointer}
+.settings-toggle strong{font-size:12px}
+.settings-toggle .summary{font-size:11px;color:var(--muted);margin-left:4px;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.settings-toggle .spacer{flex:1}
+.switch{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);flex:none}
+.settings-body{padding:12px 13px 13px;border-top:1px solid var(--line)}
+.settings-body.off .fields{opacity:.45}
+.fields{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.field label{display:block;font-size:11px;color:var(--muted);margin-bottom:5px}
+.field input,.field select,.input{width:100%;height:34px;background:#0c121a;color:var(--text);border:1px solid #2b3748;border-radius:7px;padding:0 9px;min-width:0}
+.field.full{grid-column:1/-1}
+.help{font-size:10px;line-height:1.55;color:var(--muted);margin:10px 0 0}
+.section-content{padding:0 16px}
+.job{display:flex;align-items:center;gap:11px;padding:13px 2px;border-bottom:1px solid var(--line)}
+.job:last-child{border-bottom:0}
+.status-check{width:23px;height:23px;border-radius:50%;background:#153b31;color:var(--green);display:grid;place-items:center;font-weight:800;flex:none}
+.status-check.run{background:transparent;border:3px solid #3a2a31;border-top-color:var(--red);animation:spin 1s linear infinite;font-size:0}
+.status-check.wait{background:#202938;color:#9aa9c1}
+.status-check.err{background:#351b24;color:#ff7480}
+.status-check.skip{background:#202938;color:#9aa9c1}
+@keyframes spin{to{transform:rotate(360deg)}}
+.job-main{flex:1;min-width:0}
+.job-main strong{display:block;font-size:12px;font-weight:650;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.job-main small{display:block;font-size:11px;color:var(--muted);margin-top:3px;overflow-wrap:anywhere}
+.job-main small.err{color:#ff8791}
+.mini-bar{height:4px;background:#252e3d;border-radius:9px;overflow:hidden;margin-top:6px}
+.mini-bar>div{height:100%;background:var(--red);border-radius:9px;transition:width .3s}
+.status{font-size:11px;color:#72e2b0;background:#153328;border-radius:99px;padding:4px 9px;white-space:nowrap}
+.status.run{color:#ff8791;background:#351b24}
+.status.wait{color:#9aa9c1;background:#202938}
+.status.err{color:#ff7480;background:#351b24}
+.file-table th{background:transparent}
+.file-table th,.file-table td{padding:10px 12px}
+.file-name{max-width:175px;overflow:hidden;text-overflow:ellipsis}
+.file-action{color:#c2d1e6;background:transparent;border:0;font-size:16px;text-decoration:none}
+.log-body{padding:12px 16px;background:#0c1118;font:11px/1.65 ui-monospace,SFMono-Regular,Menlo,monospace;overflow:auto;max-height:205px;color:#b4c4dc}
+.log-line{display:grid;grid-template-columns:62px 1fr;gap:8px;white-space:pre-wrap;overflow-wrap:anywhere}
+.log-time{color:#7d91b0}
+.log-good{color:#4ad49a}.log-error{color:#ff6675}
+details summary{cursor:pointer;list-style:none;display:flex;align-items:center;gap:10px}
+details summary::-webkit-details-marker{display:none}
+details summary .chev{margin-left:auto;color:var(--muted);transition:transform .2s}
+details[open] summary .chev{transform:rotate(180deg)}
+.action-panel{padding:14px 16px}
+.destination{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:11px;margin-bottom:13px;overflow-wrap:anywhere}
+.destination strong{font-weight:550;color:#d4deed}
+.folderrow{display:flex;align-items:center;gap:8px;margin-bottom:12px}
+.folderrow label{font-size:11px;color:var(--muted)}
+.primary{width:100%;border:0;border-radius:8px;background:var(--red);color:white;font-weight:700;padding:10px 14px;transition:background .15s}
+.primary:hover:not(:disabled){background:#ff5965}
+.secondary{border:1px solid var(--line);background:#151d28;color:#c4d0e1;padding:7px 10px;border-radius:7px;font-size:11px;text-decoration:none;display:inline-block}
+.secondary:hover:not(:disabled){border-color:#3a4a62}
+.secondary.danger{color:#ff7480}
+.actions2{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.bottom-log{margin-top:16px}
+.footerline{display:flex;align-items:center;gap:10px;padding:9px 16px;border-bottom:1px solid var(--line)}
+.footerline h2{font-size:13px;margin:0}
+.footerline .spacer{flex:1}
+.hidden{display:none!important}
+.empty{padding:26px 16px;text-align:center;color:var(--muted);font-size:12px}
+.toast{position:fixed;bottom:18px;right:20px;padding:12px 16px;border:1px solid #315444;border-radius:9px;background:#11251e;color:#a6f2ce;box-shadow:var(--shadow);display:none;z-index:10;max-width:420px}
+.toast.err{border-color:#5a2a33;background:#2c151c;color:#ffb0b8}
+.lib-body{padding:14px 16px}
+.st{font-size:11px;padding:3px 8px;border-radius:99px;background:#202938;color:#9aa9c1;white-space:nowrap}
+.st.ok{background:#153328;color:#75e6b3}.st.busy{background:#351b24;color:#ff8791}.st.warn{background:#38301a;color:#f0c36a}
+.libtools{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:12px}
+dialog{border:1px solid var(--line);border-radius:14px;background:var(--panel);color:var(--text);padding:0;width:min(560px,94vw)}
+dialog::backdrop{background:rgba(0,0,0,.6)}
 dialog form{padding:20px;display:grid;gap:14px}
-dialog h3{margin:0}
-label.f{display:grid;gap:4px;font-size:13px;color:var(--mute)}
-label.chk{display:flex;gap:10px;align-items:center;color:var(--ink);font-size:15px}
-.hint{font-size:12px;color:var(--mute)}
-.tabs{display:flex;gap:4px;background:var(--chip);padding:3px;border-radius:10px}
-.tabs button{border:0;background:transparent;padding:5px 14px}
-.tabs button.on{background:var(--card);font-weight:600;box-shadow:0 1px 2px rgba(0,0,0,.15)}
-.st{font-size:12px;padding:2px 8px;border-radius:99px;background:var(--chip);color:var(--mute);white-space:nowrap}
-.st.ok{background:rgba(31,157,85,.15);color:var(--ok)}.st.busy{background:rgba(229,72,77,.14);color:var(--acc)}.st.warn{background:rgba(194,124,14,.15);color:var(--warn)}
-.conv{margin-top:16px;padding:14px;border:1px solid var(--line);border-radius:10px;background:var(--bg)}
-.conv label.chk{margin:0}
-.cvgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px 14px;margin-top:12px}
-.cvgrid .wide{grid-column:1/-1}
-select{font:inherit;color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:8px;padding:6px 8px;width:100%}
-@media(max-width:700px){.cvgrid{grid-template-columns:1fr 1fr}}
-@media(max-width:700px){.hide-s{display:none}main{padding:12px}}
+dialog h3{margin:0;font-size:16px}
+.chk{display:flex;gap:10px;align-items:center;font-size:13px}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.rowend{display:flex;justify-content:flex-end;gap:8px;align-items:center;flex-wrap:wrap}
+@media(max-width:1050px){.layout{grid-template-columns:1fr}.right{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-items:start}.right .action-panel{grid-column:1/-1}.bottom-log{margin-top:12px}}
+@media(max-width:700px){.topbar{padding:0 13px;gap:12px}.brand{font-size:17px}.drive{font-size:11px;padding:7px}.drive .pill:not(.online):not(.warnpill):not(.busypill){display:none}main{padding:12px}.right{display:flex;align-items:stretch}.metrics{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.metric{border:0;padding:0}.fields{grid-template-columns:repeat(2,minmax(0,1fr))}.progress-title h1{font-size:16px}th,td{padding:9px 10px}.panel-head{padding:12px}.log-body{font-size:10px}.banner{padding:9px 13px}}
 </style>
 </head>
 <body>
-<header>
-  <div class="logo"><i></i> MakeMKV Web</div>
-  <span class="chip" id="conn"><span class="dot"></span><span>verbinde …</span></span>
-  <nav class="tabs"><button data-tab="drives" class="on">Laufwerke</button><button data-tab="lib">Bibliothek</button></nav>
-  <div class="sp"></div>
-  <span class="chip" id="outchip"></span>
-  <button id="btn-set">Einstellungen</button>
-</header>
-<div id="outwarn"></div>
-<main>
-  <div id="drives"></div>
-  <section class="card files" id="cvcard" hidden>
-    <div class="hd"><h2>Konvertierung</h2><span class="chip">x265 10-bit · CPU</span></div>
-    <div class="bd" style="padding:6px 10px 10px"><table><tbody id="cvlist"></tbody></table></div>
-  </section>
-  <section class="card files" id="upcard" hidden>
-    <div class="hd"><h2>Übertragung ins Ziel</h2><span class="chip" id="stagechip"></span></div>
-    <div class="bd" style="padding:6px 10px 10px"><table><tbody id="uplist"></tbody></table></div>
-  </section>
-  <section class="card" id="libtab" hidden>
-    <div class="hd"><h2>Bibliothek</h2><span class="chip" id="filesdir"></span><span class="chip" id="libinfo"></span><div class="sp"></div>
-      <input type="text" id="libfilter" placeholder="Filtern …" style="width:200px"><button class="sm" id="lib-reload">Aktualisieren</button></div>
-    <div class="bd">
-      <div class="conv" style="margin:0 0 14px">
-        <b>Nachträglich konvertieren</b> <span class="hint">– das Original wird nach erfolgreicher Prüfung (Länge, Spurzahl) durch die kleinere x265-Datei ersetzt. Gelesen wird direkt vom NAS, das Ergebnis liegt zuerst lokal.</span>
-        <div class="cvgrid" id="libcv"></div>
-        <div class="row" style="margin-top:12px"><button class="pri" id="lib-go" disabled>Auswahl konvertieren</button>
-          <button class="sm" id="lib-allok">Alle „Original“ wählen</button><button class="sm" id="lib-none">Keine</button><span class="hint" id="lib-sel"></span></div>
-      </div>
-      <table><thead><tr><th></th><th>Datei</th><th class="hide-s">Video</th><th class="hide-s">Audio</th><th>Größe</th><th>Status</th><th></th></tr></thead><tbody id="liblist"></tbody></table>
-      <div class="empty" id="nolib" hidden>Keine Videodateien im Ausgabeordner.</div>
+<header class="topbar">
+  <div class="brand"><span class="brand-mark"></span><span>MakeMKV <span style="font-weight:450;color:#a9bdd8">Web</span></span></div>
+  <div class="drives" id="drivechips"></div>
+  <div class="top-spacer"></div>
+  <button class="icon-btn" id="btn-set" title="Einstellungen" aria-label="Einstellungen">⚙</button>
+  <div class="menuwrap">
+    <button class="icon-btn" id="btn-menu" title="Menü" aria-label="Menü" aria-haspopup="true">☰</button>
+    <div class="menu hidden" id="menu" role="menu">
+      <button role="menuitem" data-view="drives">Laufwerke</button>
+      <button role="menuitem" data-view="lib">Bibliothek</button>
     </div>
-  </section>
+  </div>
+</header>
+<div id="banners"></div>
+<main>
+  <div id="view-drives">
+    <div class="layout">
+      <section class="left">
+        <section class="panel progress-panel" id="prog"></section>
+        <section class="panel" id="titlesPanel" hidden></section>
+      </section>
+      <aside class="right">
+        <section class="panel">
+          <div class="panel-head"><span class="brand-mark" style="width:20px;height:20px;border-width:4px"></span><div><h2>Aufträge</h2><span class="sub" id="jobsDest"></span></div></div>
+          <div class="section-content" id="jobs"></div>
+        </section>
+        <section class="panel">
+          <div class="panel-head"><span class="mini-icon">▱</span><h2>Fertige Dateien</h2><span class="spacer"></span><button class="secondary" id="files-reload">Aktualisieren</button></div>
+          <div class="table-wrap"><table class="file-table"><thead><tr><th>Dateiname</th><th>Größe</th><th>Status</th><th></th></tr></thead><tbody id="filesBody"></tbody></table></div>
+          <div class="empty" id="nofiles" hidden>Noch nichts im Ausgabeordner.</div>
+        </section>
+        <section class="panel">
+          <details id="compactLog">
+            <summary class="panel-head"><span class="mini-icon">›_</span><h2>Protokoll anzeigen</h2><span class="chev">⌄</span></summary>
+            <div class="log-body" id="logCompact"></div>
+          </details>
+        </section>
+        <section class="panel action-panel" id="actionPanel"></section>
+      </aside>
+    </div>
+    <section class="panel bottom-log">
+      <details open id="fullLog">
+        <summary class="footerline"><span class="mini-icon">›_</span><h2>Protokoll</h2><span class="spacer"></span><span class="muted" style="font-size:12px">Letzte Meldungen</span><span class="chev">⌃</span></summary>
+        <div class="log-body" id="logFull" style="max-height:220px"></div>
+      </details>
+    </section>
+  </div>
+
+  <div id="view-lib" hidden>
+    <section class="panel">
+      <div class="panel-head"><span class="mini-icon">▤</span><h2>Bibliothek</h2><span class="pill" id="filesdir"></span><span class="pill" id="libinfo"></span><span class="spacer"></span>
+        <input class="input" id="libfilter" placeholder="Filtern …" style="width:200px;height:30px"><button class="secondary" id="lib-reload">Aktualisieren</button></div>
+      <div class="lib-body">
+        <div class="settings flat">
+          <div class="settings-toggle" style="cursor:default"><span class="mini-icon">⚙</span><strong>Nachträglich konvertieren</strong><span class="summary">Das Original wird nach bestandener Prüfung (Länge, Spurzahl) durch die kleinere x265-Datei ersetzt. Gelesen wird direkt vom NAS.</span></div>
+          <div class="settings-body"><div class="fields" id="libcv"></div>
+            <div class="libtools"><button class="primary" id="lib-go" style="width:auto" disabled>Auswahl konvertieren</button>
+              <button class="secondary" id="lib-allok">Alle „Original“ wählen</button><button class="secondary" id="lib-none">Keine</button><span class="muted" style="font-size:11px" id="lib-sel"></span></div></div>
+        </div>
+        <div class="table-wrap"><table><thead><tr><th></th><th>Datei</th><th>Video</th><th>Audio</th><th>Größe</th><th>Status</th><th></th></tr></thead><tbody id="liblist"></tbody></table></div>
+        <div class="empty" id="nolib" hidden>Keine Videodateien im Ausgabeordner.</div>
+      </div>
+    </section>
+    <section class="panel" style="margin-top:12px">
+      <div class="panel-head"><span class="brand-mark" style="width:20px;height:20px;border-width:4px"></span><h2>Aufträge</h2></div>
+      <div class="section-content" id="jobs2"></div>
+    </section>
+  </div>
 </main>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <dialog id="dlg">
   <form method="dialog" id="setform">
     <h3>Einstellungen</h3>
-    <label class="chk"><input type="checkbox" id="s-auto_scan"> Eingelegte Disc automatisch analysieren</label>
-    <label class="chk"><input type="checkbox" id="s-auto_eject"> Nach erfolgreichem Rip automatisch auswerfen</label>
-    <div class="row" style="flex-wrap:nowrap">
-      <label class="f" style="flex:1">Segmente pro Film (0 = automatisch) <input type="number" id="s-conv_segments" min="0" max="12" step="1"></label>
-      <label class="f" style="flex:1">Gleichzeitige Dateien <input type="number" id="s-conv_parallel" min="1" max="8" step="1"></label>
-    </div>
-    <div class="hint" style="margin-top:-8px">x265 nutzt pro Prozess nur etwa 4–8 Kerne. Mit mehreren Segmenten wird ein Film in Zeitabschnitte geteilt, parallel kodiert und nahtlos zusammengesetzt. <b>0 = automatisch:</b> vor jeder Konvertierung wird nach freien Kernen und freiem RAM entschieden (je Segment ca. 4 Kerne, 2,5 GB), bei wenig Leistung läuft alles in einem Prozess. 1 = nie teilen.</div>
-    <label class="f">Minimale Titellänge (Sekunden)<input type="number" id="s-minlength" min="0" step="10"></label>
-    <div class="row" style="flex-wrap:nowrap">
-      <label class="f" style="flex:1">Audio-Sprachen behalten<input type="text" id="s-audio_langs" placeholder="alle  –  z. B. deu,eng"></label>
-      <label class="f" style="flex:1">Untertitel behalten<input type="text" id="s-sub_langs" placeholder="alle  –  z. B. deu"></label>
-    </div>
-    <div class="hint" style="margin-top:-8px">3-Buchstaben-Sprachcodes (deu, eng, fra …). Video und Spuren ohne Sprachangabe bleiben immer erhalten. Gilt für den nächsten Rip.</div>
-    <label class="f">Eigener MakeMKV-Key (optional)<input type="text" id="s-key" placeholder="leer = öffentlicher Beta-Key wird automatisch geholt"></label>
-    <div class="row hint" id="keystate"></div>
-    <div class="row" style="justify-content:flex-end">
-      <button type="button" id="s-cancel">Schließen</button>
-      <button type="submit" class="pri" id="s-save" value="save">Speichern</button>
-    </div>
+    <label class="chk"><input class="check" type="checkbox" id="s-auto_scan"> Eingelegte Disc automatisch analysieren</label>
+    <label class="chk"><input class="check" type="checkbox" id="s-auto_eject"> Nach erfolgreichem Rip automatisch auswerfen</label>
+    <div class="two field"><div><label for="s-minlength">Minimale Titellänge (Sekunden)</label><input type="number" id="s-minlength" min="0" step="10"></div>
+      <div><label for="s-conv_segments">Segmente pro Film (0 = automatisch)</label><input type="number" id="s-conv_segments" min="0" max="12" step="1"></div></div>
+    <div class="two field"><div><label for="s-audio_langs">Audio-Sprachen behalten</label><input type="text" id="s-audio_langs" placeholder="alle – z. B. deu,eng"></div>
+      <div><label for="s-sub_langs">Untertitel behalten</label><input type="text" id="s-sub_langs" placeholder="alle – z. B. deu"></div></div>
+    <p class="help" style="margin:-6px 0 0">3-Buchstaben-Sprachcodes (deu, eng, fra …). Video und Spuren ohne Sprachangabe bleiben immer erhalten. Gilt für den nächsten Rip.
+      Segmente: x265 nutzt pro Prozess nur ca. 4–8 Kerne – bei „0“ entscheidet die App vor jeder Konvertierung selbst nach freien Kernen und RAM; 1 = nie teilen.</p>
+    <div class="two field"><div><label for="s-conv_parallel">Gleichzeitige Dateien (Konvertierung)</label><input type="number" id="s-conv_parallel" min="1" max="8" step="1"></div>
+      <div><label for="s-key">Eigener MakeMKV-Key (optional)</label><input type="text" id="s-key" placeholder="leer = öffentlicher Beta-Key"></div></div>
+    <div class="muted" style="font-size:11px" id="keystate"></div>
+    <div class="rowend"><button type="button" class="secondary" id="s-cancel">Schließen</button><button type="submit" class="primary" style="width:auto" id="s-save" value="save">Speichern</button></div>
   </form>
 </dialog>
-
 <script>
 const $ = (s, r=document) => r.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const fmtB = n => { if(!n) return '0 B'; const u=['B','KB','MB','GB','TB']; let i=0; while(n>=1024&&i<4){n/=1024;i++} return (i?n.toFixed(i>2?2:1):n)+' '+u[i]; };
-const fmtD = s => { s=Math.max(0,Math.round(s)); const h=Math.floor(s/3600),m=Math.floor(s%3600/60),x=s%60; return h?`${h}:${String(m).padStart(2,'0')}:${String(x).padStart(2,'0')}`:`${m}:${String(x).padStart(2,'0')}`; };
+const dec = s => String(s).replace('.', ',');
+const fmtB = n => { if(!n) return '0 B'; const u=['B','KB','MB','GB','TB']; let i=0; while(n>=1024&&i<4){n/=1024;i++} return dec(i?n.toFixed(i>2?2:1):n)+' '+u[i]; };
+const pad = n => String(n).padStart(2,'0');
+const fmtD = s => { s=Math.max(0,Math.round(s)); const h=Math.floor(s/3600),m=Math.floor(s%3600/60),x=s%60; return h?`${h}:${pad(m)}:${pad(x)}`:`${m}:${pad(x)}`; };
 const ago = ts => { const s=Date.now()/1000-ts; return s<90?'gerade eben':s<5400?`vor ${Math.round(s/60)} Min.`:s<172800?`vor ${Math.round(s/3600)} Std.`:`vor ${Math.round(s/86400)} Tagen`; };
+const setHtml = (el, h) => { if(el && el.dataset.h !== h){ el.innerHTML = h; el.dataset.h = h; } };
 
-let S = null;                       // letzter Serverstand
-const ui = { sel:{}, names:{}, folder:{}, open:{}, sig:{}, wasBusy:{}, conv:{} };
+let S = null, view = 'drives', selDrive = null, connFailed = false;
+const ui = { sel:{}, names:{}, folder:{}, open:{}, conv:{}, sig:{}, hideShort:false, cvOpen:true, rate:{}, wasBusy:{}, upDone:-1, files:[] };
 const keyOf = d => `${d.id}:${d.scan_id}`;
 
+function toast(msg, err=false){
+  const el = $('#toast'); el.textContent = msg; el.classList.toggle('err', err); el.style.display = 'block';
+  clearTimeout(toast.t); toast.t = setTimeout(() => el.style.display = 'none', err ? 6000 : 2800);
+}
 async function api(path, method='POST', body){
   const r = await fetch(path, {method, headers: body?{'Content-Type':'application/json'}:{}, body: body?JSON.stringify(body):undefined});
-  if(!r.ok){ let m=r.statusText; try{ m=(await r.json()).detail||m }catch{} alert(m); throw new Error(m); }
+  if(!r.ok){ let m=r.statusText; try{ m=(await r.json()).detail||m }catch{} toast(m, true); throw new Error(m); }
   return r.json();
 }
 
-// ---------- Verbindung
+// ---------- Verbindung (Server-Sent Events)
 function connect(){
   const es = new EventSource('/api/events');
-  es.onmessage = e => { S = JSON.parse(e.data); setConn(true); render(); };
-  es.onerror = () => { setConn(false); es.close(); setTimeout(connect, 2500); };
-}
-function setConn(ok){
-  $('#conn').innerHTML = `<span class="dot ${ok?'live':'err'}"></span><span>${ok?'live verbunden':'getrennt – verbinde neu …'}</span>`;
+  es.onmessage = e => { S = JSON.parse(e.data); connFailed = false; render(); };
+  es.onerror = () => { connFailed = true; es.close(); renderBanners(); setTimeout(connect, 2500); };
 }
 
-// ---------- Rendering
-const STATUS = { empty:['Keine Disc',''], open:['Schublade offen','warn'], loading:['Laufwerk lädt …','warn'], ready:['Disc erkannt','ok'], unknown:['…',''] };
-
-function render(){
-  const o = S.output;
-  $('#outchip').innerHTML = `<span class="dot ${o.mounted?'ok':'warn'}"></span> Ziel <b>${esc(o.dir)}</b> · ${fmtB(o.free)} frei`;
-  $('#filesdir').textContent = o.dir;
-  $('#outwarn').innerHTML = o.stalled ? `<div class="warn-box">⚠ Das Ziel ${esc(o.dir)} antwortet nur sehr langsam (Netzwerk/NAS überlastet?). Rips laufen dadurch langsamer.</div>` : o.mounted ? '' : `<div class="warn-box">⚠ ${esc(o.preferred)} ist nicht eingehängt – es wird vorübergehend lokal auf diesem Server gespeichert (${esc(o.dir)}).</div>`;
-
-  const host = $('#drives');
-  const ids = S.drives.map(d => d.id);
-  [...host.children].forEach(c => { if(!ids.includes(c.dataset.id)) c.remove(); });
-  if(!S.drives.length){
-    host.innerHTML = `<div class="card"><div class="bd"><div class="empty"><div class="disc">⌀</div>Kein Laufwerk gefunden.<br>USB-Laufwerk anstecken – es erscheint hier automatisch.</div></div></div>`;
-  } else if(host.firstElementChild && !host.firstElementChild.dataset.id){ host.innerHTML=''; }
-
-  let anyPct = null;
-  for(const d of S.drives){
-    let el = host.querySelector(`[data-id="${d.id}"]`);
-    if(!el){ el = document.createElement('section'); el.className='card'; el.dataset.id=d.id; host.appendChild(el); }
-    const sig = [d.scan_id, d.status, d.job?d.job.kind:'', d.disc?1:0, d.error, o.dir].join('|');
-    if(ui.sig[d.id] !== sig){ ui.sig[d.id] = sig; buildCard(el, d); }
-    updateDynamic(el, d);
-    if(d.job && d.job.kind!=='scan') anyPct = Math.round((d.job.overall||0)*100);
-    const was = ui.wasBusy[d.id]; ui.wasBusy[d.id] = !!d.job;
-    if(was && !d.job) loadFiles();
-  }
-  renderConversions();
-  renderUploads();
-  document.title = anyPct!==null ? `${anyPct}% – MakeMKV Web` : 'MakeMKV Web';
+// ---------- Hilfen: Laufwerk, Auswahl, Presets
+function curDrive(){
+  if(!S) return null;
+  let d = S.drives.find(x => x.id === selDrive);
+  if(!d){ d = S.drives.find(x => x.job || x.disc) || S.drives[0] || null; selDrive = d ? d.id : null; }
+  return d;
 }
-
-function mainTitleIds(disc){
-  const max = Math.max(0, ...disc.titles.map(t=>t.duration));
-  return disc.titles.filter(t => t.duration >= max*0.5).map(t=>t.id);
+const mainTitleIds = disc => { const max = Math.max(0, ...disc.titles.map(t=>t.duration)); return disc.titles.filter(t => t.duration >= max*0.5).map(t=>t.id); };
+function selOf(d){
+  const k = keyOf(d);
+  if(!ui.sel[k]){ ui.sel[k] = Object.fromEntries(d.disc.titles.map(t=>[t.id, false])); mainTitleIds(d.disc).forEach(i => ui.sel[k][i] = true); }
+  return ui.sel[k];
 }
-// Vorschlag für den Dateinamen: MakeMKV liefert oft für alle Titel den Disc-Namen -> Titelnummer anhängen
+// MakeMKV liefert oft für alle Titel den Disc-Namen -> bei Doppelten die Titelnummer anhängen
 function suggestName(disc, t){
   const base = (t.name || '').trim() || `Titel ${t.id+1}`;
   const dup = disc.titles.filter(x => (x.name||'').trim() === base).length > 1;
-  return dup ? `${base} - Titel ${String(t.id+1).padStart(2,'0')}` : base;
+  return dup ? `${base} - Titel ${pad(t.id+1)}` : base;
 }
-// Konvertierungs-Preset je Disc-Art (Blu-ray vorausgewählt), im Browser pro Rip änderbar
 const CV_FALLBACK = {convert:false, rf:21, preset:'slow', tune:'none', extra:'aq-mode=3:no-sao=1', audio:'copy'};
 const discKind = d => /blu/i.test(d.disc.type||'') ? 'bluray' : 'dvd';
 function convOf(d){
@@ -235,300 +312,357 @@ function convOf(d){
   if(!ui.conv[k]) ui.conv[k] = {...CV_FALLBACK, ...((S.settings.presets||{})[discKind(d)]||{})};
   return ui.conv[k];
 }
-const opt = (v, cur, label) => `<option value="${v}" ${String(cur)===String(v)?'selected':''}>${label||v}</option>`;
-function convHtml(d, busy){
-  const c = convOf(d), dis = busy?'disabled':'';
-  const kind = discKind(d)==='bluray' ? 'Blu-rays' : 'DVDs';
-  return `<div class="conv">
-    <label class="chk"><input type="checkbox" data-cv="convert" ${c.convert?'checked':''} ${dis}> <b>Nach dem Rippen konvertieren</b> <span class="hint">x265 10-bit · deutlich kleinere Dateien, sieht aus wie das Original</span></label>
-    <div class="cvgrid" ${c.convert?'':'hidden'}>
-      <label class="f">Qualität (RF) <input type="number" min="14" max="30" step="1" data-cv="rf" value="${c.rf}" ${dis}></label>
-      <label class="f">Preset <select data-cv="preset" ${dis}>${['veryfast','fast','medium','slow','slower'].map(x=>opt(x,c.preset)).join('')}</select></label>
-      <label class="f">Tune <select data-cv="tune" ${dis}>${opt('none',c.tune,'keins')}${opt('grain',c.tune,'grain (körnige Filme)')}${opt('film',c.tune,'film')}${opt('animation',c.tune,'animation')}</select></label>
-      <label class="f">Audio <select data-cv="audio" ${dis}>${opt('copy',c.audio,'Original (Passthrough)')}${opt('ac3',c.audio,'AC3 5.1, 640 kbps')}${opt('eac3',c.audio,'E-AC3 5.1, 640 kbps')}${opt('opus',c.audio,'Opus (nicht überall abspielbar)')}</select></label>
-      <label class="f wide">Zusatz-Optionen x265 <input type="text" data-cv="extra" value="${esc(c.extra)}" placeholder="z. B. aq-mode=3:no-sao=1" ${dis}></label>
-      <div class="hint wide">RF 20 ≈ praktisch transparent · RF 21–22 = guter Kompromiss. Software-Encoding (CPU), Untertitel (PGS) und Kapitel bleiben unverändert, schwarze Balken werden automatisch entfernt.
-        <b>Achtung:</b> x265 rechnet nur auf der CPU. Auf schwachen Rechnern (z. B. 2 Kerne) braucht ein Film mit „slow“ über einen Tag, „fast“ ist etwa 5× schneller. Rippen und Übertragung laufen währenddessen weiter.</div>
-      <div class="wide"><button class="sm" data-act="savepreset" ${dis}>Als Standard für ${kind} speichern</button></div>
-    </div></div>`;
+const PRESETS = ['ultrafast','fast','medium','slow','slower','veryslow'];
+const TUNES = [['none','keins'],['film','film'],['animation','animation'],['grain','grain'],['stillimage','stillimage']];
+const AUDIOS = [['copy','Original (Passthrough)'],['ac3','AC3 640 kb/s'],['aac','AAC 256 kb/s']];
+const AUDIO_NAMEN = {copy:'Original-Audio', ac3:'AC3 640 kb/s', aac:'AAC 256 kb/s', eac3:'E-AC3 640 kb/s', opus:'Opus'};
+const optsOf = (list, cur) => list.map(([v,l]) => `<option value="${v}" ${String(v)===String(cur)?'selected':''}>${l}</option>`).join('');
+function cvFields(c, attr, dis){
+  const rfs = [18,19,20,21,22,23,24,25]; if(!rfs.includes(+c.rf)){ rfs.push(+c.rf); rfs.sort((a,b)=>a-b); }
+  const aud = AUDIOS.some(([v]) => v===c.audio) ? AUDIOS : [...AUDIOS, [c.audio, AUDIO_NAMEN[c.audio]||c.audio]];
+  return `<div class="field"><label for="${attr}-rf">Qualität (RF)</label><select id="${attr}-rf" data-${attr}="rf" ${dis}>${optsOf(rfs.map(v=>[v,v]), c.rf)}</select></div>
+    <div class="field"><label for="${attr}-preset">Preset</label><select id="${attr}-preset" data-${attr}="preset" ${dis}>${optsOf(PRESETS.map(v=>[v,v]), c.preset)}</select></div>
+    <div class="field"><label for="${attr}-tune">Tune</label><select id="${attr}-tune" data-${attr}="tune" ${dis}>${optsOf(TUNES, c.tune)}</select></div>
+    <div class="field"><label for="${attr}-audio">Audio</label><select id="${attr}-audio" data-${attr}="audio" ${dis}>${optsOf(aud, c.audio)}</select></div>
+    <div class="field full"><label for="${attr}-extra">Zusatz-Optionen x265</label><input id="${attr}-extra" data-${attr}="extra" value="${esc(c.extra)}" placeholder="z. B. aq-mode=3:no-sao=1" ${dis}></div>`;
 }
-function selOf(d){
-  const k = keyOf(d);
-  if(!ui.sel[k]) ui.sel[k] = Object.fromEntries(d.disc.titles.map(t=>[t.id, false])), mainTitleIds(d.disc).forEach(i=>ui.sel[k][i]=true);
-  return ui.sel[k];
-}
+const CV_HELP = 'RF 20–22 ist ein guter Kompromiss. Software-Encoding (CPU), Untertitel und Kapitel bleiben unverändert; schwarze Balken werden automatisch entfernt. x265 rechnet nur auf der CPU. Mit „slow“ kann die Konvertierung deutlich länger als das Rippen dauern. („film“ und „stillimage“ kennt x265 nicht – dann wird kein Tune gesetzt.)';
+const cvSummary = c => c.convert ? `x265 10-bit · RF ${c.rf} · Preset ${c.preset} · Tune ${c.tune==='none'?'keins':c.tune} · ${AUDIO_NAMEN[c.audio]||c.audio}` : 'aus – Original ohne Konvertierung';
 
-function buildCard(el, d){
-  const [stTxt, stCls] = STATUS[d.status] || STATUS.unknown;
-  const busy = !!d.job;
-  const badge = busy ? `<span class="badge busy">${d.job.kind==='scan'?'analysiert …':d.job.kind==='backup'?'Backup läuft':'rippt …'}</span>` : `<span class="badge ${stCls}">${stTxt}</span>`;
-  let body = '';
-  if(d.job && d.job.kind==='scan'){
-    body = `<div class="prog"></div>`;
-  } else if(d.disc){
-    body = discHtml(d, busy);
-  } else if(d.error && d.status==='ready'){
-    body = `<div class="err-box">${esc(d.error)}</div><button class="pri" data-act="scan">Erneut analysieren</button>`;
-  } else if(d.status==='ready'){
-    body = `<div class="empty"><div class="disc">💿</div>Disc erkannt.<br><button class="pri" data-act="scan" style="margin-top:12px">Jetzt analysieren</button></div>`;
-  } else if(d.status==='open'){
-    body = `<div class="empty"><div class="disc">⏏</div>Schublade ist offen – Disc einlegen.<br><button data-act="close" style="margin-top:12px">Schublade schließen</button></div>`;
-  } else if(d.status==='loading'){
-    body = `<div class="empty"><div class="disc">…</div>Laufwerk liest die Disc ein.</div>`;
-  } else {
-    body = `<div class="empty"><div class="disc">💿</div>Bitte eine DVD oder Blu-ray einlegen.<br><span class="hint">Sie wird automatisch erkannt und analysiert.</span></div>`;
+// ---------- Rendering
+function render(){
+  renderBanners(); renderChips();
+  const d = curDrive();
+  if(view === 'drives'){ renderProgress(d); renderTitles(d); renderAction(d); renderLogs(d); }
+  renderJobs();
+  let pct = null;
+  for(const x of S.drives){
+    if(x.job && x.job.kind!=='scan') pct = Math.round((x.job.overall||0)*100);
+    const was = ui.wasBusy[x.id]; ui.wasBusy[x.id] = !!x.job;
+    if(was && !x.job) refreshLists();
   }
-  const post = (d.job && d.job.kind!=='scan') ? `<div class="prog"></div>` : '';
-  el.innerHTML = `
-    <div class="hd"><h2>${esc(d.name)}</h2><span class="chip">${esc(d.dev)}</span>${badge}<div class="sp"></div>
-      <button class="sm" data-act="eject" ${busy?'disabled':''}>Auswerfen</button></div>
-    <div class="bd">${d.job && d.job.kind!=='scan' ? '<div class="prog"></div>' : ''}${body}
-      ${d.job && d.job.kind==='scan' ? '' : ''}
-      <details class="log" ${busy||d.error?'open':''}><summary>Protokoll</summary><div class="logbox"></div></details></div>`;
-  wire(el, d);
+  const done = (S.uploads||[]).filter(u => u.status==='done').length;
+  if(done !== ui.upDone){ ui.upDone = done; refreshLists(); }
+  document.title = pct!==null ? `${pct} % – MakeMKV Web` : 'MakeMKV Web';
+}
+function refreshLists(){ loadFiles(); if(view==='lib') loadLibrary(); }
+
+function renderBanners(){
+  const b = [];
+  if(connFailed) b.push(['err','Verbindung zum Server getrennt – verbinde neu …']);
+  const o = S && S.output;
+  if(o){
+    if(o.stalled) b.push(['warn',`Das Ziel ${o.dir} antwortet nur sehr langsam (Netzwerk/NAS überlastet?). Rips laufen dadurch langsamer.`]);
+    else if(!o.mounted) b.push(['warn',`${o.preferred} ist nicht eingehängt – es wird vorübergehend lokal auf diesem Server gespeichert (${o.dir}).`]);
+  }
+  setHtml($('#banners'), b.map(([c,t]) => `<div class="banner ${c}">⚠ ${esc(t)}</div>`).join(''));
 }
 
-function discHtml(d, busy){
-  const disc = d.disc, k = keyOf(d), sel = selOf(d);
-  const names = ui.names[k] ||= {};
-  const mainId = disc.titles.reduce((a,t)=>t.duration>(a?.duration||0)?t:a, null)?.id;
-  if(ui.folder[k]===undefined) ui.folder[k] = disc.name || disc.volume || 'Disc';
+const STATUSTXT = { empty:'Laufwerk verbunden', open:'Schublade offen', loading:'Laufwerk lädt …', ready:'Disc erkannt', unknown:'…' };
+function renderChips(){
+  const cur = curDrive();
+  if(!S.drives.length){ setHtml($('#drivechips'), '<div class="drive"><span>Kein Laufwerk</span><span class="pill warnpill">● nicht verbunden</span></div>'); return; }
+  setHtml($('#drivechips'), S.drives.map(d => {
+    const busy = d.job ? (d.job.kind==='scan' ? 'analysiert …' : d.job.kind==='backup' ? 'Backup läuft' : 'rippt …') : null;
+    const cls = busy ? 'busypill' : (d.status==='open'||d.status==='loading') ? 'warnpill' : 'online';
+    return `<button class="drive ${cur && d.id===cur.id?'sel':''}" data-drive="${d.id}">${esc(d.name)} <span class="pill">${esc(d.dev)}</span><span class="pill ${cls}">● ${busy || STATUSTXT[d.status] || '…'}</span></button>`;
+  }).join(''));
+}
+
+function rate(d){        // geglättete Geschwindigkeit aus dem Fortschritt (Bytes/s)
+  const j = d.job, done = (j.overall||0)*(j.bytes||0);
+  let r = ui.rate[d.id];
+  if(!r || r.job !== j.started){ r = ui.rate[d.id] = {job:j.started, t:S.now, b:done, v:0}; }
+  else if(S.now - r.t >= 3){ const inst = Math.max(0,(done-r.b)/(S.now-r.t)); r.v = r.v ? r.v*0.6+inst*0.4 : inst; r.t = S.now; r.b = done; }
+  return r.v;
+}
+
+function renderProgress(d){
+  let title, line = '', lineErr = false, pct = null, bar = 0, indet = false, cancel = false, m = ['–','–','–','–'];
+  if(!d){ title = 'Kein Laufwerk gefunden'; line = 'USB-Laufwerk anstecken – es erscheint hier automatisch.'; }
+  else if(d.job && d.job.kind==='scan'){
+    const j = d.job; title = 'Disc wird analysiert'; line = j.text || '…'; indet = !(j.total>0); pct = indet ? null : Math.round(j.total*100); bar = pct||0; cancel = true;
+    m = ['–', fmtD(S.now-j.started), '–', '–'];
+  } else if(d.job){
+    const j = d.job, el = Math.max(1, S.now-j.started), ov = j.overall||0, v = rate(d);
+    title = (d.disc && d.disc.name) || 'Rip';
+    line = (j.title ? `Titel ${pad(j.index||0)} von ${j.count}: ${j.title}` : 'Starte …') + (j.text ? ` – ${j.text}` : '');
+    pct = Math.round(ov*100); bar = pct; cancel = true;
+    const eta = ov>0.01 ? ((v>0 && j.bytes) ? j.bytes*(1-ov)/v : el/ov-el) : 0;
+    m = [v>0 ? `${fmtB(v)}/s` : '–', fmtD(el), eta ? fmtD(eta) : '–', j.kind==='backup' ? 'Backup' : `${j.index||0} / ${j.count}`];
+  } else if(d.disc){
+    title = d.disc.name || 'Unbenannte Disc'; lineErr = !!d.error;
+    line = d.error || `${d.disc.type} · ${d.disc.titles.length} Titel – Titel auswählen und rippen`;
+  } else if(d.error){ title = 'Analyse fehlgeschlagen'; line = d.error; lineErr = true; }
+  else {
+    title = {ready:'Disc erkannt', open:'Schublade ist offen', loading:'Laufwerk liest die Disc ein …'}[d.status] || 'Bitte eine DVD oder Blu-ray einlegen';
+    line = {empty:'Sie wird automatisch erkannt und analysiert.', open:'Disc einlegen oder Schublade schließen.', ready:'Die Analyse startet gleich.'}[d.status] || '';
+  }
+  const mets = [['◉','Geschwindigkeit'],['◴','Laufzeit'],['◷','Restzeit'],['▤','Titel']];
+  setHtml($('#prog'), `<div class="progress-title"><div><h1>${esc(title)}</h1><p class="${lineErr?'err':''}">${esc(line)}</p></div>
+      ${(pct!==null||cancel) ? `<div class="percent">${pct!==null ? pct+' %' : ''}${cancel ? '<button class="secondary danger" data-act="cancel">Abbrechen</button>' : ''}</div>` : ''}</div>
+    <div class="progress-track ${indet?'indet':''}" role="progressbar" aria-valuenow="${bar}" aria-valuemin="0" aria-valuemax="100" aria-label="Fortschritt"><div class="progress-fill" style="width:${bar}%"></div></div>
+    <div class="metrics">${mets.map(([s,l],i) => `<div class="metric"><span class="symbol">${s}</span><div><strong>${esc(m[i])}</strong><small>${l}</small></div></div>`).join('')}</div>`);
+}
+
+// ---- Titelliste + Konvertierung
+function renderTitles(d){
+  const pn = $('#titlesPanel');
+  if(!d || !d.disc){ pn.hidden = true; ui.sig.titles = ''; return; }
+  pn.hidden = false;
+  const sig = [d.id, d.scan_id, d.job ? d.job.kind : '', S.output.dir].join('|');
+  if(ui.sig.titles !== sig){ ui.sig.titles = sig; buildTitles(d); } else updateTitlesLive(d);
+}
+function buildTitles(d){
+  const disc = d.disc, k = keyOf(d), sel = selOf(d), names = ui.names[k] ||= {}, busy = !!d.job, dis = busy ? 'disabled' : '';
+  const mainId = disc.titles.reduce((a,t) => t.duration > (a?.duration||0) ? t : a, null)?.id;
+  if(ui.folder[k] === undefined) ui.folder[k] = disc.name || disc.volume || 'Disc';
+  const c = convOf(d), kind = discKind(d)==='bluray' ? 'Blu-rays' : 'DVDs';
   const rows = disc.titles.map(t => {
-    const v = t.tracks.filter(x=>x.type==='Video').length, a = t.tracks.filter(x=>x.type==='Audio').length, s = t.tracks.filter(x=>x.type==='Subtitles').length;
-    const nm = names[t.id] ?? suggestName(disc, t);
-    const open = ui.open[k+':'+t.id];
-    return `<tr class="${sel[t.id]?'':'off'}" data-t="${t.id}">
-      <td><input type="checkbox" data-sel="${t.id}" ${sel[t.id]?'checked':''} ${busy?'disabled':''}></td>
-      <td class="n">${t.id+1}</td>
-      <td><input type="text" data-name="${t.id}" value="${esc(nm)}" ${busy?'disabled':''}>${t.id===mainId?'<span class="tag">LÄNGSTER</span>':''}</td>
-      <td class="num">${esc(t.duration_text)}</td>
-      <td class="num">${esc(t.size_text)}</td>
-      <td class="num hide-s">${t.chapters} Kap.</td>
-      <td class="hide-s"><button class="sm" data-trk="${t.id}">${v} V · ${a} A · ${s} UT ${open?'▴':'▾'}</button></td></tr>
-      ${open?`<tr class="tr"><td colspan="7"><div class="trk">${t.tracks.map(x=>`<span>${esc(x.type)}</span><span>${esc(x.info||x.codec)} ${x.res?'· '+esc(x.res):''} ${x.layout?'· '+esc(x.layout):''}</span><span>${esc(x.lang||x.code)}</span>`).join('')}</div></td></tr>`:''}`;
+    const cnt = ty => t.tracks.filter(x => x.type===ty).length, short = t.duration < 300, mut = short ? 'muted' : '';
+    const open = ui.open[k+':'+t.id], nm = names[t.id] ?? suggestName(disc, t);
+    const tag = t.id===mainId ? '<span class="tag red">Längster</span>' : short ? '<span class="tag">Kurz</span>' : '';
+    const trk = open ? `<tr class="trk"><td colspan="7"><div class="trkgrid">${t.tracks.map(x => `<span>${esc(x.type)}</span><span>${esc(x.info||x.codec)}${x.res?' · '+esc(x.res):''}${x.layout?' · '+esc(x.layout):''}</span><span>${esc(x.lang||x.code)}</span>`).join('')}</div></td></tr>` : '';
+    return `<tr data-t="${t.id}" data-short="${short}" class="${short && ui.hideShort ? 'hidden' : ''}">
+      <td><input class="check" type="checkbox" data-sel="${t.id}" ${sel[t.id]?'checked':''} ${dis} aria-label="Titel ${t.id+1} auswählen"></td><td class="num">${t.id+1}</td>
+      <td><div class="namecell"><input class="nameedit" type="text" data-name="${t.id}" value="${esc(nm)}" ${dis} aria-label="Dateiname Titel ${t.id+1}">${tag}</div></td>
+      <td class="${mut}">${esc(t.duration_text)}</td><td class="${mut}">${esc(t.size_text)}</td><td class="${mut}">${t.chapters} Kap.</td>
+      <td><button class="row-action" data-trk="${t.id}">${cnt('Video')} V · ${cnt('Audio')} A · ${cnt('Subtitles')} UT${open?'⌃':'⌄'}</button></td></tr>${trk}`;
   }).join('');
-  return `
-    <div class="disc-hd"><h3>${esc(disc.name||'Unbenannte Disc')}</h3><span class="chip">${esc(disc.type)}</span>
-      <span class="chip">${disc.titles.length} Titel ≥ ${disc.minlength}s</span><div class="sp"></div>
-      <button class="sm" data-pick="all" ${busy?'disabled':''}>Alle</button>
-      <button class="sm" data-pick="main" ${busy?'disabled':''}>Nur lange</button>
-      <button class="sm" data-pick="none" ${busy?'disabled':''}>Keine</button></div>
-    <table><thead><tr><th></th><th>#</th><th>Dateiname</th><th>Dauer</th><th>Größe</th><th class="hide-s">Kapitel</th><th class="hide-s">Spuren</th></tr></thead><tbody>${rows}</tbody></table>
-    ${convHtml(d, busy)}
-    <div class="sum"><div class="row" style="flex:1;min-width:240px"><label class="hint" for="folder">Ordner</label><input type="text" id="folder" data-folder value="${esc(ui.folder[k])}" ${busy?'disabled':''} style="max-width:380px"></div>
-      <div class="info" data-summary></div></div>
-    <div class="row" style="margin-top:14px;justify-content:flex-end">
-      ${d.error?`<span style="color:var(--err);flex:1">${esc(d.error)}</span>`:''}
-      <button data-act="scan" ${busy?'disabled':''}>Neu analysieren</button>
-      <button data-act="backup" ${busy?'disabled':''} title="Entschlüsselte Kopie der ganzen Disc (BDMV/VIDEO_TS-Ordner)">Disc-Backup</button>
-      <button class="pri" data-act="rip" ${busy?'disabled':''}>Auswahl rippen</button></div>`;
+  $('#titlesPanel').innerHTML = `
+    <div class="panel-head"><span class="mini-icon">☑</span><h2>Titel auswählen</h2><span class="spacer"></span><span class="sub" id="selectedCount"></span><button class="icon-btn" id="filterBtn" title="Kurze Titel (unter 5 Min.) ein-/ausblenden" aria-label="Kurze Titel ein-/ausblenden">▽</button></div>
+    <div class="table-wrap"><table><thead><tr><th><input id="selectAll" class="check" type="checkbox" aria-label="Alle Titel auswählen" ${dis}></th><th>#</th><th>Dateiname</th><th>Dauer</th><th>Größe</th><th>Kapitel</th><th>Spuren</th></tr></thead><tbody>${rows}</tbody></table></div>
+    <div class="settings">
+      <div class="settings-toggle" id="cvToggle" role="button" tabindex="0" aria-expanded="${ui.cvOpen}"><span class="mini-icon">⚙</span><strong>Nach dem Rippen konvertieren</strong><span class="summary" id="cvSummary"></span><span class="spacer"></span>
+        <label class="switch" title="Konvertierung ein-/ausschalten"><input class="check" type="checkbox" data-cv="convert" ${c.convert?'checked':''} ${dis}> aktiv</label><span id="cvChev">${ui.cvOpen?'⌃':'⌄'}</span></div>
+      <div class="settings-body ${ui.cvOpen?'':'hidden'} ${c.convert?'':'off'}" id="cvBody"><div class="fields">${cvFields(c,'cv',dis)}</div><p class="help">${esc(CV_HELP)}</p>
+        <div style="margin-top:10px"><button class="secondary" data-act="savepreset" ${dis}>Als Standard für ${kind} speichern</button></div></div>
+    </div>`;
+  updateTitlesLive(d);
 }
-
-function wire(el, d){
-  const id = d.id, k = keyOf(d);
-  el.onclick = async ev => {
-    const b = ev.target.closest('button'); if(!b) return;
-    if(b.dataset.act==='scan') api(`/api/drives/${id}/scan`);
-    else if(b.dataset.act==='eject') api(`/api/drives/${id}/eject`);
-    else if(b.dataset.act==='close') api(`/api/drives/${id}/close`);
-    else if(b.dataset.act==='cancel'){ if(confirm('Laufenden Vorgang abbrechen?')) api(`/api/drives/${id}/cancel`); }
-    else if(b.dataset.act==='rip') startRip(d, 'mkv');
-    else if(b.dataset.act==='savepreset'){ await api('/api/settings','POST',{presets:{[discKind(d)]: convOf(d)}}); b.textContent='Gespeichert ✓'; }
-    else if(b.dataset.act==='backup'){ if(confirm('Komplettes entschlüsseltes Disc-Backup erstellen? Das dauert länger und braucht den vollen Platz der Disc.')) startRip(d,'backup'); }
-    else if(b.dataset.pick){
-      const sel = selOf(d), main = mainTitleIds(d.disc);
-      d.disc.titles.forEach(t => sel[t.id] = b.dataset.pick==='all' ? true : b.dataset.pick==='main' ? main.includes(t.id) : false);
-      el.querySelectorAll('[data-sel]').forEach(c => { c.checked = sel[c.dataset.sel]; c.closest('tr').classList.toggle('off', !c.checked); });
-      updateDynamic(el, d);
-    } else if(b.dataset.trk){ const kk=k+':'+b.dataset.trk; ui.open[kk]=!ui.open[kk]; ui.sig[id]=''; buildCard(el,d); updateDynamic(el,d); }
-  };
-  el.oninput = ev => {
-    const t = ev.target;
-    if(t.dataset.sel!==undefined){ selOf(d)[t.dataset.sel]=t.checked; t.closest('tr').classList.toggle('off', !t.checked); updateDynamic(el,d); }
-    else if(t.dataset.name!==undefined){ (ui.names[k] ||= {})[t.dataset.name]=t.value; }
-    else if(t.dataset.folder!==undefined){ ui.folder[k]=t.value; updateDynamic(el,d); }
-    else if(t.dataset.cv!==undefined){
-      const c = convOf(d), f = t.dataset.cv;
-      c[f] = t.type==='checkbox' ? t.checked : f==='rf' ? (+t.value||21) : t.value;
-      if(f==='convert'){ const g = el.querySelector('.cvgrid'); if(g) g.hidden = !t.checked; }
-      updateDynamic(el, d);
-    }
-  };
+function updateTitlesLive(d){
+  const disc = d.disc, sel = selOf(d), ts = disc.titles.filter(t => sel[t.id]), bytes = ts.reduce((a,t) => a+t.bytes, 0), c = convOf(d);
+  const set = (id, v) => { const e = $(id); if(e) e.textContent = v; };
+  set('#selectedCount', `${ts.length} ausgewählt`); set('#cvSummary', cvSummary(c));
+  const all = $('#selectAll'); if(all){ all.checked = ts.length === disc.titles.length; all.indeterminate = ts.length>0 && ts.length<disc.titles.length; }
+  const ac = $('#actionCount'); if(ac) ac.textContent = `${ts.length} Titel · ${fmtB(bytes)}${c.convert ? ' (Rohdaten)' : ''}`;
+  const rip = $('#ripBtn'); if(rip) rip.disabled = !!d.job || !ts.length;
 }
+$('#titlesPanel').addEventListener('input', e => {
+  const d = curDrive(); if(!d || !d.disc) return; const t = e.target, k = keyOf(d);
+  if(t.dataset.sel !== undefined){ selOf(d)[t.dataset.sel] = t.checked; updateTitlesLive(d); }
+  else if(t.id === 'selectAll'){ const sel = selOf(d); d.disc.titles.forEach(x => sel[x.id] = t.checked); document.querySelectorAll('#titlesPanel [data-sel]').forEach(c => c.checked = t.checked); updateTitlesLive(d); }
+  else if(t.dataset.name !== undefined){ (ui.names[k] ||= {})[t.dataset.name] = t.value; }
+  else if(t.dataset.cv !== undefined){
+    const c = convOf(d), f = t.dataset.cv;
+    c[f] = t.type==='checkbox' ? t.checked : f==='rf' ? (+t.value||21) : t.value;
+    if(f === 'convert'){ const b = $('#cvBody'); if(b) b.classList.toggle('off', !t.checked); }
+    updateTitlesLive(d);
+  }
+});
+function toggleCv(){
+  ui.cvOpen = !ui.cvOpen; $('#cvBody').classList.toggle('hidden', !ui.cvOpen); $('#cvChev').textContent = ui.cvOpen ? '⌃' : '⌄'; $('#cvToggle').setAttribute('aria-expanded', ui.cvOpen);
+}
+$('#titlesPanel').addEventListener('click', async e => {
+  const d = curDrive(); if(!d || !d.disc) return; const t = e.target;
+  if(t.closest('#filterBtn')){
+    ui.hideShort = !ui.hideShort;
+    document.querySelectorAll('#titlesPanel tr[data-short="true"]').forEach(r => r.classList.toggle('hidden', ui.hideShort));
+    toast(ui.hideShort ? 'Kurze Titel ausgeblendet.' : 'Alle Titel werden angezeigt.');
+  } else if(t.closest('[data-trk]')){ const kk = keyOf(d)+':'+t.closest('[data-trk]').dataset.trk; ui.open[kk] = !ui.open[kk]; buildTitles(d); }
+  else if(t.closest('[data-act="savepreset"]')){ await api('/api/settings','POST',{presets:{[discKind(d)]: convOf(d)}}); toast('Als Standard gespeichert ✓'); }
+  else if(t.closest('#cvToggle') && !t.closest('.switch')) toggleCv();
+});
+$('#titlesPanel').addEventListener('keydown', e => { if((e.key==='Enter'||e.key===' ') && e.target.id==='cvToggle'){ e.preventDefault(); toggleCv(); } });
 
+// ---- Aktionsfeld
+function renderAction(d){
+  const el = $('#actionPanel'), disc = d && d.disc, busy = !!(d && d.job);
+  const sig = [d?d.id:'', d?d.scan_id:'', busy, d?d.status:'', !!disc, S.output.dir].join('|');
+  if(ui.sig.action !== sig){
+    ui.sig.action = sig;
+    const k = d && keyOf(d);
+    el.innerHTML = `<div class="destination"><span>♧</span><span><strong id="actionCount">${disc ? '' : 'Keine Disc'}</strong> · ${esc(S.output.dir)}</span></div>
+      ${disc ? `<div class="folderrow"><label for="folder">Ordner</label><input class="input" id="folder" value="${esc(ui.folder[k]||'')}" ${busy?'disabled':''}></div>` : ''}
+      <button class="primary" id="ripBtn" data-act="rip" ${(!disc||busy)?'disabled':''}>${busy ? 'Läuft …' : '▶ &nbsp; Auswahl rippen'}</button>
+      <div class="actions2">${d && d.status==='ready' && !busy ? '<button class="secondary" data-act="scan">Neu analysieren</button>' : ''}${disc && !busy ? '<button class="secondary" data-act="backup" title="Entschlüsselte Kopie der ganzen Disc (BDMV/VIDEO_TS-Ordner)">Disc-Backup</button>' : ''}${d && d.status==='open' ? '<button class="secondary" data-act="close">Schublade schließen</button>' : ''}${d ? `<button class="secondary" data-act="eject" ${busy?'disabled':''}>Auswerfen</button>` : ''}</div>`;
+  }
+  if(disc) updateTitlesLive(d);
+}
+$('#actionPanel').addEventListener('input', e => { const d = curDrive(); if(d && e.target.id==='folder') ui.folder[keyOf(d)] = e.target.value; });
 async function startRip(d, mode){
-  const k = keyOf(d), sel = selOf(d), names = ui.names[k]||{};
-  const titles = mode==='mkv' ? d.disc.titles.filter(t=>sel[t.id]).map(t => ({id:t.id, name:(names[t.id] ?? suggestName(d.disc, t)).trim()})) : [];
-  if(mode==='mkv' && !titles.length){ alert('Bitte mindestens einen Titel auswählen.'); return; }
-  const cv = convOf(d);
+  const k = keyOf(d), sel = selOf(d), names = ui.names[k]||{}, cv = convOf(d);
+  const titles = mode==='mkv' ? d.disc.titles.filter(t => sel[t.id]).map(t => ({id:t.id, name:(names[t.id] ?? suggestName(d.disc, t)).trim()})) : [];
+  if(mode==='mkv' && !titles.length){ toast('Bitte mindestens einen Titel auswählen.', true); return; }
   await api(`/api/drives/${d.id}/rip`, 'POST', {titles, folder: ui.folder[k]||'', mode, convert: (mode==='mkv' && cv.convert) ? cv : null});
 }
+async function driveAction(ev){
+  const b = ev.target.closest('[data-act]'); if(!b) return; const d = curDrive(); if(!d) return; const a = b.dataset.act;
+  if(a==='scan') api(`/api/drives/${d.id}/scan`);
+  else if(a==='eject') api(`/api/drives/${d.id}/eject`);
+  else if(a==='close') api(`/api/drives/${d.id}/close`);
+  else if(a==='cancel'){ if(confirm('Laufenden Vorgang abbrechen?')) api(`/api/drives/${d.id}/cancel`); }
+  else if(a==='rip') startRip(d, 'mkv');
+  else if(a==='backup'){ if(confirm('Komplettes entschlüsseltes Disc-Backup erstellen? Das dauert länger und braucht den vollen Platz der Disc.')) startRip(d, 'backup'); }
+}
+$('#actionPanel').addEventListener('click', driveAction);
+$('#prog').addEventListener('click', driveAction);
+$('#drivechips').addEventListener('click', e => { const b = e.target.closest('[data-drive]'); if(b){ selDrive = b.dataset.drive; ui.sig.titles = ''; ui.sig.action = ''; render(); } });
 
-function updateDynamic(el, d){
-  const prog = el.querySelector('.prog');
-  if(prog){
-    const j = d.job;
-    if(j){
-      const pct = j.kind==='scan' ? Math.round((j.total||0)*100) : Math.round((j.overall||0)*100);
-      const el_s = Math.max(1, S.now - j.started);
-      let stats = `<span>Laufzeit <b>${fmtD(el_s)}</b></span>`;
-      if(j.kind!=='scan' && j.overall>0.01){
-        stats += `<span>Restzeit ca. <b>${fmtD(el_s/j.overall-el_s)}</b></span>`;
-        if(j.bytes) stats += `<span>Tempo <b>${fmtB(j.overall*j.bytes/el_s)}/s</b></span>`;
-      }
-      if(j.kind==='rip') stats += `<span>Titel <b>${j.index}/${j.count}</b></span>`;
-      const label = j.kind==='scan' ? (j.text||'Analysiere …') : (j.kind==='backup' ? (j.text||'Backup') : `${esc(j.title||'')} – ${esc(j.text||'')}`);
-      const indet = (j.kind==='scan' ? !(j.total>0) : false);
-      prog.innerHTML = `<div style="margin-bottom:16px"><div class="row" style="justify-content:space-between;margin-bottom:6px"><b>${label}</b><span><b>${j.kind==='scan'&&indet?'':pct+' %'}</b> <button class="sm danger" data-act="cancel">Abbrechen</button></span></div>
-        <div class="bar ${indet?'indet':''}"><div style="width:${pct}%"></div></div>
-        ${j.sub?`<div class="hint" style="margin-top:6px">${esc(j.sub)}</div>`:''}<div class="stats">${stats}</div>
-        ${j.done&&j.done.length?`<div class="hint" style="margin-top:8px">Fertig: ${j.done.map(x=>esc(x.name)).join(', ')}</div>`:''}</div>`;
-    } else prog.innerHTML = '';
+// ---- Protokoll
+function renderLogs(d){
+  const log = d ? d.log : [];
+  const line = l => `<div class="log-line"><span class="log-time">${esc(l.t)}</span><span class="${l.l==='ok'?'log-good':l.l==='error'?'log-error':''}">${esc(l.m)}</span></div>`;
+  const put = (el, h) => { const end = el.scrollTop + el.clientHeight >= el.scrollHeight - 12; setHtml(el, h); if(end) el.scrollTop = el.scrollHeight; };
+  put($('#logFull'), log.map(line).join('') || '<span class="muted">noch keine Meldungen</span>');
+  put($('#logCompact'), log.slice(-4).map(line).join('') || '<span class="muted">noch keine Meldungen</span>');
+}
+
+// ---- Aufträge (Konvertierung + Übertragung)
+const baseName = p => String(p).split('/').pop();
+function jobRow(x){
+  const o = x.o; let cls = '', txt = 'Fertig', icon = '<span class="status-check">✓</span>', small = '', err = false, bar = '', btn;
+  if(x.k === 'c'){
+    if(o.status === 'running'){ const p = Math.round(o.pct*100); cls = 'run'; txt = 'Läuft'; icon = '<span class="status-check run"></span>';
+      small = `Konvertierung ${p} %${o.fps ? ` · ${dec(o.fps.toFixed(1))} fps` : ''}${o.speed ? ` · ${dec(o.speed.toFixed(2))}× Echtzeit` : ''}${o.eta ? ` · Restzeit ${fmtD(o.eta)}` : ''}${o.mode ? ` · ${o.mode}` : ''}`;
+      bar = `<div class="mini-bar"><div style="width:${p}%"></div></div>`; }
+    else if(o.status === 'queued'){ cls = 'wait'; txt = 'Wartet'; icon = '<span class="status-check wait">…</span>'; small = `Konvertierung eingereiht · ${fmtB(o.size_in)}`; }
+    else if(o.status === 'done') small = `Konvertiert · ${fmtB(o.size_in)} → ${fmtB(o.size_out)} (−${Math.round((1-o.size_out/o.size_in)*100)} %)`;
+    else if(o.status === 'skipped'){ icon = '<span class="status-check skip">✓</span>'; small = 'Konvertierung übersprungen · Original'; }
+    else { cls = 'err'; txt = 'Fehler'; icon = '<span class="status-check err">!</span>'; small = o.error || 'Konvertierung fehlgeschlagen'; err = true; }
+    if(o.origin === 'library') small += ' · Bibliothek';
+    btn = (o.status==='queued' || o.status==='running') ? `<button class="secondary" data-skip="${o.id}" title="Konvertierung abbrechen und das Original unverändert behalten bzw. übertragen">Überspringen</button>` : `<button class="icon-btn" data-info="c:${o.id}" aria-label="Details">›</button>`;
+  } else {
+    const p = o.size ? Math.round(o.copied/o.size*100) : 0;
+    if(o.status === 'copying'){ cls = 'run'; txt = 'Läuft'; icon = '<span class="status-check run"></span>';
+      small = `Übertragung ${p} % · ${fmtB(o.copied)} / ${fmtB(o.size)}${o.speed>0 ? ` · ${fmtB(o.speed)}/s` : ''}${o.eta>1 ? ` · noch ${fmtD(o.eta)}` : ''}`; bar = `<div class="mini-bar"><div style="width:${p}%"></div></div>`; }
+    else if(o.status === 'queued'){ cls = 'wait'; txt = 'Wartet'; icon = '<span class="status-check wait">…</span>'; small = `Übertragung eingereiht · ${fmtB(o.size)}`; }
+    else if(o.status === 'retry'){ cls = 'err'; txt = 'Neuer Versuch'; icon = '<span class="status-check err">!</span>'; small = o.error || 'Übertragung fehlgeschlagen'; err = true; }
+    else if(o.status === 'error'){ cls = 'err'; txt = 'Fehler'; icon = '<span class="status-check err">!</span>'; small = o.error || 'Übertragung fehlgeschlagen'; err = true; }
+    else small = `${fmtB(o.size)} · Zielverzeichnis${o.replace ? ' · ersetzt Original' : ''}`;
+    btn = `<button class="icon-btn" data-info="u:${o.id}" aria-label="Details">›</button>`;
   }
-  const lb = el.querySelector('.logbox');
-  if(lb){
-    const atEnd = lb.scrollTop + lb.clientHeight >= lb.scrollHeight - 12;
-    lb.innerHTML = d.log.map(l=>`<div class="${l.l}"><span class="t">${l.t}</span> ${esc(l.m)}</div>`).join('') || '<span class="t">noch keine Meldungen</span>';
-    if(atEnd) lb.scrollTop = lb.scrollHeight;
-  }
-  const sm = el.querySelector('[data-summary]');
-  if(sm && d.disc){
-    const sel = selOf(d), ts = d.disc.titles.filter(t=>sel[t.id]);
-    const bytes = ts.reduce((a,t)=>a+t.bytes,0);
-    const cvOn = convOf(d).convert;
-    sm.innerHTML = `<b>${ts.length}</b> Titel · <b>${fmtB(bytes)}</b>${cvOn?' <span class="hint">(Rohdaten, wird konvertiert)</span>':''} → ${esc(S.output.dir)}/${esc(ui.folder[keyOf(d)]||'')}`;
-    const rip = el.querySelector('[data-act="rip"]'); if(rip && !d.job) rip.disabled = !ts.length;
-  }
+  const name = baseName(o.name) + (x.k==='u' ? ' übertragen' : '');
+  return `<div class="job">${icon}<div class="job-main"><strong title="${esc(o.name)}">${esc(name)}</strong><small class="${err?'err':''}">${esc(small)}</small>${bar}</div><span class="status ${cls}">${txt}</span>${btn}</div>`;
 }
+function renderJobs(){
+  const items = [];
+  (S.conversions||[]).forEach(c => items.push({k:'c', o:c})); (S.uploads||[]).forEach(u => items.push({k:'u', o:u}));
+  const act = x => x.k==='c' ? ['queued','running'].includes(x.o.status) : ['queued','copying','retry'].includes(x.o.status);
+  items.sort((a,b) => (act(b)-act(a)) || (act(a) ? a.o.id-b.o.id : b.o.t-a.o.t));
+  const h = items.slice(0,10).map(jobRow).join('') || '<div class="empty">Keine Aufträge.</div>';
+  ['#jobs','#jobs2'].forEach(id => { const e = $(id); if(e && !e.closest('[hidden]')) setHtml(e, h); });
+  $('#jobsDest').textContent = `Ziel: ${S.output.dir}`;
+}
+function jobsClick(e){
+  const sk = e.target.closest('[data-skip]');
+  if(sk){ if(confirm('Konvertierung abbrechen? Das Original bleibt unverändert bzw. wird unverändert übertragen.')) api(`/api/conversions/${sk.dataset.skip}/skip`); return; }
+  const inf = e.target.closest('[data-info]');
+  if(inf){ const [k,id] = inf.dataset.info.split(':'), o = (k==='c' ? S.conversions : S.uploads).find(x => x.id === +id);
+    if(o) toast(`${o.name}${o.error ? ' – ' + o.error : ''}`, !!o.error); }
+}
+$('#jobs').addEventListener('click', jobsClick); $('#jobs2').addEventListener('click', jobsClick);
 
-// ---------- Konvertierung
-function renderConversions(){
-  const list = S.conversions || [];
-  $('#cvcard').hidden = !list.length;
-  const label = {queued:'wartet', running:'konvertiert', done:'fertig ✓', skipped:'übersprungen (Original)', error:'Fehler (Original)'};
-  $('#cvlist').innerHTML = list.map(c => {
-    const pct = c.status==='done' ? 100 : Math.round((c.pct||0)*100);
-    const saved = c.status==='done' && c.size_in ? ` <b style="color:var(--ok)">−${Math.round((1-c.size_out/c.size_in)*100)} %</b>` : '';
-    const sizes = c.status==='done' ? `${fmtB(c.size_in)} → ${fmtB(c.size_out)}${saved}` : c.status==='running' && c.size_out ? `${fmtB(c.size_in)} → ${fmtB(c.size_out)} …` : fmtB(c.size_in);
-    const run = c.status==='running' ? `<div class="hint">${c.fps?c.fps.toFixed(1)+' fps · ':''}${c.speed?c.speed.toFixed(2)+'× Echtzeit · ':''}${c.eta?'Restzeit ca. '+fmtD(c.eta):'berechne Restzeit …'} · RF ${c.cfg.rf}, ${esc(c.cfg.preset)}${c.mode?' · '+esc(c.mode):''}</div>` : '';
-    const skip = (c.status==='queued'||c.status==='running') ? `<button class="sm" data-skip="${c.id}" title="Konvertierung abbrechen und das Original unverändert übertragen">Überspringen</button>` : '';
-    return `<tr><td>${esc(c.name)}${c.origin==='library'?' <span class="st">Bibliothek</span>':''}${run}${c.error?`<div class="hint" style="color:var(--err)">${esc(c.error)}</div>`:''}</td>
-      <td class="sz">${sizes}</td><td style="width:170px"><div class="bar thin"><div style="width:${pct}%"></div></div></td>
-      <td class="sz" style="min-width:150px">${label[c.status]||c.status}${c.status==='running'?' '+pct+' %':''}</td><td class="a">${skip}</td></tr>`;
-  }).join('');
+// ---- Fertige Dateien (kompakt)
+async function loadFiles(){
+  try{ ui.files = (await (await fetch('/api/files')).json()).files; }catch{ return; }
+  const f = ui.files.slice(0,6);
+  $('#nofiles').hidden = f.length > 0;
+  setHtml($('#filesBody'), f.map(x => `<tr><td class="file-name" title="${esc(x.path)}">${esc(baseName(x.path))}</td><td>${fmtB(x.size)}</td><td class="muted">${ago(x.mtime)}</td>
+    <td><a class="file-action" title="Download" aria-label="Download" href="/api/download?path=${encodeURIComponent(x.path)}">↓</a></td></tr>`).join(''));
 }
-$('#cvlist').onclick = e => { const id = e.target.dataset.skip; if(id && confirm('Konvertierung abbrechen? Das Original wird unverändert übertragen.')) api(`/api/conversions/${id}/skip`); };
+$('#files-reload').addEventListener('click', () => { loadFiles(); toast('Dateiliste aktualisiert.'); });
 
-// ---------- Übertragung (Zwischenspeicher -> Ziel)
-function renderUploads(){
-  const u = S.uploads || [];
-  $('#upcard').hidden = !u.length;
-  $('#stagechip').textContent = S.staging ? `Zwischenspeicher: ${fmtB(S.staging.free)} frei` : '';
-  const label = {queued:'wartet', copying:'überträgt', retry:'Fehler – neuer Versuch folgt', done:'fertig ✓', error:'Fehler – Datei bleibt im Zwischenspeicher'};
-  $('#uplist').innerHTML = u.map(x => {
-    const pct = x.status==='done' ? 100 : x.size ? Math.round(x.copied/x.size*100) : 0;
-    return `<tr><td>${esc(x.name)}${x.replace?' <span class="st warn">ersetzt Original</span>':''}${x.error?`<div class="hint" style="color:var(--err)">${esc(x.error)}</div>`:''}</td>
-      <td class="sz">${fmtB(x.size)}</td><td style="width:180px"><div class="bar thin"><div style="width:${pct}%"></div></div></td>
-      <td class="sz" style="min-width:190px">${label[x.status]||x.status}${x.status==='copying'?' '+pct+' %':''}${x.status==='copying'&&x.speed>0?`<div class="hint">${fmtB(x.speed)}/s${x.eta>1?' · noch '+fmtD(x.eta):''}</div>`:''}</td></tr>`;
-  }).join('');
-  const done = u.filter(x => x.status==='done').length;
-  if(done !== ui.upDone){ ui.upDone = done; loadFiles(); }
+// ---------- Ansichten / Menü
+function setView(v){
+  view = v;
+  $('#view-drives').hidden = v !== 'drives'; $('#view-lib').hidden = v !== 'lib';
+  document.querySelectorAll('#menu [data-view]').forEach(b => b.classList.toggle('on', b.dataset.view === v));
+  $('#menu').classList.add('hidden');
+  if(S) render();
+  if(v === 'lib'){ libInit(); loadLibrary(); }
 }
-
-// ---------- Tabs
-let tab = 'drives';
-function setTab(t){
-  tab = t;
-  document.querySelectorAll('.tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab===t));
-  $('#drives').hidden = t!=='drives'; $('#libtab').hidden = t!=='lib';
-  if(t==='lib'){ libInit(); loadLibrary(); }
-}
-document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => setTab(b.dataset.tab));
+$('#btn-menu').addEventListener('click', e => { e.stopPropagation(); $('#menu').classList.toggle('hidden'); });
+document.addEventListener('click', e => { if(!e.target.closest('.menuwrap')) $('#menu').classList.add('hidden'); });
+document.querySelectorAll('#menu [data-view]').forEach(b => b.addEventListener('click', () => setView(b.dataset.view)));
 
 // ---------- Bibliothek
 const libSel = new Set();
 let lib = {files:[], probing:0, dir:'', instance:''}, libCv = null, libFilter = '';
 function libInit(){
-  if(libCv) return;
-  libCv = {...CV_FALLBACK, ...((S&&S.settings.presets||{}).bluray||{}), convert:true};
-  const c = libCv;
-  $('#libcv').innerHTML = `
-    <label class="f">Qualität (RF) <input type="number" min="14" max="30" data-lcv="rf" value="${c.rf}"></label>
-    <label class="f">Preset <select data-lcv="preset">${['veryfast','fast','medium','slow','slower'].map(x=>opt(x,c.preset)).join('')}</select></label>
-    <label class="f">Tune <select data-lcv="tune">${opt('none',c.tune,'keins')}${opt('grain',c.tune,'grain (körnige Filme)')}${opt('film',c.tune,'film')}${opt('animation',c.tune,'animation')}</select></label>
-    <label class="f">Audio <select data-lcv="audio">${opt('copy',c.audio,'Original (Passthrough)')}${opt('ac3',c.audio,'AC3 5.1, 640 kbps')}${opt('eac3',c.audio,'E-AC3 5.1, 640 kbps')}${opt('opus',c.audio,'Opus (nicht überall abspielbar)')}</select></label>
-    <label class="f wide">Zusatz-Optionen x265 <input type="text" data-lcv="extra" value="${esc(c.extra)}"></label>`;
+  if(libCv || !S) return;
+  libCv = {...CV_FALLBACK, ...((S.settings.presets||{}).bluray||{}), convert:true};
+  $('#libcv').innerHTML = cvFields(libCv, 'lcv', '');
 }
-$('#libcv').oninput = e => { const f = e.target.dataset.lcv; if(f) libCv[f] = f==='rf' ? (+e.target.value||21) : e.target.value; };
-async function loadLibrary(){
-  try{ lib = await (await fetch('/api/library')).json(); renderLibrary(); }catch{}
-}
-const loadFiles = () => { if(tab==='lib') loadLibrary(); };
-setInterval(() => { if(tab==='lib') loadLibrary(); }, 4000);
-$('#lib-reload').onclick = loadLibrary;
-$('#libfilter').oninput = e => { libFilter = e.target.value.toLowerCase(); renderLibrary(); };
+$('#libcv').addEventListener('input', e => { const f = e.target.dataset.lcv; if(f) libCv[f] = f==='rf' ? (+e.target.value||21) : e.target.value; });
+async function loadLibrary(){ try{ lib = await (await fetch('/api/library')).json(); renderLibrary(); }catch{} }
+setInterval(() => { if(view==='lib') loadLibrary(); }, 4000);
+$('#lib-reload').addEventListener('click', loadLibrary);
+$('#libfilter').addEventListener('input', e => { libFilter = e.target.value.toLowerCase(); renderLibrary(); });
 const libOk = f => f.state==='ok' && !f.job && !f.locked;
-$('#lib-allok').onclick = () => { lib.files.filter(libOk).filter(f=>f.path.toLowerCase().includes(libFilter)).forEach(f=>libSel.add(f.path)); renderLibrary(); };
-$('#lib-none').onclick = () => { libSel.clear(); renderLibrary(); };
+$('#lib-allok').addEventListener('click', () => { lib.files.filter(libOk).filter(f => f.path.toLowerCase().includes(libFilter)).forEach(f => libSel.add(f.path)); renderLibrary(); });
+$('#lib-none').addEventListener('click', () => { libSel.clear(); renderLibrary(); });
 function renderLibrary(){
   $('#filesdir').textContent = lib.dir || '';
-  $('#libinfo').textContent = `${lib.files.length} Dateien${lib.probing?' · '+lib.probing+' werden geprüft …':''}`;
+  $('#libinfo').textContent = `${lib.files.length} Dateien${lib.probing ? ' · '+lib.probing+' werden geprüft …' : ''}`;
   const stat = f => {
     if(f.job) return f.job.status==='replacing' ? '<span class="st busy">ersetzt Original …</span>' : f.job.status==='running' ? `<span class="st busy">konvertiert ${Math.round(f.job.pct*100)} %</span>` : '<span class="st busy">in Warteschlange</span>';
     if(f.locked) return `<span class="st warn">gesperrt (${esc(f.locked)})</span>`;
-    return {ok:'<span class="st ok">Original</span>', hevc:'<span class="st">bereits HEVC</span>', hdr:'<span class="st warn">HDR – nicht umkodiert</span>',
-            probing:'<span class="st">wird geprüft …</span>', other:'<span class="st">—</span>', unknown:`<span class="st warn" title="${esc(f.dev_err||'')}">nicht lesbar</span>`}[f.state] || '';
+    return {ok:'<span class="st ok">Original</span>', hevc:'<span class="st">bereits HEVC</span>', hdr:'<span class="st warn">HDR – nicht umkodiert</span>', probing:'<span class="st">wird geprüft …</span>', other:'<span class="st">—</span>',
+            unknown:`<span class="st warn" title="${esc(f.dev_err||'')}">nicht lesbar</span>`}[f.state] || '';
   };
-  const vid = f => f.info ? `${esc(f.info.codec)} ${f.info.w}×${f.info.h}${f.info.pix?' · '+esc(f.info.pix):''}` : '';
+  const vid = f => f.info ? `${esc(f.info.codec)} ${f.info.w}×${f.info.h}${f.info.pix ? ' · '+esc(f.info.pix) : ''}` : '';
   const aud = f => f.info ? esc((f.info.audio[0]||'') + (f.info.audio.length>1 ? ` (+${f.info.audio.length-1})` : '')) : '';
   const rows = lib.files.filter(f => f.path.toLowerCase().includes(libFilter));
-  $('#nolib').hidden = rows.length>0;
-  $('#liblist').innerHTML = rows.map(f => `<tr>
-    <td><input type="checkbox" data-lsel="${esc(f.path)}" ${libSel.has(f.path)?'checked':''} ${libOk(f)?'':'disabled'}></td>
-    <td>${esc(f.path)}</td><td class="hide-s num">${vid(f)}</td><td class="hide-s">${aud(f)}</td><td class="sz num">${fmtB(f.size)}</td><td>${stat(f)}</td>
-    <td class="a"><a class="btn sm" href="/api/download?path=${encodeURIComponent(f.path)}">Download</a> <button class="sm danger" data-del="${esc(f.path)}" ${f.job||f.locked?'disabled':''}>Löschen</button></td></tr>`).join('');
+  $('#nolib').hidden = rows.length > 0;
+  setHtml($('#liblist'), rows.map(f => `<tr><td><input class="check" type="checkbox" data-lsel="${esc(f.path)}" ${libSel.has(f.path)?'checked':''} ${libOk(f)?'':'disabled'} aria-label="${esc(f.path)} auswählen"></td>
+    <td>${esc(f.path)}</td><td class="muted">${vid(f)}</td><td class="muted">${aud(f)}</td><td>${fmtB(f.size)}</td><td>${stat(f)}</td>
+    <td><a class="secondary" href="/api/download?path=${encodeURIComponent(f.path)}">Download</a> <button class="secondary danger" data-del="${esc(f.path)}" ${f.job||f.locked?'disabled':''}>Löschen</button></td></tr>`).join(''));
   const n = [...libSel].filter(p => lib.files.some(f => f.path===p && libOk(f))).length;
   $('#lib-go').disabled = !n; $('#lib-go').textContent = n ? `${n} Datei${n>1?'en':''} konvertieren` : 'Auswahl konvertieren';
-  const tot = lib.files.filter(f => libSel.has(f.path)).reduce((a,f)=>a+f.size,0);
+  const tot = lib.files.filter(f => libSel.has(f.path)).reduce((a,f) => a+f.size, 0);
   $('#lib-sel').textContent = n ? `${fmtB(tot)} Originale – danach ersetzt durch die kleinere Datei` : '';
 }
-$('#liblist').onchange = e => { const p = e.target.dataset.lsel; if(p===undefined) return; e.target.checked ? libSel.add(p) : libSel.delete(p); renderLibrary(); };
-$('#liblist').onclick = async e => {
+$('#liblist').addEventListener('change', e => { const p = e.target.dataset.lsel; if(p === undefined) return; e.target.checked ? libSel.add(p) : libSel.delete(p); renderLibrary(); });
+$('#liblist').addEventListener('click', async e => {
   const p = e.target.dataset.del; if(!p) return;
   if(confirm(`„${p}“ endgültig löschen?`)){
     const r = await fetch('/api/files?path='+encodeURIComponent(p), {method:'DELETE'});
-    if(!r.ok){ let m='Löschen fehlgeschlagen'; try{ m=(await r.json()).detail||m }catch{} alert(m); }
-    loadLibrary();
+    if(!r.ok){ let m = 'Löschen fehlgeschlagen'; try{ m = (await r.json()).detail || m }catch{} toast(m, true); }
+    loadLibrary(); loadFiles();
   }
-};
-$('#lib-go').onclick = async () => {
+});
+$('#lib-go').addEventListener('click', async () => {
   const paths = [...libSel];
   if(!confirm(`${paths.length} Datei(en) konvertieren?\n\nDas Original wird nach bestandener Prüfung GELÖSCHT und durch die konvertierte Datei ersetzt.`)) return;
   const r = await api('/api/library/convert', 'POST', {paths, convert: libCv});
   libSel.clear();
   if(r.skipped && r.skipped.length) alert(`${r.started.length} gestartet, ${r.skipped.length} übersprungen:\n` + r.skipped.map(x => `• ${x.path}: ${x.why}`).join('\n'));
+  else toast(`${r.started.length} Datei(en) in die Warteschlange gestellt.`);
   loadLibrary();
-};
+});
 
 // ---------- Einstellungen
 const dlg = $('#dlg');
-$('#btn-set').onclick = () => {
-  const s = S.settings;
-  $('#s-auto_scan').checked = s.auto_scan; $('#s-auto_eject').checked = s.auto_eject; $('#s-minlength').value = s.minlength; $('#s-conv_parallel').value = s.conv_parallel; $('#s-conv_segments').value = s.conv_segments;
+$('#btn-set').addEventListener('click', () => {
+  if(!S) return; const s = S.settings;
+  $('#s-auto_scan').checked = s.auto_scan; $('#s-auto_eject').checked = s.auto_eject; $('#s-minlength').value = s.minlength;
+  $('#s-conv_parallel').value = s.conv_parallel; $('#s-conv_segments').value = s.conv_segments;
   $('#s-audio_langs').value = s.audio_langs; $('#s-sub_langs').value = s.sub_langs; $('#s-key').value = s.key;
   const k = S.key;
-  $('#keystate').innerHTML = k.custom ? 'Eigener Key wird verwendet.' : k.beta ? `Öffentlicher Beta-Key aktiv (geholt ${ago(k.fetched)}). <button type="button" class="sm" id="keyref">Neu holen</button>` : `Kein Key vorhanden${k.error?': '+esc(k.error):''}. <button type="button" class="sm" id="keyref">Beta-Key holen</button>`;
-  const kr = $('#keyref'); if(kr) kr.onclick = async () => { kr.disabled=true; try{ await api('/api/key/refresh'); }catch{} dlg.close(); };
+  $('#keystate').innerHTML = k.custom ? 'Eigener Key wird verwendet.' : k.beta ? `Öffentlicher Beta-Key aktiv (geholt ${ago(k.fetched)}). <button type="button" class="secondary" id="keyref">Neu holen</button>` : `Kein Key vorhanden${k.error ? ': '+esc(k.error) : ''}. <button type="button" class="secondary" id="keyref">Beta-Key holen</button>`;
+  const kr = $('#keyref'); if(kr) kr.onclick = async () => { kr.disabled = true; try{ await api('/api/key/refresh'); }catch{} dlg.close(); };
   dlg.showModal();
-};
-$('#s-cancel').onclick = () => dlg.close();
-$('#setform').onsubmit = async e => {
-  await api('/api/settings', 'POST', {
-    auto_scan: $('#s-auto_scan').checked, auto_eject: $('#s-auto_eject').checked, minlength: +$('#s-minlength').value || 0, conv_parallel: +$('#s-conv_parallel').value || 1, conv_segments: Math.max(0, +$('#s-conv_segments').value || 0),
+});
+$('#s-cancel').addEventListener('click', () => dlg.close());
+$('#setform').addEventListener('submit', async () => {
+  await api('/api/settings', 'POST', { auto_scan: $('#s-auto_scan').checked, auto_eject: $('#s-auto_eject').checked, minlength: +$('#s-minlength').value || 0,
+    conv_parallel: +$('#s-conv_parallel').value || 1, conv_segments: Math.max(0, +$('#s-conv_segments').value || 0),
     audio_langs: $('#s-audio_langs').value, sub_langs: $('#s-sub_langs').value, key: $('#s-key').value });
-};
+  toast('Einstellungen gespeichert ✓');
+});
 
-connect();
+setView('drives'); connect(); loadFiles(); setInterval(loadFiles, 60000);
 </script>
 </body>
 </html>
