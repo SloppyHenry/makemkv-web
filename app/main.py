@@ -732,7 +732,7 @@ def enqueue_convert(src: Path, folder: str, cfg: dict, dev: str = ""):
     src.with_name(src.name + ".json").write_text(json.dumps(cfg))
     conversions.append({"id": _cv_seq, "name": f"{folder}/{src.name}", "folder": folder, "src": str(src), "size_in": src.stat().st_size,
                         "size_out": 0, "status": "queued", "pct": 0.0, "fps": 0.0, "speed": 0.0, "eta": 0, "error": "",
-                        "cfg": cfg, "dev": dev, "t": time.time(), "started": 0, "mode": "", "origin": "", "paused": False, "handed": ""})
+                        "cfg": cfg, "dev": dev, "t": time.time(), "started": 0, "mode": "", "origin": "", "paused": False, "handed": "", "cancel": False})
     convert_queue.put_nowait(conversions[-1])
     broadcast()
 
@@ -1154,8 +1154,12 @@ async def convert_worker():
             return
         item = await convert_queue.get()
         dr = drives.get(item["dev"])
+        if item["status"] == "cancelled":
+            continue
         while conv_state["paused"] and item["status"] == "queued":      # pausiert: nichts Neues starten
             await asyncio.sleep(1)
+        if item["status"] == "cancelled":
+            continue
         if item["status"] != "skipped":
             for attempt in (1, 2):
                 try:
@@ -1194,6 +1198,10 @@ async def convert_worker():
                     if attempt == 1:
                         item.update(status="queued", pct=0.0)
                         broadcast()
+        if item["status"] != "done" and item.get("cancel"):             # Abbrechen: Auftrag beenden, nichts weiterreichen
+            finalize_cancel(item)
+            broadcast()
+            continue
         if item["status"] != "done":
             was_skipped = item["status"] == "skipped"
             if item.get("origin") == "library":              # Original liegt unverändert auf dem NAS
@@ -1545,6 +1553,40 @@ async def hand_to_peer_after_upload(item: dict, base: Path, dr):
             dr.add_log(item["error"] + " – die Datei liegt unverändert im Ziel (Bibliothek → konvertieren).", "error")
 
 
+def discard_staged(item: dict):
+    """Eine noch lokal zwischengespeicherte, gerippte Datei verwerfen (nur unterhalb des Konvertierungs-Ordners)."""
+    src = Path(item["src"])
+    if CONVERT.resolve() in src.resolve().parents:
+        src.unlink(missing_ok=True)
+        src.with_name(src.name + ".json").unlink(missing_ok=True)
+        try:
+            src.parent.rmdir()
+        except OSError:
+            pass
+
+
+def finalize_cancel(item: dict):
+    if item["status"] == "cancelled":
+        return
+    if item.get("origin") == "library":
+        release_lock(item["lock"])                                       # Original bleibt unverändert auf dem NAS
+    else:
+        discard_staged(item)                                             # frisch gerippte Datei wird verworfen
+    item["status"] = "cancelled"
+    item["t"] = time.time()
+    dr = drives.get(item.get("dev", ""))
+    if dr:
+        dr.add_log(f"{item['name']}: abgebrochen", "info")
+
+
+def cancel_conversion(item: dict):
+    item["cancel"] = True
+    if item["status"] == "queued":                                       # noch nicht gestartet: sofort erledigen
+        finalize_cancel(item)
+    else:                                                                # läuft: ffmpeg beenden, der Worker räumt auf
+        skip_conversion(item)
+
+
 def skip_conversion(item: dict):
     item["status"] = "skipped"
     item["t"] = time.time()
@@ -1555,7 +1597,7 @@ def skip_conversion(item: dict):
                 _signal_all([proc], signal.SIGCONT)      # ein angehaltener Prozess nimmt SIGTERM erst nach SIGCONT an
 
 
-PROXY_ERLAUBT = (re.compile(r"library/convert"), re.compile(r"conversions/pause"), re.compile(r"conversions/\d+/skip"))
+PROXY_ERLAUBT = (re.compile(r"library/convert"), re.compile(r"conversions/pause"), re.compile(r"conversions/\d+/skip"), re.compile(r"conversions/\d+/cancel"))
 
 
 @app.post("/api/peer/{name}/{pfad:path}")
@@ -1628,7 +1670,7 @@ def snapshot():
                    "free": out_cache["free"], "stalled": out_cache["stalled"]},
         "uploads": [{k: u[k] for k in ("id", "name", "size", "copied", "status", "error", "t", "speed", "eta", "replace")} for u in uploads
                     if not (u["status"] == "done" and time.time() - u["t"] > 600)],
-        "conversions": [{k: c[k] for k in ("id", "name", "size_in", "size_out", "status", "pct", "fps", "speed", "eta", "error", "cfg", "t", "started", "mode", "origin", "paused", "handed")}
+        "conversions": [{k: c.get(k) for k in ("id", "name", "size_in", "size_out", "status", "pct", "fps", "speed", "eta", "error", "cfg", "t", "started", "mode", "origin", "paused", "handed", "cancel")}
                         for c in conversions if not (c["status"] in ("done", "skipped") and time.time() - c["t"] > 900)],
         "conv_paused": conv_state["paused"],
         "capacity": capacity(),
@@ -1788,6 +1830,16 @@ async def api_conv_pause(req: PauseReq):
     return {"ok": True, "paused": conv_state["paused"]}
 
 
+@app.post("/api/conversions/{cid}/cancel")
+async def api_conv_cancel(cid: int):
+    item = next((c for c in conversions if c["id"] == cid), None)
+    if not item or item["status"] not in CV_ACTIVE:
+        raise HTTPException(404, "Keine laufende oder wartende Konvertierung")
+    cancel_conversion(item)
+    broadcast()
+    return {"ok": True}
+
+
 @app.post("/api/conversions/{cid}/skip")
 async def api_conv_skip(cid: int):
     item = next((c for c in conversions if c["id"] == cid), None)
@@ -1842,9 +1894,9 @@ async def api_library():
                 lib_probe_queue.put_nowait(rel)
         job = None
         if rel in active:
-            job = {"status": active[rel]["status"], "pct": active[rel]["pct"]}
+            job = {"status": active[rel]["status"], "pct": active[rel]["pct"], "id": active[rel]["id"]}
         elif rel in remote:
-            job = {"status": remote[rel][1]["status"], "pct": remote[rel][1].get("pct", 0), "host": remote[rel][0]}
+            job = {"status": remote[rel][1]["status"], "pct": remote[rel][1].get("pct", 0), "host": remote[rel][0], "id": remote[rel][1].get("id")}
         elif rel in done:
             job = {"status": "replacing", "pct": 1.0}
         lk = locks.get(rel)
@@ -1896,7 +1948,7 @@ async def api_library_convert(req: LibReq):
         _cv_seq += 1
         conversions.append({"id": _cv_seq, "name": rel, "folder": str(Path(rel).parent), "src": str(p), "size_in": st.st_size, "size_out": 0,
                             "status": "queued", "pct": 0.0, "fps": 0.0, "speed": 0.0, "eta": 0, "error": "", "cfg": cfg, "dev": "",
-                            "t": time.time(), "started": 0, "mode": "", "origin": "library", "rel": rel, "lock": str(lock_path(p)), "paused": False, "handed": ""})
+                            "t": time.time(), "started": 0, "mode": "", "origin": "library", "rel": rel, "lock": str(lock_path(p)), "paused": False, "handed": "", "cancel": False})
         convert_queue.put_nowait(conversions[-1])
         started.append(rel)
     save_libcache()
