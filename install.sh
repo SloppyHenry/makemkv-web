@@ -17,7 +17,7 @@ if [ ! -f .env ]; then
   echo "→ .env angelegt – bei Bedarf anpassen (Ausgabeordner, Port)"
 fi
 set -a; . ./.env; set +a
-mkdir -p data
+mkdir -p data "${STAGING_PATH:-data/staging}"
 [ -d "${NAS_MOUNT:-/mnt/nas}" ] || { echo "→ Lege ${NAS_MOUNT:-/mnt/nas} an"; $SUDO mkdir -p "${NAS_MOUNT:-/mnt/nas}"; }
 
 if [ "${ACCEPT_EULA:-}" != "yes" ]; then
