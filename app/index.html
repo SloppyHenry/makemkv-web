@@ -194,7 +194,7 @@ dialog h3{margin:0;font-size:16px}
           <div class="section-content" id="jobs"></div>
         </section>
         <section class="panel">
-          <div class="panel-head"><span class="mini-icon">▱</span><h2>Fertige Dateien</h2><span class="spacer"></span><button class="secondary" id="files-reload">Aktualisieren</button></div>
+          <div class="panel-head"><span class="mini-icon">▱</span><h2>Fertige Dateien</h2><span class="spacer"></span><button class="secondary" id="to-lib" title="Alle Dateien im Ziel anzeigen und nicht konvertierte nachträglich konvertieren">Nachträglich konvertieren</button><button class="secondary" id="files-reload">Aktualisieren</button></div>
           <div class="table-wrap"><table class="file-table"><thead><tr><th>Dateiname</th><th>Größe</th><th>Status</th><th></th></tr></thead><tbody id="filesBody"></tbody></table></div>
           <div class="empty" id="nofiles" hidden>Noch nichts im Ausgabeordner.</div>
         </section>
@@ -217,7 +217,7 @@ dialog h3{margin:0;font-size:16px}
 
   <div id="view-lib" hidden>
     <section class="panel">
-      <div class="panel-head"><span class="mini-icon">▤</span><h2>Bibliothek</h2><span class="pill" id="filesdir"></span><span class="pill" id="libinfo"></span><span class="spacer"></span>
+      <div class="panel-head"><button class="secondary" id="lib-back" title="Zurück zu den Laufwerken">← Laufwerke</button><span class="mini-icon">▤</span><h2>Bibliothek</h2><span class="pill" id="filesdir"></span><span class="pill" id="libinfo"></span><span class="spacer"></span>
         <input class="input" id="libfilter" placeholder="Filtern …" style="width:200px;height:30px"><button class="secondary" id="lib-reload">Aktualisieren</button></div>
       <div class="lib-body">
         <div class="settings flat">
@@ -571,6 +571,8 @@ async function loadFiles(){
   setHtml($('#filesBody'), f.map(x => `<tr><td class="file-name" title="${esc(x.path)}">${esc(baseName(x.path))}</td><td>${fmtB(x.size)}</td><td class="muted">${ago(x.mtime)}</td>
     <td><a class="file-action" title="Download" aria-label="Download" href="/api/download?path=${encodeURIComponent(x.path)}">↓</a></td></tr>`).join(''));
 }
+$('#to-lib').addEventListener('click', () => setView('lib'));
+$('#lib-back').addEventListener('click', () => setView('drives'));
 $('#files-reload').addEventListener('click', () => { loadFiles(); toast('Dateiliste aktualisiert.'); });
 
 // ---------- Ansichten / Menü
