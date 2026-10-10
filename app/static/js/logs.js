@@ -5,7 +5,7 @@ import { curDrive, dkey } from './drives.js';
 import { isActive, onState, registerPanel } from './registry.js';
 
 const KEY = 'logOpen';
-const stored = () => { try{ return localStorage.getItem(KEY); }catch{ return null; } };     // null = nie gewählt -> offen
+const stored = () => { try{ return localStorage.getItem(KEY); }catch{ return null; } };     // null = nie gewählt -> zu
 const store = open => { try{ localStorage.setItem(KEY, open ? '1' : '0'); }catch{ /* Speicher gesperrt: dann eben ohne Merken */ } };
 const seen = {};        // Laufwerk -> Zahl der Fehlermeldungen, die der Nutzer schon gesehen hat
 const prev = {};        // Laufwerk -> Zahl der Fehlermeldungen beim letzten Zeichnen (nur ein Anstieg klappt auf, nicht schon vorhandene Fehler)
@@ -39,7 +39,7 @@ document.addEventListener('toggle', e => {
 onState(() => { if(isActive('laufwerke')) renderLogs(curDrive()); });
 
 registerPanel({view:'laufwerke', slot:'bottom', order:10, id:'fullLog', html:`<section class="panel bottom-log">
-      <details id="fullLog" ${stored() === '0' ? '' : 'open'}>
+      <details id="fullLog" ${stored() === '1' ? 'open' : ''}>
         <summary class="footerline" aria-label="Protokoll ein- oder ausklappen"><span class="mini-icon">›_</span><h2>Protokoll</h2><span class="pill busypill" id="logBadge" hidden></span><span class="spacer"></span><span class="muted log-count" id="logCount"></span><span class="chev">⌄</span></summary>
         <div class="log-body" id="logFull" role="log" aria-live="off"></div>
       </details>
