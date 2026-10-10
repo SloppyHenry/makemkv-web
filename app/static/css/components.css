@@ -1,0 +1,62 @@
+/* Bausteine der Laufwerks-Ansicht: Fortschritt, Titelliste, Einstellungsfelder, Aktionsfeld, Dateien, Rechnerwahl */
+.progress-panel{padding:17px 20px 15px}
+.progress-title{display:flex;align-items:flex-start;gap:18px}
+.progress-title h1{font-size:18px;margin:0 0 2px;letter-spacing:-.3px;overflow-wrap:anywhere}
+.progress-title p{margin:0;color:var(--muted);font-size:12px}
+.progress-title p.err{color:#ff8791}
+.percent{margin-left:auto;color:var(--red);font-size:20px;font-weight:750;white-space:nowrap;display:flex;align-items:center;gap:12px}
+.progress-track{height:9px;background:#252e3d;border-radius:20px;overflow:hidden;margin:13px 0 16px}
+.progress-fill{height:100%;width:0;background:var(--red);border-radius:20px;transition:width .3s}
+.progress-track.indet .progress-fill{width:35%!important;animation:ind 1.2s infinite ease-in-out}
+@keyframes ind{0%{margin-left:-35%}100%{margin-left:100%}}
+.metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr))}
+.metric{padding:0 14px;border-left:1px solid var(--line);display:flex;gap:10px;align-items:flex-start}
+.metric:first-child{padding-left:0;border-left:0}
+.metric .symbol{color:#a9bddf;font-size:17px}
+.metric strong{display:block;font-size:12px;font-weight:650}
+.metric small{display:block;color:var(--muted);font-size:11px;margin-top:2px}
+.row-action{border:0;background:transparent;color:#9fb4d7;font-size:12px}
+.namecell{display:flex;align-items:center;gap:2px}
+.namecell .tag{flex:none}
+.nameedit{background:transparent;border:1px solid transparent;color:var(--text);font:inherit;font-size:12px;flex:1 1 300px;min-width:130px;padding:3px 6px;border-radius:6px}
+.nameedit:hover{border-color:#2b3748}
+.nameedit:focus{border-color:#3a4a62;background:#0c121a;outline:0}
+tr.trk td{padding:0 12px 10px 55px;border-bottom:1px solid #222d3b;background:#0e141d}
+.trkgrid{display:grid;grid-template-columns:80px minmax(0,1fr) 110px;gap:3px 14px;padding:8px 12px;color:var(--muted);font-size:11px;white-space:normal}
+.settings{margin:10px 13px 13px;border:1px solid #2b384a;border-radius:10px;overflow:hidden;background:var(--panel2)}
+.settings.flat{margin:0 0 14px}
+.settings-toggle{width:100%;display:flex;align-items:center;gap:10px;text-align:left;padding:12px 13px;background:#131b27;color:var(--text);border:0;cursor:pointer}
+.settings-toggle strong{font-size:12px}
+.settings-toggle .summary{font-size:11px;color:var(--muted);margin-left:4px;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.settings-toggle .spacer{flex:1}
+.switch{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);flex:none}
+.settings-body{padding:12px 13px 13px;border-top:1px solid var(--line)}
+.settings-body.off .fields{opacity:.45}
+.fields{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.field label{display:block;font-size:11px;color:var(--muted);margin-bottom:5px}
+.field input,.field select,.input{width:100%;height:34px;background:#0c121a;color:var(--text);border:1px solid #2b3748;border-radius:7px;padding:0 9px;min-width:0}
+.field.full{grid-column:1/-1}
+.help{font-size:10px;line-height:1.55;color:var(--muted);margin:10px 0 0}
+.section-content{padding:0 16px}
+.file-table th{background:transparent}
+.file-table th,.file-table td{padding:10px 12px}
+.file-name{max-width:175px;overflow:hidden;text-overflow:ellipsis}
+.file-action{color:#c2d1e6;background:transparent;border:0;font-size:16px;text-decoration:none}
+.action-panel{padding:14px 16px}
+.destination{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:11px;margin-bottom:13px;overflow-wrap:anywhere}
+.destination strong{font-weight:550;color:#d4deed}
+.folderrow{display:flex;align-items:center;gap:8px;margin-bottom:12px}
+.folderrow label{font-size:11px;color:var(--muted)}
+.actions2{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.bottom-log{margin-top:16px}
+.footerline{display:flex;align-items:center;gap:10px;padding:9px 16px;border-bottom:1px solid var(--line)}
+.footerline h2{font-size:13px;margin:0}
+.footerline .spacer{flex:1}
+.peers{display:grid;gap:8px}
+.peer{display:flex;align-items:center;gap:12px;padding:10px 12px;border:1px solid var(--line);border-radius:9px;background:#0e141d;cursor:pointer}
+.peer:has(input:checked){border-color:var(--red)}
+.peer.off{opacity:.5;cursor:not-allowed}
+.peer .meta{color:var(--muted);font-size:11px}
+.set-section{display:contents}
+@media(max-width:700px){.metrics{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.metric{border:0;padding:0}.fields{grid-template-columns:repeat(2,minmax(0,1fr))}.progress-title h1{font-size:16px}}
+@media(max-width:1050px){.bottom-log{margin-top:12px}}

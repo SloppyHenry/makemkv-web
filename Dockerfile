@@ -30,7 +30,7 @@ COPY --from=build /usr/share/MakeMKV /usr/share/MakeMKV
 COPY --from=build /src/version /etc/makemkv-version
 RUN ldconfig
 RUN python3 -m venv /opt/venv && /opt/venv/bin/pip install --no-cache-dir fastapi "uvicorn[standard]"
-COPY app /app
-WORKDIR /app
+COPY app /srv/app
+WORKDIR /srv
 ENV PATH=/opt/venv/bin:$PATH HOME=/data
-CMD ["uvicorn","main:app","--host","0.0.0.0","--port","8780"]
+CMD ["uvicorn","app.main:app","--host","0.0.0.0","--port","8780"]

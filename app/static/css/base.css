@@ -1,0 +1,60 @@
+/* Grundlagen: Farben, Formulare, Knöpfe, Tabellen, Plaketten, Dialog */
+:root{
+  color-scheme:dark;--bg:#0b0e13;--panel:#111720;--panel2:#0e141d;--line:#253041;
+  --text:#edf2fa;--muted:#91a0b6;--red:#f04452;--red2:#c92e3c;--green:#36c98b;--blue:#9cb8e8;--amber:#e0a23c;
+  --radius:12px;--shadow:0 10px 35px #0002;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}
+button,input,select{font:inherit}
+button{cursor:pointer}
+button:disabled{cursor:not-allowed;opacity:.5}
+button:focus-visible,input:focus-visible,select:focus-visible,[role=button]:focus-visible{outline:2px solid #f04452;outline-offset:2px}
+a{color:inherit}
+.pill{font-size:11px;color:var(--muted);background:#202938;border-radius:99px;padding:4px 8px;white-space:nowrap}
+.online{color:#75e6b3;background:#153328}
+.warnpill{color:#f0c36a;background:#38301a}
+.busypill{color:#ff8791;background:#351b24}
+.icon-btn{border:0;background:transparent;color:#b8c5d8;padding:8px;border-radius:8px}
+.icon-btn:hover{background:#1a2330}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow)}
+.panel-head{display:flex;align-items:center;gap:10px;padding:13px 16px;border-bottom:1px solid var(--line)}
+.panel-head h2{margin:0;font-size:14px;font-weight:700;letter-spacing:-.15px}
+.panel-head .sub{color:var(--muted);font-size:12px}
+.panel-head .spacer{flex:1}
+.mini-icon{width:27px;height:27px;border-radius:7px;background:#202a39;display:grid;place-items:center;color:#c6d5ed;font-size:16px;flex:none}
+.table-wrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;white-space:nowrap}
+th{height:34px;text-align:left;font-size:10px;letter-spacing:.06em;font-weight:650;color:var(--muted);text-transform:uppercase;background:#101620}
+th,td{padding:9px 12px;border-bottom:1px solid #222d3b}
+td{font-size:12px}
+tbody tr:last-child td{border-bottom:0}
+tbody tr:hover{background:#151e2a}
+th:first-child,td:first-child{padding-left:17px;width:38px}
+.check{accent-color:var(--red);width:15px;height:15px;vertical-align:middle}
+.num{color:var(--muted);width:28px}
+.muted{color:var(--muted)}
+.tag{font-size:10px;border-radius:99px;padding:3px 7px;background:#202938;color:#9aa9c1;margin-left:7px}
+.tag.red{background:#351b24;color:#ff7480}
+details summary{cursor:pointer;list-style:none;display:flex;align-items:center;gap:10px}
+details summary::-webkit-details-marker{display:none}
+details summary .chev{margin-left:auto;color:var(--muted);transition:transform .2s}
+details[open] summary .chev{transform:rotate(180deg)}
+.primary{width:100%;border:0;border-radius:8px;background:var(--red);color:white;font-weight:700;padding:10px 14px;transition:background .15s}
+.primary:hover:not(:disabled){background:#ff5965}
+.secondary{border:1px solid var(--line);background:#151d28;color:#c4d0e1;padding:7px 10px;border-radius:7px;font-size:11px;text-decoration:none;display:inline-block}
+.secondary:hover:not(:disabled){border-color:#3a4a62}
+.secondary.danger{color:#ff7480}
+.hidden{display:none!important}
+.empty{padding:26px 16px;text-align:center;color:var(--muted);font-size:12px}
+.toast{position:fixed;bottom:18px;right:20px;padding:12px 16px;border:1px solid #315444;border-radius:9px;background:#11251e;color:#a6f2ce;box-shadow:var(--shadow);display:none;z-index:10;max-width:420px}
+.toast.err{border-color:#5a2a33;background:#2c151c;color:#ffb0b8}
+.st{font-size:11px;padding:3px 8px;border-radius:99px;background:#202938;color:#9aa9c1;white-space:nowrap}
+.st.ok{background:#153328;color:#75e6b3}.st.busy{background:#351b24;color:#ff8791}.st.warn{background:#38301a;color:#f0c36a}
+dialog{border:1px solid var(--line);border-radius:14px;background:var(--panel);color:var(--text);padding:0;width:min(560px,94vw)}
+dialog::backdrop{background:rgba(0,0,0,.6)}
+dialog form{padding:20px;display:grid;gap:14px}
+dialog h3{margin:0;font-size:16px}
+.chk{display:flex;gap:10px;align-items:center;font-size:13px}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.rowend{display:flex;justify-content:flex-end;gap:8px;align-items:center;flex-wrap:wrap}
