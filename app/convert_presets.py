@@ -4,7 +4,6 @@ Wird von main.py automatisch geladen (OPTIONAL_MODULES). Eigene Presets des Nutz
 die Zuordnung „welches Preset für welche Disc-Art“ in `settings["convert"]["default_for"]`. `conv_parallel`/`conv_segments` und die alten
 Standard-Presets (`presets.bluray/dvd`, Schema v1 bzw. migriert) bleiben im Namensraum „general“; die Oberfläche speichert beides.
 """
-import asyncio
 import os
 import re
 
@@ -15,7 +14,7 @@ from app import cluster, convert_caps, convert_probe, convert_stats, ext
 from app.config import INSTANCE, PRESET_DEFAULTS
 from app.convert import clean_convert
 from app.convert_builtin import BUILTIN, BUILTIN_IDS, DEFAULT_FOR
-from app.convert_schema import CODECS, SCHEMA, clean_v2, crf_to_level, describe, is_v1_compatible, level_to_crf, to_v1
+from app.convert_schema import CODECS, SCHEMA, clean_v2, crf_to_level, describe, is_v1_compatible, level_to_crf
 from app.ffmpeg_args import command_preview
 from app.state import broadcast, peers_state, settings
 
@@ -278,13 +277,6 @@ class StartReq(BaseModel):
     takeover_from: str = ""
 
 
-def _peer_post(name: str, path: str, body: dict, timeout: float = 30.0):
-    fn = getattr(cluster, "peer_call", None)
-    if fn:
-        return fn(name, path, body, timeout=timeout)
-    return cluster._http_json(f"{peers_state[name]['url']}/api/{path}", body, timeout)
-
-
 @router.post("/start")
 async def api_start(req: StartReq):
     """Bibliotheks-Dateien konvertieren lassen, auf diesem Rechner oder einem anderen. Ein Rechner, der die Einstellungen nicht versteht
@@ -296,15 +288,10 @@ async def api_start(req: StartReq):
     peer = peers_state.get(req.target)
     if not peer:
         raise HTTPException(404, f"Rechner „{req.target}“ ist nicht bekannt.")
-    ok, why = convert_caps.peer_ok(cfg, peer)
-    if not ok:
+    send, why = cluster.cfg_for_peer(cfg, peer)
+    if send is None:
         raise HTTPException(409, f"{req.target}: {why}")
-    legacy = peer.get("legacy") or not (peer.get("capabilities") or {})
-    body = {"paths": req.paths, "convert": to_v1(cfg) if legacy else cfg, "takeover_from": req.takeover_from}
-    try:
-        return await asyncio.to_thread(_peer_post, req.target, "library/convert", body, 30.0)
-    except Exception as e:  # noqa: BLE001
-        raise HTTPException(502, f"{req.target} antwortet nicht: {e}")
+    return await cluster.peer_call(req.target, "library/convert", {"paths": req.paths, "convert": send, "takeover_from": req.takeover_from}, 30.0)
 
 
 async def startup():
