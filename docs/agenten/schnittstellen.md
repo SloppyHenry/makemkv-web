@@ -128,6 +128,8 @@ registerLibraryAction({id:'play', label:'Abspielen', icon:'▶', primary:true,
 
 Verbund und Konvertierung: Eine Übergabe prüft vorher `convert_caps.peer_ok`. Rechner mit altem Stand bekommen nur die fünf alten Felder (`convert_schema.to_v1`), und das nur, wenn sich der Auftrag so ausdrücken lässt; sonst bleibt der Auftrag hier und der Grund wird gemeldet. Konvertierte Dateien tragen im Container `MKW_CONVERTED`; „konvertiert“ in der Bibliothek heißt dieses Kennzeichen oder HEVC/AV1.
 
+Auftragsliste: `app/joblist.py` entfernt beendete Einträge ohne Rückfrage (`POST /api/conversions/{id}/dismiss`, `/api/uploads/{id}/dismiss`, `/api/jobs/dismiss-finished`, auch über `/api/peer/…`); Fähigkeit `jobs_dismiss` zeigt, ob ein Rechner das kann (alte Rechner: kein Knopf).
+
 Tests: `python3 -m unittest discover -s tests -t .` (die gemeinsame Umgebung setzt `tests/__init__.py`).
 
 ## 8. Bekannte Einschränkungen

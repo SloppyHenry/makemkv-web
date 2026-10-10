@@ -17,6 +17,10 @@ function clusterItems(){
   }
   return items;
 }
+// Beendete Einträge lassen sich aus der Liste entfernen (ohne Rückfrage; Dateien bleiben). Andere Rechner nur, wenn sie das können (capabilities.jobs_dismiss).
+const itemDone = x => x.k==='c' ? ['done','skipped','cancelled','error'].includes(x.o.status) : x.k==='u' ? ['done','error'].includes(x.o.status) : false;
+const canDismiss = x => itemDone(x) && (x.local || !!(((S.peers||[]).find(p => p.name===x.host)||{}).capabilities||{}).jobs_dismiss);
+const dismissBtn = (x, h) => jobBtn(`data-dismiss="${x.k}:${x.o.id}" data-host="${h}"`, '🗑', 'Entfernen', 'Aus der Liste entfernen (die Datei bleibt)');
 const itemActive = x => x.k==='d' ? true : x.k==='c' ? ['queued','running'].includes(x.o.status) : ['queued','copying','retry'].includes(x.o.status);
 function jobSpeed(x){        // geglättete Geschwindigkeit eines Rips/Backups (Bytes/s) – auch für Aufträge anderer Rechner
   const o = x.o, key = x.host + ':' + o.dev, done = (o.overall||0)*(o.bytes||0), now = S.now;
@@ -56,7 +60,7 @@ function jobModel(x, multi){
     m.acts = ((o.status==='queued' || o.status==='running') && !o.cancel)
       ? '<span class="job-btns">' + jobBtn(`data-skip="${o.id}" data-host="${h}"`, '⏭︎', 'Überspringen', 'Ohne Konvertierung weiter: das Original bleibt liegen bzw. wird unverändert übertragen')
         + jobBtn(`data-cancel="${o.id}" data-host="${h}" data-origin="${esc(o.origin||'')}"`, '✕', 'Abbrechen', 'Auftrag ganz beenden', 'danger') + '</span>'
-      : `<button class="icon-btn job-info" data-info="c:${o.id}:${esc(x.host)}" aria-label="Details">›</button>`;
+      : (canDismiss(x) ? '<span class="job-btns">' + dismissBtn(x, h) + `<button class="icon-btn job-info" data-info="c:${o.id}:${esc(x.host)}" aria-label="Details">›</button></span>` : `<button class="icon-btn job-info" data-info="c:${o.id}:${esc(x.host)}" aria-label="Details">›</button>`);
   } else {
     const p = o.size ? Math.round(o.copied/o.size*100) : 0;
     if(o.status === 'copying'){ run(); m.pct = p;
@@ -65,7 +69,8 @@ function jobModel(x, multi){
     else if(o.status === 'retry') fail('Neuer Versuch', o.error || 'Übertragung fehlgeschlagen');
     else if(o.status === 'error') fail('Fehler', o.error || 'Übertragung fehlgeschlagen');
     else m.small = `${fmtB(o.size)} · Zielverzeichnis${o.replace ? ' · ersetzt Original' : ''}`;
-    m.acts = `<button class="icon-btn job-info" data-info="u:${o.id}:${esc(x.host)}" aria-label="Details">›</button>`;
+    const info = `<button class="icon-btn job-info" data-info="u:${o.id}:${esc(x.host)}" aria-label="Details">›</button>`;
+    m.acts = canDismiss(x) ? '<span class="job-btns">' + dismissBtn(x, x.local ? '' : esc(x.host)) + info + '</span>' : info;
   }
   m.name = baseName(o.name) + (x.k==='u' ? ' übertragen' : ''); m.title = o.name;
   return m;
@@ -81,12 +86,17 @@ function renderJobs(){
   const aktiv = (S.conversions||[]).some(c => c.status==='queued' || c.status==='running'), p = !!S.conv_paused;
   const hatPeers = (S.peers||[]).length > 0;
   document.querySelectorAll('.idle-chip').forEach(c => { c.hidden = !hatPeers; c.textContent = S.idle ? '✓ bereit zum Herunterfahren' : 'Arbeit läuft'; c.className = 'pill idle-chip ' + (S.idle ? 'online' : 'busypill'); });
+  const nDone = items.filter(canDismiss).length;
+  document.querySelectorAll('.clear-btn').forEach(b => { b.hidden = !nDone; b.textContent = `🗑 Erledigte entfernen (${nDone})`; });
   document.querySelectorAll('.pause-btn').forEach(b => { b.hidden = !(aktiv || p); b.textContent = p ? '▶ Fortsetzen' : '⏸ Pausieren'; b.dataset.paused = p ? '1' : ''; });
   const pp = (S.peers||[]).filter(x => x.reachable && ((x.conversions||[]).some(c => ['queued','running'].includes(c.status)) || x.conv_paused))
     .map(x => `<button class="secondary" data-ppause="${esc(x.name)}" data-paused="${x.conv_paused ? '1' : ''}">${x.conv_paused ? '▶' : '⏸'} ${esc(x.name)}</button>`).join('');
   document.querySelectorAll('.peerpause').forEach(e => { e.hidden = !pp; setHtml(e, pp); });
 }
+function dismissUrl(kind, id, host){ return `${host ? `/api/peer/${host}` : '/api'}/${kind==='c' ? 'conversions' : 'uploads'}/${id}/dismiss`; }
 function jobsClick(e){
+  const dm = e.target.closest('[data-dismiss]');
+  if(dm){ const [k, id] = dm.dataset.dismiss.split(':'); api(dismissUrl(k, id, dm.dataset.host)).catch(() => {}); return; }
   const sk = e.target.closest('[data-skip]');
   if(sk){
     if(confirm('Konvertierung abbrechen? Das Original bleibt unverändert bzw. wird unverändert übertragen.')){
@@ -111,6 +121,11 @@ function jobsClick(e){
   }
 }
 document.addEventListener('click', e => {
+  if(e.target.closest('.clear-btn')){
+    const hosts = (S.peers||[]).filter(p => p.reachable && (p.capabilities||{}).jobs_dismiss).map(p => p.name);
+    Promise.all([api('/api/jobs/dismiss-finished'), ...hosts.map(h => api(`/api/peer/${h}/jobs/dismiss-finished`))]).catch(() => {});
+    return;
+  }
   const pb = e.target.closest('[data-ppause]');
   if(pb){ api(`/api/peer/${pb.dataset.ppause}/conversions/pause`, 'POST', {paused: !pb.dataset.paused}).then(() => toast(pb.dataset.paused ? `${pb.dataset.ppause}: Konvertierung läuft weiter.` : `${pb.dataset.ppause}: Konvertierung pausiert.`)); return; }
   const b = e.target.closest('.pause-btn'); if(!b) return;
@@ -121,7 +136,7 @@ delegate('[data-joblist]', 'click', jobsClick);
 onState(renderJobs);
 
 // Werkzeugleiste über der Auftragsliste (Übergabe-Knopf: js/handover.js)
-const JOBTOOLS = '<div class="jobtools"><span class="pill idle-chip" hidden></span><button class="secondary handover-btn" hidden title="Laufende und wartende Konvertierungen an einen anderen Rechner übergeben, z. B. vor dem Herunterfahren">⇄ Übergabe</button><button class="secondary pause-btn" hidden></button><span class="peerpause" hidden style="display:contents"></span></div>';
+const JOBTOOLS = '<div class="jobtools"><span class="pill idle-chip" hidden></span><button class="secondary handover-btn" hidden title="Laufende und wartende Konvertierungen an einen anderen Rechner übergeben, z. B. vor dem Herunterfahren">⇄ Übergabe</button><button class="secondary pause-btn" hidden></button><button class="secondary clear-btn" hidden title="Alle fertigen, übersprungenen, abgebrochenen und fehlgeschlagenen Einträge aus der Liste entfernen (Dateien bleiben)">🗑 Erledigte entfernen</button><span class="peerpause" hidden style="display:contents"></span></div>';
 const BRAND = '<span class="brand-mark" style="width:20px;height:20px;border-width:4px"></span>';
 // HTML des Auftragsfeldes. Das Feld der Laufwerksansicht zeigt zusätzlich das Ziel; `id` ist die Kennung der Liste.
 export const jobsPanelHtml = (id, withDest) => `<section class="panel"${withDest ? '' : ' style="margin-top:12px"'}>

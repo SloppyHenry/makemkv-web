@@ -13,7 +13,7 @@ import importlib
 
 from fastapi import FastAPI
 
-from app import (auth, cluster, convert, drives, ext, files, library, makemkv, rip, settings, state,
+from app import (auth, cluster, convert, drives, ext, files, joblist, library, makemkv, rip, settings, state,
                  ui, upload)
 from app.config import DATA, FEATURES, VERSION
 
@@ -26,6 +26,7 @@ app.middleware("http")(auth.basic_auth)
 
 ext.register_capability("version", VERSION)
 ext.register_capability("features", FEATURES)
+ext.register_capability("jobs_dismiss", True)    # beendete Aufträge lassen sich aus der Liste entfernen
 
 for _name in OPTIONAL_MODULES:
     try:
@@ -35,7 +36,7 @@ for _name in OPTIONAL_MODULES:
             raise
 
 for _router in (state.router, drives.router, rip.router, convert.router, library.router, files.router,
-                settings.router, makemkv.router, cluster.router, *ext.routers):
+                settings.router, makemkv.router, cluster.router, joblist.router, *ext.routers):
     app.include_router(_router)
 app.mount("/static", ui.NoCacheStatic(directory=ui.STATIC), name="static")
 app.include_router(ui.router)
