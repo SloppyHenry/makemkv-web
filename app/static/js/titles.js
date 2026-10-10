@@ -1,6 +1,6 @@
 // Titelliste, Dateinamen, „Nach dem Rippen konvertieren“ und das Aktionsfeld (Rippen, Backup, Auswerfen).
 import { $, S, api, delegate, esc, fmtB, keyOf, pad, toast, ui } from './core.js';
-import { CV_FALLBACK, CV_HELP, cvFields, cvSummary } from './cvform.js';
+import { cvSummary, getDefaultConfig, mountConvertEditor } from './convert-editor.js';
 import { curDrive, driveUrl, dkey, outDir } from './drives.js';
 import { isActive, onState, registerPanel } from './registry.js';
 
@@ -19,15 +19,24 @@ export function suggestName(disc, t){
 export const discKind = d => /blu/i.test(d.disc.type||'') ? 'bluray' : 'dvd';
 export function convOf(d){
   const k = keyOf(d);
-  // Einstellungen (RF, Preset …) kommen aus dem gespeicherten Standard, der Haken „konvertieren“ ist bei jeder Disc zuerst AUS
-  if(!ui.conv[k]) ui.conv[k] = {...CV_FALLBACK, ...((S.settings.presets||{})[discKind(d)]||{}), convert:false};
+  // cfg (Einstellungen) kommt vom Konvertier-Editor (null = Standard der Disc-Art); der Haken „konvertieren“ ist bei jeder Disc zuerst AUS
+  if(!ui.conv[k]) ui.conv[k] = {convert:false, cfg:null};
   return ui.conv[k];
+}
+let editor = null;
+const killEditor = () => { if(editor){ editor.destroy(); editor = null; } };
+function mountEditor(d, dis){
+  killEditor();
+  const el = $('#cvEditor'); if(!el) return;
+  const c = convOf(d);
+  editor = mountConvertEditor(el, c.cfg, {mode:'compact', discKind:discKind(d), readonly:!!dis, onChange: cfg => { c.cfg = cfg; updateTitlesLive(curDrive() || d); }});
+  getDefaultConfig(discKind(d)).then(def => { if(!c.cfg){ c.cfg = def; updateTitlesLive(curDrive() || d); } });
 }
 // ---- Titelliste + Konvertierung
 function renderTitles(d){
   const pn = $('#titlesPanel');
   if(!pn) return;
-  if(!d || !d.disc){ pn.hidden = true; ui.sig.titles = ''; return; }
+  if(!d || !d.disc){ pn.hidden = true; ui.sig.titles = ''; killEditor(); return; }
   pn.hidden = false;
   const sig = [dkey(d), d.scan_id, d.job ? d.job.kind : '', outDir(d)].join('|');
   if(ui.sig.titles !== sig){ ui.sig.titles = sig; buildTitles(d); } else updateTitlesLive(d);
@@ -36,7 +45,7 @@ function buildTitles(d){
   const disc = d.disc, k = keyOf(d), sel = selOf(d), names = ui.names[k] ||= {}, busy = !!d.job, dis = busy ? 'disabled' : '';
   const mainId = disc.titles.reduce((a,t) => t.duration > (a?.duration||0) ? t : a, null)?.id;
   if(ui.folder[k] === undefined) ui.folder[k] = disc.name || disc.volume || 'Disc';
-  const c = convOf(d), kind = discKind(d)==='bluray' ? 'Blu-rays' : 'DVDs';
+  const c = convOf(d);
   const rows = disc.titles.map(t => {
     const cnt = ty => t.tracks.filter(x => x.type===ty).length, short = t.duration < 300, mut = short ? 'muted' : '';
     const open = ui.open[k+':'+t.id], nm = names[t.id] ?? suggestName(disc, t);
@@ -54,15 +63,15 @@ function buildTitles(d){
     <div class="settings">
       <div class="settings-toggle" id="cvToggle" role="button" tabindex="0" aria-expanded="${ui.cvOpen}"><span class="mini-icon">⚙</span><strong>Nach dem Rippen konvertieren</strong><span class="summary" id="cvSummary"></span><span class="spacer"></span>
         <label class="switch" title="Konvertierung ein-/ausschalten"><input class="check" type="checkbox" data-cv="convert" ${c.convert?'checked':''} ${dis}> aktiv</label><span id="cvChev">${ui.cvOpen?'⌃':'⌄'}</span></div>
-      <div class="settings-body ${ui.cvOpen?'':'hidden'} ${c.convert?'':'off'}" id="cvBody"><div class="fields">${cvFields(c,'cv',dis)}</div><p class="help">${esc(CV_HELP)}</p>
-        <div style="margin-top:10px"><button class="secondary" data-act="savepreset" ${dis}>Als Standard für ${kind} speichern</button></div></div>
+      <div class="settings-body ${ui.cvOpen?'':'hidden'} ${c.convert?'':'off'}" id="cvBody"><div id="cvEditor"></div></div>
     </div>`;
+  mountEditor(d, dis);
   updateTitlesLive(d);
 }
 function updateTitlesLive(d){
   const disc = d.disc, sel = selOf(d), ts = disc.titles.filter(t => sel[t.id]), bytes = ts.reduce((a,t) => a+t.bytes, 0), c = convOf(d);
   const set = (id, v) => { const e = $(id); if(e) e.textContent = v; };
-  set('#selectedCount', `${ts.length} ausgewählt`); set('#cvSummary', cvSummary(c));
+  set('#selectedCount', `${ts.length} ausgewählt`); set('#cvSummary', c.cfg ? cvSummary(c.cfg) : '');
   const all = $('#selectAll'); if(all){ all.checked = ts.length === disc.titles.length; all.indeterminate = ts.length>0 && ts.length<disc.titles.length; }
   const ac = $('#actionCount'); if(ac) ac.textContent = `${ts.length} Titel · ${fmtB(bytes)}${c.convert ? ' (Rohdaten)' : ''}`;
   const rip = $('#ripBtn'); if(rip) rip.disabled = !!d.job || !ts.length;
@@ -72,24 +81,21 @@ delegate('#titlesPanel', 'input', e => {
   if(t.dataset.sel !== undefined){ selOf(d)[t.dataset.sel] = t.checked; updateTitlesLive(d); }
   else if(t.id === 'selectAll'){ const sel = selOf(d); d.disc.titles.forEach(x => sel[x.id] = t.checked); document.querySelectorAll('#titlesPanel [data-sel]').forEach(c => c.checked = t.checked); updateTitlesLive(d); }
   else if(t.dataset.name !== undefined){ (ui.names[k] ||= {})[t.dataset.name] = t.value; }
-  else if(t.dataset.cv !== undefined){
-    const c = convOf(d), f = t.dataset.cv;
-    c[f] = t.type==='checkbox' ? t.checked : f==='rf' ? (+t.value||21) : t.value;
-    if(f === 'convert'){ const b = $('#cvBody'); if(b) b.classList.toggle('off', !t.checked); }
+  else if(t.dataset.cv === 'convert'){
+    convOf(d).convert = t.checked; const b = $('#cvBody'); if(b) b.classList.toggle('off', !t.checked);
     updateTitlesLive(d);
   }
 });
 function toggleCv(){
   ui.cvOpen = !ui.cvOpen; $('#cvBody').classList.toggle('hidden', !ui.cvOpen); $('#cvChev').textContent = ui.cvOpen ? '⌃' : '⌄'; $('#cvToggle').setAttribute('aria-expanded', ui.cvOpen);
 }
-delegate('#titlesPanel', 'click', async e => {
+delegate('#titlesPanel', 'click', e => {
   const d = curDrive(); if(!d || !d.disc) return; const t = e.target;
   if(t.closest('#filterBtn')){
     ui.hideShort = !ui.hideShort;
     document.querySelectorAll('#titlesPanel tr[data-short="true"]').forEach(r => r.classList.toggle('hidden', ui.hideShort));
     toast(ui.hideShort ? 'Kurze Titel ausgeblendet.' : 'Alle Titel werden angezeigt.');
   } else if(t.closest('[data-trk]')){ const kk = keyOf(d)+':'+t.closest('[data-trk]').dataset.trk; ui.open[kk] = !ui.open[kk]; buildTitles(d); }
-  else if(t.closest('[data-act="savepreset"]')){ await api('/api/settings','POST',{presets:{[discKind(d)]: convOf(d)}}); toast('Als Standard gespeichert ✓'); }
   else if(t.closest('#cvToggle') && !t.closest('.switch')) toggleCv();
 });
 delegate('#titlesPanel', 'keydown', e => { if((e.key==='Enter'||e.key===' ') && e.target.id==='cvToggle'){ e.preventDefault(); toggleCv(); } });
@@ -113,9 +119,10 @@ function renderAction(d){
 delegate('#actionPanel', 'input', e => { const d = curDrive(); if(d && e.target.id==='folder') ui.folder[keyOf(d)] = e.target.value; });
 async function startRip(d, mode){
   const k = keyOf(d), sel = selOf(d), names = ui.names[k]||{}, cv = convOf(d);
+  const cfg = (mode==='mkv' && cv.convert) ? {...(cv.cfg || await getDefaultConfig(discKind(d))), convert:true} : null;
   const titles = mode==='mkv' ? d.disc.titles.filter(t => sel[t.id]).map(t => ({id:t.id, name:(names[t.id] ?? suggestName(d.disc, t)).trim()})) : [];
   if(mode==='mkv' && !titles.length){ toast('Bitte mindestens einen Titel auswählen.', true); return; }
-  await api(driveUrl(d, 'rip'), 'POST', {titles, folder: ui.folder[k]||'', mode, convert: (mode==='mkv' && cv.convert) ? cv : null});
+  await api(driveUrl(d, 'rip'), 'POST', {titles, folder: ui.folder[k]||'', mode, convert: cfg});
 }
 async function driveAction(ev){
   const b = ev.target.closest('[data-act]'); if(!b) return; const d = curDrive(); if(!d) return; const a = b.dataset.act;
