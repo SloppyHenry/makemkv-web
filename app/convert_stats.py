@@ -65,7 +65,7 @@ def audio_bytes(audio: list, dur: float) -> int:
 
 def model_bytes(cfg: dict, src: dict) -> int:
     """Erwartete Größe des Ergebnisses ohne Statistik. src: size, dur, w, h, fps, audio (Liste), abytes (optional)."""
-    v, q, snd = cfg["video"], cfg["quality"], cfg["sound"]
+    v, q = cfg["video"], cfg["quality"]
     dur = max(1.0, float(src.get("dur") or 1))
     abytes = src.get("abytes") or audio_bytes(src.get("audio") or [], dur)
     if v["codec"] == "copy":
@@ -81,12 +81,18 @@ def model_bytes(cfg: dict, src: dict) -> int:
         bpp *= 1 - 0.025 * math.log2(rel_time(cfg))          # jede Stufe langsamer spart etwas Platz
         px = out_px(int(src.get("w") or 1920), int(src.get("h") or 1080), cfg["picture"]["scale"])
         vid = min(px * float(src.get("fps") or 24) * bpp * dur / 8, max(0, src["size"] - abytes) * 0.85)
+    return int(vid + audio_out_bytes(cfg, src, abytes, dur))
+
+
+def audio_out_bytes(cfg: dict, src: dict, abytes: int = 0, dur: float = 0) -> int:
+    """Größe der Tonspuren im Ergebnis."""
+    snd = cfg["sound"]
+    dur = dur or max(1.0, float(src.get("dur") or 1))
+    abytes = abytes or src.get("abytes") or audio_bytes(src.get("audio") or [], dur)
     if snd["mode"] == "copy":
-        aud = abytes
-    else:
-        n = max(1, len(src.get("audio") or [1]))
-        aud = n * dur * (snd["kbps"] or (128 if snd["channels"] == "stereo" else 256)) * 1000 / 8
-    return int(vid + aud)
+        return int(abytes)
+    n = max(1, len(src.get("audio") or [1]))
+    return int(n * dur * (snd["kbps"] or (128 if snd["channels"] == "stereo" else 256)) * 1000 / 8)
 
 
 def _cal(cfg: dict) -> tuple[float, int]:
