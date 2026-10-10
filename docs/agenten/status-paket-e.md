@@ -8,8 +8,11 @@ Mockup fertig: docs/mockups/paket-e.html (Umschalter „kein TMDB-Schlüssel“ 
 - Live gegen die Dev-Instanz (Port 8840, TMDB-Attrappe 8841) geprüft: Rip-Hook schreibt Begleitdaten, Erkennen (inkl. Play-All, auch bei Teilauswahl), Suche/IMDb-Auflösung, Plan, Ausführen, Rückgängig, Automatik nach Rip (5 Folgen einsortiert, Play-All bleibt), Ordnerauswahl/Prüfung.
 - Quellen der Benennungsregeln: https://jellyfin.org/docs/general/server/media/movies/ und .../shows/ (abgerufen 2026-10-10): `Titel (Jahr) [imdbid-tt…]`, Versionen ` - 1080p`, Extras-Ordner (extras, behind the scenes, deleted scenes, featurettes, interviews, scenes, shorts, trailers, samples, clips, other), `Season 01`, `S01E01-E02`, Specials `Season 00`, unzulässige Zeichen `< > : " / \ | ? *`.
 
-## In Arbeit / offen
-- Oberfläche (`js/media.js`, `css/media.css`): erst nach Freigabe des Mockups, dann 1:1.
+## Oberfläche (Mockup freigegeben, 1:1 umgesetzt)
+- `css/media.css`, `js/media.js` (Anmeldung), `js/media-settings.js` (Einstellungsabschnitt `media`), `js/media-wizard.js` + `js/media-steps.js` (Assistent, 5 Schritte), `js/media-util.js` (eigene Anfragefunktion mit lesbaren 422-Meldungen). Alle < 400 Zeilen.
+- Bibliotheks-Aktion `organize` („In Filme/Serien einsortieren …“): `when(files)` = ≥ 1 Datei, nicht in Arbeit/gesperrt; `run(files)` nimmt mehrere Dateien (der Server löst auch Ordnerpfade auf). Nach dem Ausführen und Rückgängig: `emit('files-changed')`.
+- Kleine Ergänzung gegenüber dem Mockup: Link „Letzte Aktionen / Rückgängig …“ in Schritt 1 (sonst wäre Rückgängig nur direkt nach dem Einsortieren erreichbar); im Plan lässt sich eine „… - 2“-Entscheidung wieder auf „Überspringen“ zurückstellen; Eingabefeld „Start bei Episode“ neben „Staffel für alle“.
+- Geprüft (Dev-Instanz, mit PBs Einstellungsseite darüber gelegt): Einstellungen (Ordnerprüfung, Ordnerauswahl, Umschalter, TMDB-Test, Schlüssel löschen, Speichern pro Abschnitt, Zustand „kein Schlüssel“), Assistent Serie mit Play-All, Film mit Suche, ohne Schlüssel von Hand, Konflikt (überspringen/„- 2“), gesperrte Datei, Ausführen, Rückgängig; Desktop 1440 und 375 px, Konsole fehlerfrei. Nicht geprüft: Raster-/Ordneraktion in PFs neuer Bibliothek (gibt es noch nicht), echter NAS-Betrieb, echtes TMDB.
 - Abschnitt wird als `media` angemeldet (`registerSettingsSection`, order 40, icon, description); Speichern pro Abschnitt über PB (`collect()` = `{media:{…}}`, Geheimnisfelder `null` = unverändert; eigene Bedienelemente lösen `change` aus).
 
 ## Angebotene Schnittstellen

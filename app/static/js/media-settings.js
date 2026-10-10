@@ -53,7 +53,7 @@ function render(el, settings){
     </div></div></div>`;
   const $ = s => el.querySelector(s);
   const keyUi = () => {
-    $('#media-tmdb_key').placeholder = tmdbSet() ? '•••••••••••• (gespeichert, zum Ändern neu eingeben)' : 'Schlüssel (v3) oder Zugriffstoken (v4) hier einfügen';
+    $('#media-tmdb_key').placeholder = tmdbSet() ? '•••••••••••• (gespeichert, zum Ändern neu eingeben)' : 'Schlüssel hier einfügen (v3 oder v4)';
     $('#media-jellyfin_key').placeholder = jfSet() ? '•••••••••••• (gespeichert, zum Ändern neu eingeben)' : 'Jellyfin → Dashboard → API-Schlüssel';
     $('#media-tmdb-del').classList.toggle('hidden', !tmdbSet()); $('#media-jf-del').classList.toggle('hidden', !jfSet());
     $('#media-nokey').classList.toggle('hidden', tmdbSet() || !!$('#media-tmdb_key').value.trim());
