@@ -64,8 +64,14 @@ NFS-Beispiel (`/etc/fstab`, ohne Automount, damit Docker den Pfad einbinden kann
 
 ## Aufbau
 
-`app/main.py` (FastAPI, ruft `makemkvcon -r` auf, ioctl-Laufwerkserkennung, Server-Sent-Events) ·
-`app/index.html` (Single-Page-UI ohne Build-Schritt) · `Dockerfile` · `docker-compose.yml` · `install.sh`
+- `app/` – Python-Paket (FastAPI): `main.py` (App, Router, Start), `drives.py`, `rip.py`, `upload.py`, `convert.py`/`ffmpeg.py`, `library.py`, `cluster.py`, `files.py`, `settings.py`, `state.py`, `ext.py` (Erweiterungspunkte) u. a.
+- `app/static/` – Oberfläche ohne Build-Schritt: `index.html`, `css/`, `js/` (native ES-Module; `registry.js` enthält die Erweiterungspunkte)
+- `Dockerfile` · `docker-compose.yml` · `install.sh`
+- Details, Schnittstellen und Konventionen: [docs/agenten/schnittstellen.md](docs/agenten/schnittstellen.md)
+
+## Entwicklung
+
+Lokal ohne Docker, ohne Laufwerk und ohne NAS: `scripts/dev.sh` startet die App auf http://127.0.0.1:8790 mit Beispieldateien und einem Attrappen-Laufwerk (`scripts/dev.sh pair` startet zwei Instanzen im Verbund, `scripts/dev.sh --help` zeigt alle Optionen). Benötigt Python 3 und ffmpeg; fehlende Python-Pakete installiert das Skript in eine eigene virtuelle Umgebung.
 
 ## Lizenz
 
