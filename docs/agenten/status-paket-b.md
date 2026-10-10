@@ -35,3 +35,8 @@ Mockup fertig: docs/mockups/paket-b.html
 2. Chips unter den Reitern in eigener Leiste (nur in „Laufwerke“): so recht? Auswahlmenü bei sehr vielen Laufwerken gewünscht?
 3. Plakette der laufenden Aufträge am Reiter „Laufwerke“: so recht, oder lieber getrennt (z. B. Konvertierungen am Reiter „Bibliothek“)?
 4. Einstellungen: ein Abschnitt zur Zeit mit Speichern je Abschnitt (wie im Mockup) oder alles auf einer langen Seite?
+
+## Entscheidung des Koordinators (2026-10-10)
+- `registry.js` (`fromHash`/Unterrouten `#/einstellungen/<abschnitt>`): PB darf diese **eine** Änderung selbst in `app/static/js/registry.js` machen (erstes Hash-Segment = Ansicht, Rest über eine kleine exportierte Funktion, z. B. `routeRest()`), klein halten und in diesem Dokument unter „Fremde Dateien angefasst“ vermerken. PZ übernimmt sie beim Zusammenführen.
+- PF/PC/PE sind informiert: Abschnittskennungen `convert`, `nodes`, `media`; Speichern pro Abschnitt über `collect()`; PF entfernt `#lib-back`.
+- `files.js` (Knopf `#to-lib`) darfst du bei der Umsetzung wie vorher abgesprochen entfernen.
