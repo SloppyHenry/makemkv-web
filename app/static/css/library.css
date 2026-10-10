@@ -1,0 +1,11 @@
+/* Bibliothek (Besitzer: PF) */
+.folder td{background:#0f1520;border-bottom:1px solid #222d3b}
+.foldertoggle{background:transparent;border:0;color:var(--text);font:inherit;display:inline-flex;gap:10px;align-items:center;padding:3px 6px;border-radius:6px;text-align:left}
+.foldertoggle:hover{background:#1a2330}
+.chevb{display:inline-block;transition:transform .15s;color:var(--muted)}
+.chevb.open{transform:rotate(90deg)}
+.fileindent{padding-left:34px;display:flex;align-items:center;gap:8px;min-width:0}
+.editrow{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+tr.file td:first-child{padding-left:30px}
+.lib-body{padding:14px 16px}
+.libtools{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:12px}
