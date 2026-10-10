@@ -1,5 +1,6 @@
 """Tests für den Player (Paket PD).
 
+Braucht Python >= 3.10 mit fastapi (wie die App; bei Bedarf PYTHON=/opt/homebrew/bin/python3).
 Reine Logik (Entscheidung Direkt/Remux/Transkodieren, Pfadprüfung):   python3 -m unittest tests.test_player
 Mit laufender Dev-Instanz zusätzlich HTTP-Tests (Strom, Suchen, Aufräumen, Pfadausbruch, Sperre):
     PLAYER_URL=http://127.0.0.1:8830 PLAYER_OUT=$TMPDIR/mkw-dev-d/output python3 -m unittest tests.test_player
@@ -91,6 +92,23 @@ class PlanTests(unittest.TestCase):
     def test_ohne_ton(self):
         p = pp.plan(info(audio=()), CAPS_CHROME, ext=".mp4")
         self.assertEqual((p["mode"], p["audio"]), ("direct", "none"))
+
+
+class SweepTests(unittest.IsolatedAsyncioTestCase):
+    """Wächter: Ein Prozess, aus dem niemand mehr Daten abholt, wird beendet; nie abgeholte Sitzungen verfallen."""
+
+    async def test_leerlauf_und_nie_abgeholt(self):
+        import asyncio
+        import time
+        from app import player_stream as ps
+        pr = await asyncio.create_subprocess_exec("sleep", "60", start_new_session=True)
+        ps.sessions["a"] = {"id": "a", "client": "x", "proc": pr, "created": time.time(), "last_io": time.time() - ps.IDLE_KILL - 1, "plan": {"video": "copy"}}
+        ps.sessions["b"] = {"id": "b", "client": "y", "proc": None, "created": time.time() - ps.NEVER_FETCHED - 1, "last_io": 0, "plan": {"video": "x264"}}
+        ps.sessions["c"] = {"id": "c", "client": "z", "proc": None, "created": time.time(), "last_io": 0, "plan": {"video": "x264"}}
+        await ps.sweep()
+        self.assertEqual(sorted(ps.sessions), ["c"])
+        self.assertIsNotNone(pr.returncode if pr.returncode is not None else await asyncio.wait_for(pr.wait(), 3))
+        ps.sessions.clear()
 
 
 class PathTests(unittest.TestCase):

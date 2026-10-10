@@ -195,8 +195,11 @@ def new_session(client: str, rel: str, p: Path, start: float, info: dict, plan: 
 async def start_process(s: dict) -> bytes:
     """ffmpeg starten und das erste Datenstück abwarten (Fehler kommen so noch vor den HTTP-Kopfzeilen). Ein zweiter Abruf ersetzt den ersten."""
     await kill(s)
-    pr = await asyncio.create_subprocess_exec("nice", "-n", str(s["nice"]), *s["args"], stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
-                                              start_new_session=True)
+    try:
+        pr = await asyncio.create_subprocess_exec("nice", "-n", str(s["nice"]), *s["args"], stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+                                                  start_new_session=True)
+    except OSError as e:
+        raise HTTPException(503, f"ffmpeg lässt sich nicht starten: {e}")
     s["proc"], s["last_io"], s["bytes"] = pr, time.time(), 0
 
     async def drain():
@@ -251,22 +254,29 @@ class StreamResponse(StreamingResponse):
                 pass
 
 
+async def sweep():
+    """Ein Durchgang des Wächters: verwaiste Sitzungen und festhängende ffmpeg-Prozesse abräumen."""
+    now = time.time()
+    for sid, s in list(sessions.items()):
+        pr = s["proc"]
+        if pr is None:
+            if now - s["created"] > NEVER_FETCHED:
+                sessions.pop(sid, None)
+        elif pr.returncode is not None:
+            if now - s["last_io"] > 60:
+                sessions.pop(sid, None)
+        elif now - s["last_io"] > IDLE_KILL:
+            await kill(s)
+            sessions.pop(sid, None)
+
+
 async def janitor():
-    """Wächter: verwaiste Sitzungen und festhängende ffmpeg-Prozesse abräumen."""
     while True:
         await asyncio.sleep(5)
-        now = time.time()
-        for sid, s in list(sessions.items()):
-            pr = s["proc"]
-            if pr is None:
-                if now - s["created"] > NEVER_FETCHED:
-                    sessions.pop(sid, None)
-            elif pr.returncode is not None:
-                if now - s["last_io"] > 60:
-                    sessions.pop(sid, None)
-            elif now - s["last_io"] > IDLE_KILL:
-                await kill(s)
-                sessions.pop(sid, None)
+        try:
+            await sweep()
+        except Exception as e:  # noqa: BLE001
+            print(f"Player-Wächter: {e}", flush=True)
 
 
 async def stop_all():
