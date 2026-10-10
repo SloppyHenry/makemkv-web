@@ -84,7 +84,7 @@ class Editor {
     const same = this.base && this.base.video.codec === c;
     this.cfg.video.speed = same ? this.base.video.speed : m.codecs[c].speed_def;
     this.cfg.video.extra = same ? this.base.video.extra : '';
-    this.cfg.video.hw = c === 'hw' ? ((caps && caps.hw && caps.hw[0]) || 'hevc_vaapi') : '';
+    this.cfg.video.hw = c === 'hw' ? ((caps && caps.hw && (caps.hw.find(e => e.startsWith('hevc_')) || caps.hw[0])) || 'hevc_vaapi') : '';
     if(c === 'hw' && this.cfg.video.hw.startsWith('h264_')) this.cfg.video.bits = 8;
   }
   set(path, v){

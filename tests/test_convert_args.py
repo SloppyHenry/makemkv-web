@@ -67,7 +67,10 @@ class ArgsTest(unittest.TestCase):
                    {"rf": 20, "preset": "medium", "tune": "stillimage", "extra": "", "audio": "eac3"}):
             for crop in (None, "crop=1920:800:0:140"):
                 cfg = clean_v2({**v1, "convert": True})
-                self.assertEqual(fa.ffmpeg_args("a.mkv", "b.mkv", cfg, ctx(crop=crop)), old_cmd("a.mkv", "b.mkv", v1, INFO, crop), (v1, crop))
+                new = fa.ffmpeg_args("a.mkv", "b.mkv", cfg, ctx(crop=crop))
+                i = new.index("-metadata")
+                self.assertTrue(new[i + 1].startswith("MKW_CONVERTED="))
+                self.assertEqual(new[:i] + new[i + 2:], old_cmd("a.mkv", "b.mkv", v1, INFO, crop), (v1, crop))
 
     def test_segment_pools(self):
         cfg = clean_v2({"rf": 20})

@@ -38,7 +38,7 @@ export function rowHtml(f, edit){
   const dur = f.info && f.info.dur ? fmtD(f.info.dur) : '';
   const sv = saveOf(f), sub = f.status === 'conv' ? '' : sv ? `<small>−${esc(fmtB(sv))}</small>` : '';
   return `<div class="lib-row ${sel ? 'sel' : ''} ${L.cur === f.path ? 'cur' : ''}" data-key="f:${esc(f.path)}" data-file="${esc(f.path)}"><input class="check" type="checkbox" data-fsel="${esc(f.path)}" ${sel ? 'checked' : ''} ${ok ? '' : 'disabled'} aria-label="${esc(baseName(f.path))} auswählen">${thumb(f)}
-    <div class="nm">${name}<small>${esc(dur)}${f.locked ? ` · wird von ${esc(f.locked)} bearbeitet` : ''}${f.m && f.m.episode_name ? ' · ' + esc(f.m.episode_name) : ''}</small></div>${badges(f)}<div class="sz">${fmtB(s)}${sub}</div>${runBlock(f)}</div>`;
+    <div class="nm">${name}<small>${esc(dur)}${f.locked && !f.live ? ` · wird von ${esc(f.locked)} bearbeitet` : ''}${f.m && f.m.episode_name ? ' · ' + esc(f.m.episode_name) : ''}</small></div>${badges(f)}<div class="sz">${fmtB(s)}${sub}</div>${runBlock(f)}</div>`;
 }
 export function tileHtml(f){
   const sel = L.sel.has(f.path), ok = selectable(f), j = f.live, sv = saveOf(f);

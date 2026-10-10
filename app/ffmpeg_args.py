@@ -12,6 +12,7 @@ import os
 import shlex
 
 from app.config import X265_PRESETS
+from app.convert_schema import describe
 
 HW_DEVICE = os.environ.get("HW_DEVICE", "/dev/dri/renderD128")
 HDR_TRANSFERS = ("smpte2084", "arib-std-b67")
@@ -20,6 +21,11 @@ TONEMAP = ("zscale=t=linear:npl=100,format=gbrpf32le,zscale=p=bt709,tonemap=tone
            "zscale=t=bt709:m=bt709:r=tv")
 SAMPLE_INFO = {"streams": [{"codec_type": "video", "codec_name": "h264", "width": 1920, "height": 1080, "r_frame_rate": "24000/1001"},
                            {"codec_type": "audio", "channels": 6}, {"codec_type": "subtitle"}], "format": {"duration": "7200"}}
+
+
+def mark(cfg: dict) -> str:
+    """Kennzeichnung im Container: Diese Datei wurde von MakeMKV-Web konvertiert (die Bibliothek zeigt sie dann als „konvertiert“)."""
+    return "MKW_CONVERTED=" + describe(cfg)[:150]
 
 
 def vstream(info: dict) -> dict:
@@ -270,7 +276,7 @@ def ffmpeg_args(src, out, cfg: dict, ctx: dict, pass_no: int = 0) -> list[str]:
         a += ["-fps_mode", "cfr"]
     if pass_no == 1:
         return a + ["-an", "-sn", "-progress", "pipe:1", "-nostats", "-f", "null", os.devnull]
-    return a + audio_args(cfg, info) + ["-c:s", "copy", "-progress", "pipe:1", "-nostats", str(out)]
+    return a + audio_args(cfg, info) + ["-c:s", "copy", "-metadata", mark(cfg), "-progress", "pipe:1", "-nostats", str(out)]
 
 
 def segment_args(src, part, cfg: dict, ctx: dict, seek: list[str], rate: str) -> list[str]:
@@ -282,7 +288,7 @@ def segment_args(src, part, cfg: dict, ctx: dict, seek: list[str], rate: str) ->
 
 def mux_args(list_file, src, out, cfg: dict, info: dict) -> list[str]:
     return ["ffmpeg", "-hide_banner", "-nostdin", "-y", "-f", "concat", "-safe", "0", "-i", str(list_file), "-i", str(src), "-map", "0:v:0", "-map", "1:a?"] \
-        + sub_maps(cfg, info, 1) + ["-map_chapters", "1", "-c:v", "copy"] + audio_args(cfg, info) + ["-c:s", "copy", str(out)]
+        + sub_maps(cfg, info, 1) + ["-map_chapters", "1", "-c:v", "copy"] + audio_args(cfg, info) + ["-c:s", "copy", "-metadata", mark(cfg), str(out)]
 
 
 def command_preview(cfg: dict, info: dict | None = None, ctx_extra: dict | None = None) -> str:

@@ -2,7 +2,7 @@
 from app import convert_caps, convert_stats
 from app.config import LIB_CODECS
 
-INFO_VERSION = 2           # ältere Cache-Einträge ohne die neuen Felder werden neu geprüft
+INFO_VERSION = 3           # ältere Cache-Einträge ohne die neuen Felder werden neu geprüft
 AUDIO_BPS = convert_stats.AUDIO_BPS
 
 
@@ -20,6 +20,7 @@ def lib_info(pr: dict) -> dict:
     subs = [x for x in pr["streams"] if x["codec_type"] == "subtitle"]
     dur = float(pr["format"].get("duration") or 0)
     tr = v.get("color_transfer")
+    ftags = {str(k).upper(): v for k, v in (pr["format"].get("tags") or {}).items()}
 
     def abps(a):
         name = str(a.get("codec_name", "")).lower()
@@ -28,6 +29,7 @@ def lib_info(pr: dict) -> dict:
             "hdr": tr in ("smpte2084", "arib-std-b67"), "hdr_fmt": {"smpte2084": "HDR10", "arib-std-b67": "HLG"}.get(tr, ""),
             "dovi": any("DOVI" in str(x.get("side_data_type", "")) or "Dolby Vision" in str(x.get("side_data_type", "")) for x in v.get("side_data_list", [])),
             "dur": dur, "fps": _fps(v), "bitrate": int(pr["format"].get("bit_rate") or 0),
+            "encoded": "MKW_CONVERTED" in ftags, "enc_note": ftags.get("MKW_CONVERTED", ""),
             "interlaced": v.get("field_order", "progressive") not in ("progressive", "unknown", ""), "profile": v.get("profile", ""),
             "audio": [f'{a.get("codec_name", "?")} {a.get("channels", "?")}ch {a.get("tags", {}).get("language", "")}'.strip() for a in auds],
             "alist": [{"codec": a.get("codec_name", "?"), "profile": a.get("profile", ""), "ch": a.get("channels", 0), "lang": a.get("tags", {}).get("language", ""),

@@ -128,7 +128,7 @@ async def api_library():
         out.append({**it, "state": state, "info": info, "job": job, "locked": locked, "kind": kind_of(info) if info else "", "est": est,
                     "dev_err": (c or {}).get("err", "") if not fresh or not c.get("info") else ""})
     out.sort(key=lambda x: -x["mtime"])
-    orig = [f for f in out if f["est"] and not f["est"]["issue"] and f["state"] != "hevc" and not f["job"] and not f["locked"]]
+    orig = [f for f in out if f["est"] and not f["est"]["issue"] and f["state"] != "hevc" and not f["info"].get("encoded") and not f["job"] and not f["locked"]]
     summary = {"count": len(out), "bytes": sum(f["size"] for f in out), "orig_count": len(orig), "orig_bytes": sum(f["size"] for f in orig),
                "save_bytes": sum(max(0, f["size"] - f["est"]["bytes"]) for f in orig), "free": out_cache.get("free", 0)}
     return {"dir": base, "files": out[:1500], "probing": len(lib_probing), "instance": INSTANCE, "summary": summary}
