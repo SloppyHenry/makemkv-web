@@ -45,7 +45,7 @@ Ausführen-auf-Auswahl (PF): `p.reachable && !p.legacy` für neue Funktionen; f�
 - Endpunkte: `GET /api/nodes`, `POST /api/nodes`, `PATCH|DELETE /api/nodes/{id}`, `POST /api/nodes/{id}/test`, `POST /api/nodes/pair`, `GET /api/discovery/hello`, `POST /api/discovery/scan`. (Genaueres folgt hier, sobald gebaut.)
 
 ## Brauche von anderen
-- PB: Der Abschnitt „Rechner“ meldet sich per `registerSettingsSection({id:'nodes', label:'Rechner', order:30, …})` an (erst nach Freigabe des Mockups). Er speichert sich selbst (Namensraum `nodes`, auch eigene Aktionen wie „Koppeln“ sind direkte API-Aufrufe), `collect()` liefert nur `nodes`-Felder. Falls PBs Seite pro Abschnitt einen eigenen Speichern-Knopf vorsieht, bitte `collect()`-Ergebnis genauso behandeln. Status: offen (Hinweis).
+- PB: Abgestimmt (Koordinator): Abschnitt `registerSettingsSection({id:'nodes', label:'Rechner', order:30, icon, description, …})`; PB speichert pro Abschnitt `collect()` = `{nodes:{name, mode, discoverable, scan_nets, auto_search}}`. Die Rechnerliste (Koppeln, Suchen, Hinzufügen, Umbenennen, Entfernen) ist kein Formularfeld, sondern ruft eigene Endpunkte direkt auf; bei Änderungen an Bedienelementen löse ich `change` aus. Das Mockup hat deshalb keinen eigenen Speichern-Knopf. Status: erledigt.
 - PZ (optional): In `main.py` kann die Bedingung `if cluster.parse_peers(PEERS_RAW): create_task(cluster.peer_prober())` entfallen; der Prober startet jetzt über `nodes.py` und läuft nur einmal (Doppelstart ist abgesichert).
 - PZ: Docker/Compose brauchen nichts. Wer die Erkennung im Docker-Bridge-Netz nutzt, trägt bei Bedarf `nodes.scan_nets` ein.
 
