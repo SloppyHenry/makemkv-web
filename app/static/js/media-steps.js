@@ -25,18 +25,19 @@ function filesList(w){
     const take = w.kind !== 'series' && it.role === 'extra' ? `<label class="chk" style="display:inline-flex;margin-right:8px"><input class="check" type="checkbox" data-f="take" data-i="${i}" ${w.skip.has(it.path) ? '' : 'checked'} aria-label="mitnehmen"></label>` : '';
     return `<li>${take}${esc(baseName(it.path))} <span>${fmtDur(it.dur)}${it.dur ? '' : ' (Laufzeit unbekannt)'} · ${fmtB(it.size)} · ${roleLabel[it.role] || ''}</span></li>`;
   }).join('');
-  return `<details class="media-files"><summary>${w.items.length} Dateien ansehen</summary><ul>${rows}</ul></details>`;
+  return `<details class="media-files"><summary>${w.items.length} ${w.items.length === 1 ? 'Datei' : 'Dateien'} ansehen</summary><ul>${rows}</ul></details>`;
 }
 
 export function stepDetect(w){
   const d = w.det.detect, t = w.det.tmdb, c = w.chosen;
-  const kindWord = w.kind === 'series' ? 'einer <b style="color:var(--text)">Serie</b>' : w.kind === 'movie' ? 'einem <b style="color:var(--text)">Film</b>' : '<b style="color:var(--text)">Extras</b> zu einem Film';
   const sure = d.confidence >= 0.8, none = d.kind === 'unknown';
+  const b = t => `<b style="color:var(--text)">${t}</b>`;
+  const kindWord = none ? (w.kind === 'series' ? 'Serie' : 'Film') : w.kind === 'series' ? 'einer Serie' : w.kind === 'movie' ? 'einem Film' : 'Extras zu einem Film';
   const meta = w.kind === 'series' ? `Staffel ${w.season} · ${w.disc ? 'Disc ' + w.disc + ' · ' : ''}${w.items.filter(i => i.role === 'episode').length} Episoden${w.items.some(i => i.role === 'playall') ? ' + Play-All' : ''}`
     : `${w.items.length} ${w.items.length === 1 ? 'Titel' : 'Titel'}${w.items[0] ? ' · ' + fmtDur(Math.max(...w.items.map(i => i.dur))) : ''}`;
   const ids = c ? ` · TMDB ${c.tmdb}${c.imdb ? ' · IMDb ' + esc(c.imdb) : ''}` : '';
   let h = `<div class="media-detect">${poster(w, c && c.poster_url, w.title)}<div>
-    <p class="media-meta" style="margin:0 0 2px">${none ? 'Nicht sicher erkannt – es könnte' : 'Das sieht nach'} ${kindWord} ${none ? 'sein' : 'aus'}</p>
+    <p class="media-meta" style="margin:0 0 2px">${none ? `Nicht sicher erkannt, vielleicht ${b(kindWord)}` : `Das sieht nach ${b(kindWord)} aus`}</p>
     <h4>${esc(w.title || 'Unbekannter Titel')} ${w.year ? `<span class="muted" style="font-weight:450">(${w.year})</span>` : ''}</h4>
     <p class="media-meta">${esc(meta)}${esc(ids)}</p>
     <div class="media-conf ${sure ? '' : 'mid'}"><strong>${pct(d.confidence)} %</strong><div class="bar"><i style="width:${pct(d.confidence)}%"></i></div><span class="muted">${sure ? 'sicher' : 'bitte prüfen'}</span></div>
@@ -120,14 +121,14 @@ export function stepPreview(w){
   for(const r of files){
     const parts = r.dst.split('/');
     for(let i = 1; i < parts.length; i++){ const d = parts.slice(0, i).join('/'); if(!shown.has(d)){ shown.add(d); tree += `<div class="media-tr"><span class="n d${i}"><span class="dir">${esc(parts[i - 1])}/</span></span><span class="o">${dirExists[d] ? 'Ordner existiert schon' : 'neuer Ordner'}</span></div>`; } }
-    const cls = r.status === 'conflict' ? 'bad' : r.status === 'locked' ? 'lock' : '';
+    const cls = r.status === 'conflict' || w.decisions[r.src] === 'rename' ? 'bad' : r.status === 'locked' ? 'lock' : '';
     let why = '';
-    if(r.status === 'conflict') why = `<span class="why"><b>${esc(r.why)}</b> – wird nie überschrieben. <span class="media-seg"><button type="button" data-act="conf:${w.items.findIndex(x => x.path === r.src)}:skip" class="${w.decisions[r.src] === 'rename' ? '' : 'on'}">Überspringen</button><button type="button" data-act="conf:${w.items.findIndex(x => x.path === r.src)}:rename" class="${w.decisions[r.src] === 'rename' ? 'on' : ''}">Als „… - 2“ ablegen</button></span></span>`;
-    else if(r.status === 'locked') why = `<span class="why">Gesperrt: ${esc(r.why.toLowerCase())}. Bleibt liegen, später erneut einsortieren.</span>`;
+    if(r.status === 'conflict' || w.decisions[r.src] === 'rename') why = `<span class="why"><b>${esc(r.status === 'conflict' ? r.why : 'Existiert schon im Ziel')}</b> – wird nie überschrieben. <span class="media-seg"><button type="button" data-act="conf:${w.items.findIndex(x => x.path === r.src)}:skip" class="${w.decisions[r.src] === 'rename' ? '' : 'on'}">Überspringen</button><button type="button" data-act="conf:${w.items.findIndex(x => x.path === r.src)}:rename" class="${w.decisions[r.src] === 'rename' ? 'on' : ''}">Als „… - 2“ ablegen</button></span></span>`;
+    else if(r.status === 'locked') why = `<span class="why">Gesperrt: ${esc(r.why[0].toLowerCase() + r.why.slice(1))}. Bleibt liegen, später erneut einsortieren.</span>`;
     else if(r.why) why = `<span class="why muted">${esc(r.why)}</span>`;
-    tree += `<div class="media-tr ${cls}"><span class="n d${parts.length - 1}">${esc(parts[parts.length - 1])}</span><span class="o">${esc(old(r))}</span>${why}</div>`;
+    tree += `<div class="media-tr ${cls}"><span class="n d${parts.length - 1}">${esc(parts[parts.length - 1])}</span><span class="o f">${esc(old(r))}</span>${why}</div>`;
   }
-  for(const r of rows.filter(r => r.status === 'skip' || r.status === 'missing' || r.status === 'error')) tree += `<div class="media-tr skip"><span class="n d1">–</span><span class="o">${esc(old(r))}</span><span class="why">${esc(r.why || 'ausgelassen')}. Bleibt liegen.</span></div>`;
+  for(const r of rows.filter(r => r.status === 'skip' || r.status === 'missing' || r.status === 'error')) tree += `<div class="media-tr skip"><span class="n d1">–</span><span class="o f">${esc(old(r))}</span><span class="why">${esc(r.why || 'ausgelassen')}. Bleibt liegen.</span></div>`;
   const how = p.action === 'kopieren' ? 'Die Dateien werden <b>kopiert</b>, die Originale bleiben liegen.' : p.same_fs ? 'Quelle und Ziel liegen auf demselben Laufwerk: <b>Verschieben = Umbenennen</b>, sofort und ohne Kopieren.' : 'Quelle und Ziel liegen auf verschiedenen Laufwerken: die Dateien werden <b>kopiert, geprüft und erst dann am alten Ort entfernt</b> (kann dauern).';
   return {body: `<div class="media-sum">${pills}</div><div class="media-tree" role="table" aria-label="Zielbaum">${tree}</div>${note('info', 'i', how + (p.new_dirs.length ? '' : ''))}`,
     footer: `<button type="button" class="secondary" data-act="back">Zurück</button><span class="sp"></span><button type="button" class="primary" data-act="run" ${p.ok ? '' : 'disabled'}>Ausführen (${sm.move} Datei${sm.move === 1 ? '' : 'en'})</button>`};
@@ -141,7 +142,7 @@ export function stepResult(w){
     top = `<div class="media-done"><div><h4>Dateien werden einsortiert …</h4><p>${op.total ? `${fmtB(op.copied)} von ${fmtB(op.total)}` : 'einen Moment'}</p></div></div><div class="media-bar"><i style="width:${pc}%"></i></div>`;
   }else if(op){
     const done = op.rows.filter(r => r.status === 'done'), left = op.rows.filter(r => !['done', 'skip'].includes(r.status));
-    top = `<div class="media-done"><div class="big">${done.length ? '✓' : '!'}</div><div><h4>${done.length} Datei${done.length === 1 ? '' : 'en'} einsortiert</h4><p>${esc(w.plan ? w.plan.root : '')} · ${fmtB(done.reduce((a, r) => a + (r.size || 0), 0))}${done.some(r => r.how === 'rename') ? ' · umbenannt' : ''}</p></div></div>`;
+    top = `<div class="media-done"><div class="big">${done.length ? '✓' : '!'}</div><div><h4>${done.length} Datei${done.length === 1 ? '' : 'en'} einsortiert</h4><p>${esc(w.plan && done[0] ? w.plan.root + '/' + done[0].dst.split('/').slice(0, -1).join('/') : '')} · ${fmtB(done.reduce((a, r) => a + (r.size || 0), 0))}${done.some(r => r.how === 'rename') ? ' · umbenannt' : ''}</p></div></div>`;
     if(op.error) top += note('err', '!', esc(op.error));
     if(op.jellyfin) top += note(op.jellyfin.ok ? 'ok' : '', op.jellyfin.ok ? '✓' : '!', esc(op.jellyfin.message));
     if(left.length) top += note('', '!', `<b>${left.length} Datei${left.length === 1 ? '' : 'en'} bleiben liegen:</b> ${left.map(r => esc(shortName(r.src)) + ' (' + esc(r.why || r.status) + ')').join(', ')}. Ein erneutes Einsortieren nimmt sie später mit.`);
