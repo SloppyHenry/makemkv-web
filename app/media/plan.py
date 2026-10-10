@@ -12,7 +12,7 @@ from fastapi import HTTPException
 from app import files
 from app.media import conf, naming
 from app.media.moves import same_device
-from app.util import safe_name
+from app.util import fmt_bytes, safe_name
 
 VIDEO = naming.VIDEO_EXT
 
@@ -82,7 +82,7 @@ def build_plan(req: dict) -> dict:
         if not why and files.fresh_lock_in(src, False):
             why = "wird gerade von einer anderen Instanz bearbeitet"
         if why:
-            row.update(status="locked", why=why.capitalize() if why[0].islower() else why)
+            row.update(status="locked", why=why[0].upper() + why[1:])
         try:
             row["dst"] = dest_rel(req, it, st)
         except PlanError as e:
@@ -106,7 +106,7 @@ def build_plan(req: dict) -> dict:
             else:
                 try:
                     old = dst.stat()
-                    info = f" ({old.st_size / 1e9:.1f} GB, {time.strftime('%d.%m.%Y', time.localtime(old.st_mtime))})"
+                    info = f" ({fmt_bytes(old.st_size)}, {time.strftime('%d.%m.%Y', time.localtime(old.st_mtime))})"
                 except OSError:
                     info = ""
                 row.update(status="conflict" if row["status"] == "move" else row["status"], why="Existiert schon im Ziel" + info if dst.exists() else "Zwei Dateien hätten denselben Namen")

@@ -139,7 +139,7 @@
   .media-detect{grid-template-columns:84px minmax(0,1fr);gap:12px}.media-detect h4{font-size:16px}
   .media-search{grid-template-columns:1fr 90px}.media-search .media-seg{grid-column:1/-1}.media-search>.secondary,.media-search>.primary{grid-column:1/-1}
   .media-steps{display:none}.media-stepline{display:block}
-  .media-tr{grid-template-columns:1fr}.media-tr.head{display:none}.media-tr .o:before{content:"von: "}.media-tr .n.d1{padding-left:10px}.media-tr .n.d2{padding-left:20px}
+  .media-tr{grid-template-columns:1fr}.media-tr.head{display:none}.media-tr .o.f:before{content:"von: "}.media-tr .n.d1{padding-left:10px}.media-tr .n.d2{padding-left:20px}
   .media-eps-table{display:none}.media-cards{display:grid}
   .media-hit{grid-template-columns:44px minmax(0,1fr)}.media-hit .tag.go{display:none}
   .media-dlg{border-radius:0;border-left:0;border-right:0;max-width:none;margin:0}
@@ -165,3 +165,6 @@ dialog.media-modal::backdrop{background:rgba(0,0,0,.65)}
   dialog.media-modal{width:100vw;max-height:100dvh;height:100dvh}
   .media-modal .media-dlg{max-height:none;min-height:100dvh;border-radius:0;border:0}
 }
+
+.media-dlg>.media-dbody>*,.media-done>div,.media-note>div,.media-log .it>*{min-width:0}
+.media-done p,.media-log .it b{overflow-wrap:anywhere}

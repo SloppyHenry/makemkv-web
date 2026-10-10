@@ -260,6 +260,13 @@ class InfoTest(unittest.TestCase):
         self.assertEqual((i["known"], i["source"], i["kind"], i["imdb"]), (True, "name", "movie", "tt1234567"))
         self.assertEqual(info.info_for("Irgendwas/datei.mkv"), {"path": "Irgendwas/datei.mkv", "known": False})
 
+    def test_bulk_endpoint_omits_unknown(self):
+        from app.media import api
+        r = api.infos(api.InfoReq(paths=["Film (2021)/Film (2021).mkv", "Irgendwas/datei.mkv", "Serie (2020)/Season 01/Serie S01E02.mkv"]))
+        self.assertEqual(sorted(r), ["Film (2021)/Film (2021).mkv", "Serie (2020)/Season 01/Serie S01E02.mkv"])
+        self.assertEqual((r["Film (2021)/Film (2021).mkv"]["kind"], r["Serie (2020)/Season 01/Serie S01E02.mkv"]["episode"]), ("movie", 2))
+        self.assertNotIn("path", r["Film (2021)/Film (2021).mkv"])
+
 
 if __name__ == "__main__":
     unittest.main()
