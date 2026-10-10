@@ -16,7 +16,7 @@
 .nav-tab.end{margin-left:auto}
 .nav-badge{min-width:19px;height:19px;padding:0 6px;border-radius:99px;background:var(--red);color:#fff;font-size:11px;font-weight:750;display:grid;place-items:center}
 .nav-more{background:transparent;border:0;border-top:3px solid transparent;font:inherit;font-weight:620;display:none}
-.nav-more[aria-expanded=true]{color:#fff}
+.nav-more[aria-expanded=true],.nav-more.on{color:#fff}
 .drivebar{display:flex;align-items:center;gap:8px 10px;padding:10px 24px;background:#0d121a;border-bottom:1px solid var(--line)}
 .drivebar[hidden]{display:none}
 .drivebar>.lbl{font-size:11px;color:var(--muted);letter-spacing:.06em;text-transform:uppercase;font-weight:650;flex:none}
@@ -59,7 +59,7 @@
   .nav-tab{flex:1;flex-direction:column;gap:3px;justify-content:center;padding:8px 4px 7px;min-height:56px;font-size:11px;border-bottom:0}
   .nav-tab[aria-selected=true]{border-top-color:var(--red)}
   .nav-tab.end{margin-left:0}
-  .nav-more{display:flex}.nav-tab.extra{display:none}
+  .nav-more{display:flex}.nav-more.on{border-top-color:var(--red)}.nav-tab.extra{display:none}
   .nav-ico{font-size:20px}
   .nav-badge{position:absolute;top:4px;left:calc(50% + 6px);min-width:17px;height:17px;font-size:10px}
   .drivebar{padding:8px 13px;overflow-x:auto;scrollbar-width:none}.drivebar::-webkit-scrollbar{display:none}.drivebar[hidden]{display:none}
