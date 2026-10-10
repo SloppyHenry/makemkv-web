@@ -37,7 +37,7 @@ function renderTabs(){
   for(const v of views){
     const t = $(`#tab-${CSS.escape(v.id)}`); if(!t) continue;
     const n = badgeOf(v), b = $('.nav-badge', t);
-    b.hidden = !n; b.textContent = n > 99 ? '99+' : n; b.setAttribute('aria-label', `${n} laufende Aufträge`);
+    b.hidden = !n; b.textContent = n > 99 ? '99+' : n; b.setAttribute('aria-label', `${n} laufende${n === 1 ? 'r Auftrag' : ' Aufträge'}`);
     $('.nav-dot', t).hidden = !(v.id === SETTINGS && dirty && v.id !== cur);
   }
   $('#drivebar').hidden = cur !== 'laufwerke';
