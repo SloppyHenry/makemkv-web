@@ -1,11 +1,145 @@
-/* Bibliothek (Besitzer: PF) */
-.folder td{background:#0f1520;border-bottom:1px solid #222d3b}
+/* Bibliothek (Besitzer: PF). Die Maße richten sich nach der Breite der Bibliothek (Container Query auf .lib), nicht nach dem Fenster. */
+.lib{container:lib/inline-size;overflow:clip}
+.lib-head{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;padding:14px 20px;border-bottom:1px solid var(--line)}
+.lib-head h2{margin:0;font-size:16px}
+.lib-stat{display:flex;gap:14px;flex-wrap:wrap;margin-left:auto;font-size:12px;color:var(--muted)}
+.lib-stat b{color:var(--text);font-size:13px}
+.lib-stat .save b{color:#75e6b3}
+.lib-meter{height:5px;width:120px;background:#252e3d;border-radius:4px;overflow:hidden;margin-top:4px}
+.lib-meter i{display:block;height:100%;background:#9cb8e8}
+.lib-cols{display:grid;grid-template-columns:220px minmax(0,1fr) 340px;min-height:560px}
+.lib-cols.nodetail{grid-template-columns:220px minmax(0,1fr)}
+.lib-filter{border-right:1px solid var(--line);padding:14px 12px;display:grid;gap:14px;align-content:start;background:#0d1219}
+.lib-filter h5{margin:0 0 5px;font-size:10px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+.lib-fi{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:7px;font-size:12.5px;color:#c4d0e1;border:0;background:none;width:100%;text-align:left}
+.lib-fi:hover{background:#151e2a}
+.lib-fi.on{background:#2a1a21;color:#ffb0b8}
+.lib-fi .n{margin-left:auto;font-size:10.5px;color:var(--muted)}
+.lib-fi.sub{padding-left:24px;font-size:12px;color:var(--muted)}
+.lib-main{min-width:0;display:flex;flex-direction:column}
+.lib-tools{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:10px 14px;border-bottom:1px solid var(--line)}
+.lib-tools .input{width:210px;height:32px}
+.lib-view{display:inline-flex;border:1px solid #2b3748;border-radius:7px;overflow:hidden}
+.lib-view button{border:0;background:#0c121a;color:#9fb0c8;padding:6px 10px;font-size:12px}
+.lib-view button.on{background:#2a1a21;color:#ffb0b8}
+.lib-list{display:grid}
+.lib-grp{display:flex;align-items:center;gap:10px;padding:8px 14px;background:#0f1520;border-bottom:1px solid #222d3b;border-top:1px solid #222d3b;font-size:12.5px}
+.lib-grp .pill{margin-left:4px}
+.lib-grp .sp{flex:1}
+.lib-row{display:grid;grid-template-columns:22px 46px minmax(0,1fr) auto 78px;gap:10px;align-items:center;padding:8px 14px;border-bottom:1px solid #1b2431;cursor:pointer}
+.lib-row:hover{background:#131b27}
+.lib-row.sel{background:#1b1319}
+.lib-row.cur{box-shadow:2px 0 0 var(--red) inset}
+.lib-row .nm{min-width:0}
+.lib-row .nm strong{display:block;font-size:12.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lib-row .nm small{display:block;font-size:11px;color:var(--muted);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lib-row .sz{text-align:right;font-size:12px;color:#c4d0e1}
+.lib-row .sz small{display:block;font-size:10.5px;color:#75e6b3}
+.lib-thumb{width:46px;height:34px;border-radius:5px;background:linear-gradient(135deg,var(--c1,#2a3a4d),var(--c2,#4a3a3a));display:grid;place-items:center;font-size:9px;color:#fff9;font-weight:700}
+.lib-badges{display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end}
+.lib-b{font-size:10px;border-radius:5px;padding:2px 6px;background:#1c2634;color:#b4c4dc;white-space:nowrap;font-weight:600;letter-spacing:.02em}
+.lib-b.hdr{background:#3a2d12;color:#f0c36a}
+.lib-b.ok{background:#153328;color:#75e6b3}
+.lib-b.old{background:#2c2230;color:#d3a6e8}
+.lib-b.sd{background:#22303a;color:#9ed0e8}
+.lib-b.err{background:#351b24;color:#ff7480}
+.lib-run{grid-column:3/-1;display:grid;gap:5px;margin-top:2px}
+.lib-run .t{display:flex;gap:8px;align-items:center;font-size:11px;color:#ff9aa3;flex-wrap:wrap}
+.lib-run .btns{margin-left:auto}
+.lib-run .mini-bar{margin:0}
+.lib-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;padding:14px}
+.lib-tile{position:relative;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:#0e141d;cursor:pointer;display:grid}
+.lib-tile.sel{border-color:var(--red);box-shadow:0 0 0 1px var(--red) inset}
+.lib-tile .poster{aspect-ratio:2/3;background:linear-gradient(160deg,var(--c1,#2a3a4d),var(--c2,#4a3a3a));display:flex;align-items:flex-end;padding:8px;font-size:11px;font-weight:700;color:#fffc;line-height:1.25;position:relative}
+.lib-tile .poster .lib-badges{position:absolute;top:6px;right:6px;left:6px;justify-content:flex-start}
+.lib-tile .poster .chk{position:absolute;right:7px;bottom:7px}
+.lib-tile .poster{padding-right:28px}
+.lib-tile .cap2{padding:7px 9px 9px;font-size:11px;color:var(--muted);display:grid;gap:2px}
+.lib-tile .cap2 strong{color:var(--text);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lib-tile .prog{position:absolute;left:0;right:0;bottom:0;height:4px;background:#0008}
+.lib-tile .prog i{display:block;height:100%;background:var(--red)}
+.lib-tile .runtag{position:absolute;left:6px;bottom:30px;font-size:10px;background:#351b24;color:#ff9aa3;border-radius:5px;padding:2px 6px}
+.lib-detail{border-left:1px solid var(--line);padding:14px 16px;display:grid;gap:14px;align-content:start;background:#0d1219;min-width:0}
+.lib-detail h3{margin:0;font-size:15px;overflow-wrap:anywhere}
+.lib-detail .sub{font-size:11px;color:var(--muted);margin-top:2px;overflow-wrap:anywhere}
+.lib-kv{display:grid;grid-template-columns:96px 1fr;gap:5px 10px;font-size:12px}
+.lib-kv dt{color:var(--muted)}
+.lib-kv dd{margin:0}
+.lib-tracks{display:grid;gap:4px;font-size:11.5px}
+.lib-tracks div{display:flex;gap:8px;align-items:center;padding:5px 8px;border-radius:6px;background:#121a25}
+.lib-tracks div span:first-child{width:46px;color:var(--muted);font-size:10px;text-transform:uppercase}
+.lib-save{border:1px solid #1f4a39;background:#0f2019;border-radius:10px;padding:10px 12px;display:grid;gap:4px}
+.lib-save b{font-size:18px;color:#75e6b3}
+.lib-save small{color:#8ab8a3;font-size:11px}
+.lib-acts{display:flex;flex-wrap:wrap;gap:6px}
+.lib-acts .primary{width:auto}
+.lib-bar{position:sticky;bottom:0;z-index:6;display:flex;align-items:center;gap:8px 14px;flex-wrap:wrap;padding:11px 18px;background:#141b26;border-top:1px solid #3a4a62;box-shadow:0 -10px 30px #0006}
+.lib-bar b{font-size:13px}
+.lib-bar .sv{color:#75e6b3}
+.lib-bar .grow{flex:1}
+.lib-bar select{height:34px;background:#0c121a;color:var(--text);border:1px solid #2b3748;border-radius:7px;padding:0 8px;max-width:100%}
+.lib-bar[hidden]{display:none}
+.lib-chips{display:flex;gap:6px;flex-wrap:wrap;padding:10px 14px;border-bottom:1px solid var(--line)}
+.lib-chips button{border:1px solid var(--line);background:#121a25;color:#c4d0e1;border-radius:99px;padding:5px 11px;font-size:12px}
+.lib-chips button.on{background:#2a1a21;border-color:#6a2a35;color:#ffb0b8}
+.lib-sheet{border-top:1px solid var(--line);padding:14px 18px;display:grid;gap:12px;background:#0d1219}
+.lib-sidecv{border-left:1px solid var(--line);background:#0d1219;padding:12px 14px;display:grid;gap:12px;align-content:start;min-width:0}
+.lib-sidecv h3{margin:0;font-size:14px;display:flex;align-items:center;gap:8px}
+.lib-sidecv h3 .sp{flex:1}
+.lib-filterbtn{display:none}
+
+/* Zusätze der echten Oberfläche */
+.lib-player{border:0;background:transparent}
+.lib-player.player-embed,.lib-player .player{border-radius:10px;overflow:hidden}
+.lib-namebtn{background:transparent;border:0;color:inherit;font:inherit;font-weight:600;padding:0;text-align:left;cursor:pointer;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block}
+.lib-namebtn:hover{text-decoration:underline;text-underline-offset:2px}
+.lib-b.busy{background:#351b24;color:#ff8791}
+.lib-run .t.err{color:#ff8791}
+.lib-tile .cap2 .sv{color:#75e6b3}.lib-tile .cap2 .svr{color:#ff7480}
+.lib-thumb.big{width:56px;height:80px;flex:none}
+.lib-more{margin:12px auto;display:block}
+.lib-grp .check{margin-right:2px}
+.lib-grp .lbl{margin-left:2px}
+.lib-detail .lib-acts{align-items:center}
+.lib-tile.cur{border-color:#6a7a96}
 .foldertoggle{background:transparent;border:0;color:var(--text);font:inherit;display:inline-flex;gap:10px;align-items:center;padding:3px 6px;border-radius:6px;text-align:left}
 .foldertoggle:hover{background:#1a2330}
 .chevb{display:inline-block;transition:transform .15s;color:var(--muted)}
 .chevb.open{transform:rotate(90deg)}
-.fileindent{padding-left:34px;display:flex;align-items:center;gap:8px;min-width:0}
 .editrow{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-tr.file td:first-child{padding-left:30px}
-.lib-body{padding:14px 16px}
-.libtools{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:12px}
+.lib-row .editrow{grid-column:auto}
+.lib-bar select{max-width:260px}
+@container lib (max-width:1180px){
+  .lib-cols{grid-template-columns:190px minmax(0,1fr)}
+  .lib-detail,.lib-sidecv{grid-column:1/-1;border-left:0;border-top:1px solid var(--line)}
+}
+@container lib (max-width:760px){
+  .lib-cols,.lib-cols.nodetail{grid-template-columns:1fr}
+  .lib-filter{display:none;border-right:0;border-bottom:1px solid var(--line)}
+  .lib-filter.open{display:grid}
+  .lib-filterbtn{display:inline-block}
+  .lib-row{grid-template-columns:22px 40px minmax(0,1fr) auto;gap:8px;padding:9px 12px}
+  .lib-row .lib-badges{grid-column:3/-1;justify-content:flex-start;order:5}
+  .lib-thumb{width:40px;height:30px}
+  .lib-stat{margin-left:0;width:100%}
+  .lib-head{padding:12px}
+  .lib-bar{padding:10px 12px}
+  .lib-tools .input{width:100%;flex:1 1 140px}
+  .lib-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;padding:12px}
+  .lib-kv{grid-template-columns:84px 1fr}
+  .lib-grp .lbl{display:none}
+}
+@container lib (max-width:520px){
+  .lib-bar{gap:6px 8px}
+  .lib-bar select:first-of-type{display:none}
+  .lib-bar select{flex:1 1 100%;max-width:none}
+  .lib-bar .grow{display:none}
+  .lib-bar .primary{flex:1}
+  .lib-detail .lib-acts .primary{flex:1 1 100%}
+}
+.lib [hidden],.cv [hidden]{display:none!important}
+.lib-grp{flex-wrap:nowrap}
+.lib-grp .secondary{white-space:nowrap;flex:none}
+.lib-grp .lbl{display:inline-block;max-width:120px;overflow:hidden;text-overflow:ellipsis;vertical-align:bottom}
+.lib-grp .foldertoggle{min-width:0}
+.lib-grp .foldertoggle strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}

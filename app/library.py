@@ -9,8 +9,9 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from app import ext
 from app.convert import clean_convert, next_conversion_id
+from app.library_info import INFO_VERSION, estimate, file_issue, kind_of, lib_info, lib_state
 from app.ffmpeg import probe
-from app.config import INSTANCE, LIBCACHE, LIB_CODECS, LIB_EXT, LOCK_TTL
+from app.config import INSTANCE, LIBCACHE, LIB_EXT, LOCK_TTL
 from app.files import acquire_lock, busy_reason, fresh_lock_in, held_locks, inside_out, lock_path, out_dir
 from app.state import ACTIVE, CV_ACTIVE, broadcast, convert_queue, conversions, out_cache, peers_state, uploads
 from app.util import valid_name
@@ -23,26 +24,6 @@ ext.allow_proxy(r"library/convert")
 lib_cache: dict[str, dict] = {}
 lib_probe_queue: asyncio.Queue = asyncio.Queue()
 lib_probing: set[str] = set()
-
-
-def lib_info(pr: dict) -> dict:
-    v = next((x for x in pr["streams"] if x["codec_type"] == "video"), {})
-    auds = [x for x in pr["streams"] if x["codec_type"] == "audio"]
-    return {"codec": v.get("codec_name", ""), "w": v.get("width", 0), "h": v.get("height", 0), "pix": v.get("pix_fmt", ""),
-            "hdr": v.get("color_transfer") in ("smpte2084", "arib-std-b67"),
-            "dur": float(pr["format"].get("duration") or 0),
-            "audio": [f'{a.get("codec_name", "?")} {a.get("channels", "?")}ch {a.get("tags", {}).get("language", "")}'.strip() for a in auds],
-            "subs": sum(1 for x in pr["streams"] if x["codec_type"] == "subtitle")}
-
-
-def lib_state(info) -> str:
-    if info is None:
-        return "unknown"
-    if info["hdr"]:
-        return "hdr"
-    if info["codec"] == "hevc":
-        return "hevc"
-    return "ok" if info["codec"] in LIB_CODECS else "other"
 
 
 def load_cache():
@@ -121,7 +102,7 @@ async def api_library():
     for it in items:
         rel = it["path"]
         c = lib_cache.get(rel)
-        fresh = c and c["size"] == it["size"] and c["mtime"] == it["mtime"]
+        fresh = c and c["size"] == it["size"] and c["mtime"] == it["mtime"] and (c["info"] is None or c["info"].get("v") == INFO_VERSION)
         if fresh:
             info, state = c["info"], lib_state(c["info"])
         else:
@@ -143,10 +124,14 @@ async def api_library():
                 locked = json.loads(lk[1].read_text()).get("inst", "andere Instanz")
             except (OSError, ValueError):
                 locked = "andere Instanz"
-        out.append({**it, "state": state, "info": info, "job": job, "locked": locked,
+        est = estimate(info, it["size"]) if info and info.get("dur") else None
+        out.append({**it, "state": state, "info": info, "job": job, "locked": locked, "kind": kind_of(info) if info else "", "est": est,
                     "dev_err": (c or {}).get("err", "") if not fresh or not c.get("info") else ""})
     out.sort(key=lambda x: -x["mtime"])
-    return {"dir": base, "files": out[:1500], "probing": len(lib_probing), "instance": INSTANCE}
+    orig = [f for f in out if f["est"] and not f["est"]["issue"] and f["state"] != "hevc" and not f["info"].get("encoded") and not f["job"] and not f["locked"]]
+    summary = {"count": len(out), "bytes": sum(f["size"] for f in out), "orig_count": len(orig), "orig_bytes": sum(f["size"] for f in orig),
+               "save_bytes": sum(max(0, f["size"] - f["est"]["bytes"]) for f in orig), "free": out_cache.get("free", 0)}
+    return {"dir": base, "files": out[:1500], "probing": len(lib_probing), "instance": INSTANCE, "summary": summary}
 
 
 @router.post("/api/library/convert")
@@ -164,7 +149,7 @@ async def api_library_convert(req: LibReq):
             continue
         st = p.stat()
         c = lib_cache.get(rel)
-        if c and c["size"] == st.st_size and c["mtime"] == st.st_mtime and c["info"]:
+        if c and c["size"] == st.st_size and c["mtime"] == st.st_mtime and c["info"] and c["info"].get("v") == INFO_VERSION:
             info = c["info"]
         else:
             try:
@@ -173,9 +158,8 @@ async def api_library_convert(req: LibReq):
                 skipped.append({"path": rel, "why": f"nicht lesbar: {str(e)[:80]}"})
                 continue
             lib_cache[rel] = {"size": st.st_size, "mtime": st.st_mtime, "info": info}
-        state = lib_state(info)
-        if state != "ok":
-            skipped.append({"path": rel, "why": {"hevc": "ist bereits HEVC", "hdr": "HDR – wird nicht umkodiert"}.get(state, "Codec wird nicht unterstützt")})
+        if why := file_issue(cfg, info, rel):
+            skipped.append({"path": rel, "why": why})
             continue
         owner = acquire_lock(p, req.takeover_from)
         if owner:
@@ -183,7 +167,7 @@ async def api_library_convert(req: LibReq):
             continue
         conversions.append({"id": next_conversion_id(), "name": rel, "folder": str(Path(rel).parent), "src": str(p), "size_in": st.st_size, "size_out": 0,
                             "status": "queued", "pct": 0.0, "fps": 0.0, "speed": 0.0, "eta": 0, "error": "", "cfg": cfg, "dev": "",
-                            "t": time.time(), "started": 0, "mode": "", "origin": "library", "rel": rel, "lock": str(lock_path(p)), "paused": False, "handed": "", "cancel": False})
+                            "t": time.time(), "started": 0, "mode": "", "origin": "library", "audio": info["audio"], "rel": rel, "lock": str(lock_path(p)), "paused": False, "handed": "", "cancel": False})
         convert_queue.put_nowait(conversions[-1])
         started.append(rel)
     save_libcache()
