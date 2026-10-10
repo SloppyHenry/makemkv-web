@@ -27,7 +27,7 @@ function fillHandover(){
   const usable = (S.peers||[]).filter(p => p.reachable && p.has_handover);
   const best = usable.slice().sort((a,b) => (a.load/(a.cores||1)) - (b.load/(b.cores||1)))[0];
   const chosen = ($('#hoPeers input:checked')||{}).value || (best && best.name);
-  $('#hoPeers').innerHTML = (S.peers||[]).map(p => peerOption(p, p.name === chosen)).join('') || '<div class="empty">Keine anderen Rechner eingetragen (PEERS in der .env).</div>';
+  $('#hoPeers').innerHTML = (S.peers||[]).map(p => peerOption(p, p.name === chosen)).join('') || '<div class="empty">Keine anderen Rechner eingetragen. Unter Einstellungen › Rechner lassen sie sich im Netz suchen und koppeln.</div>';
   $('#ho-go').disabled = busy || !act.length || !usable.length;
 }
 delegate('.handover-btn', 'click', () => { fillHandover(); hoDlg.showModal(); });
