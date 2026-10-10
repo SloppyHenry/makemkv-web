@@ -17,6 +17,7 @@ if [ ! -f .env ]; then
   echo "→ .env angelegt – bei Bedarf anpassen (Ausgabeordner, Port)"
 fi
 grep -q "^INSTANCE_NAME=" .env || echo "INSTANCE_NAME=$(hostname)" >> .env    # Name dieser Instanz (für Sperrdateien)
+grep -q "^RENDER_GID=" .env || echo "RENDER_GID=$(getent group render | cut -d: -f3 || echo 105)" >> .env   # Gruppe render (Hardware-Encoding über /dev/dri)
 set -a; . ./.env; set +a
 mkdir -p data "${STAGING_PATH:-data/staging}"
 [ -d "${NAS_MOUNT:-/mnt/nas}" ] || { echo "→ Lege ${NAS_MOUNT:-/mnt/nas} an"; $SUDO mkdir -p "${NAS_MOUNT:-/mnt/nas}" 2>/dev/null || echo "   (Ordner fehlt – einmalig sudo ./scripts/setup-host.sh ausführen)"; }
