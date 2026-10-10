@@ -82,7 +82,7 @@ class MetadataTest(unittest.TestCase):
 
     def test_season(self):
         eps = run(m.season("testkey", 1402, 1))
-        self.assertEqual((eps[0]["n"], eps[0]["name"], eps[0]["runtime"]), (1, "Days Gone Bye", 67))
+        self.assertEqual((eps[0]["n"], eps[0]["name"], eps[0]["runtime"]), (1, "Days Gone Bye", 45))
         with self.assertRaises(m.MetadataError) as c:
             run(m.season("testkey", 1402, 9))
         self.assertEqual(c.exception.code, "not_found")

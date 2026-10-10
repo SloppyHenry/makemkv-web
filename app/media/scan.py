@@ -13,7 +13,7 @@ _sem = asyncio.Semaphore(3)
 
 def expand(paths: list[str]) -> list[str]:
     """Pfade (Dateien oder Ordner, relativ zum Ausgabeordner) -> Liste der Videodateien, sortiert, ohne Doppelte."""
-    base = files.out_dir()[0]
+    base = files.out_dir()[0].resolve()
     out: list[str] = []
     for rel in paths:
         p = files.inside_out(rel)
@@ -28,14 +28,14 @@ def expand(paths: list[str]) -> list[str]:
 
 
 async def duration(rel: str, size: int) -> float:
-    """Laufzeit in Sekunden: aus dem Bibliotheks-Zwischenspeicher, sonst per ffprobe (höchstens drei gleichzeitig). 0 = unbekannt."""
+    """Laufzeit in Sekunden: aus der Begleitdatei beim Rippen, dem Bibliotheks-Zwischenspeicher, sonst per ffprobe (höchstens drei gleichzeitig). 0 = unbekannt."""
+    sc = store.sidecar(rel)
+    if sc and sc["title"].get("duration"):                  # echte Laufzeit der Disc (die Datei selbst kann gekürzt sein)
+        return float(sc["title"]["duration"])
     from app import library
     c = library.lib_cache.get(rel)
     if c and c.get("size") == size and c.get("info"):
         return float(c["info"].get("dur") or 0)
-    sc = store.sidecar(rel)
-    if sc and sc["title"].get("duration"):
-        return float(sc["title"]["duration"])
     from app.ffmpeg import probe
     async with _sem:
         try:

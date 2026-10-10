@@ -11,12 +11,12 @@ def _data() -> dict:
 
 
 def next_episode(k: str, season: int, disc: int | None) -> int | None:
-    """Nächste Episode der Staffel; war diese Disc schon dran, deren erste Folge (erneutes Einsortieren). None = unbekannt."""
+    """Nächste Episode der Staffel (None = unbekannt). Kommt eine frühere Disc nachträglich dran, als schon spätere eingetragen sind, ist der Stand unbrauchbar."""
     rec = (_data().get(k) or {}).get("seasons", {}).get(str(season))
     if not rec:
         return None
-    if disc and str(disc) in rec.get("discs", {}):
-        return rec["discs"][str(disc)][0]
+    if disc and any(int(d) > disc for d in rec.get("discs", {})):
+        return None
     return rec.get("next")
 
 

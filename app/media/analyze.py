@@ -62,6 +62,12 @@ async def analyze(paths: list[str]) -> dict:
                 det["reasons"].append(f"TMDB-Treffer „{hit['title']}“ ({hit['year']})")
         except metadata.MetadataError as e:
             tm["error"] = str(e)
+    ch = tm["chosen"] or {}
+    if det["kind"] == "movie" and ch.get("runtime"):
+        main = next((i for i in det["items"] if i["role"] == "movie"), None)
+        if main and main["dur"] and abs(main["dur"] / 60 - ch["runtime"]) <= 0.06 * ch["runtime"]:
+            det["confidence"] = round(min(0.98, det["confidence"] + 0.05), 2)
+            det["reasons"].append(f"Laufzeit passt zu TMDB ({ch['runtime']} min)")
     out = {"detect": det, "tmdb": tm, "files": files_, "episodes": None, "start": None}
     if det["kind"] == "series":
         n_eps = sum(1 for i in det["items"] if i["role"] == "episode")

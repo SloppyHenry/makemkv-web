@@ -4,7 +4,7 @@ import os
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from app.media import analyze, conf, info, jellyfin, metadata, organize, plan as planner
+from app.media import analyze, auto, conf, info, jellyfin, metadata, organize, plan as planner
 from app.util import mkdir_open, valid_name
 
 router = APIRouter(prefix="/api/media")
@@ -183,8 +183,13 @@ def run_status(oid: str):
 @router.get("/history")
 def history():
     last = organize.last_undoable()
-    return {"items": [{**{k: h[k] for k in ("id", "t", "title", "kind", "action", "undone")}, "files": len(h["rows"]), "can_undo": bool(last and last["id"] == h["id"])}
+    return {"items": [{**{k: h[k] for k in ("id", "t", "title", "kind", "action", "undone")}, "auto": bool(h.get("auto")), "files": len(h["rows"]), "can_undo": bool(last and last["id"] == h["id"])}
                       for h in reversed(organize.history())]}
+
+
+@router.get("/auto")
+def auto_log():
+    return {"enabled": conf.cfg()["auto"], "log": list(reversed(auto.log))}
 
 
 @router.post("/undo/{oid}")
