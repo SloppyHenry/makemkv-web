@@ -25,7 +25,10 @@ def target_root(kind: str, st: dict) -> Path:
     d = st["movies_dir"] if kind == "movie" else st["series_dir"]
     if not d:
         raise PlanError("Der Ordner für " + ("Filme" if kind == "movie" else "Serien") + " ist noch nicht eingestellt (Einstellungen → Medien / Jellyfin).")
-    return conf.inside_root(d)
+    try:
+        return conf.inside_root(d)
+    except HTTPException as e:
+        raise PlanError(f"{d}: {e.detail}")
 
 
 def dest_rel(req: dict, it: dict, st: dict) -> str:

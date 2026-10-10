@@ -39,3 +39,7 @@ Keine.
 1. TMDB-API-Schlüssel (kostenlos bei themoviedb.org) für Live-Tests? Bisher nur gegen Attrappe getestet.
 2. Wo liegen Filme- und Serien-Ordner auf dem NAS (Vorschlag: neben `dump`, z. B. `/mnt/datenstein/Filme` und `/mnt/datenstein/Serien`)?
 3. Soll die Automatik (nach dem Rippen ohne Rückfrage einsortieren) überhaupt angeboten werden, und mit welcher Schwelle (jetzt 95 %)?
+
+## Nachtrag (Antwort des Nutzers)
+- Vorbelegung `movies_dir=/mnt/datenstein/Filme`, `series_dir=/mnt/datenstein/Serien` (nur Standardwert; das Backend legt nichts an). Achtung: Im Container heißt das NAS ggf. `/mnt/nas` (OUTPUT_MOUNT); liegt die Vorbelegung außerhalb des eingehängten Ziels, meldet der Plan „Der Ordner muss innerhalb des eingehängten Ziels liegen“ (statt Absturz), und der Nutzer wählt den Ordner in den Einstellungen neu. PZ/Nutzer: tatsächlichen Mount-Pfad im Container prüfen.
+- TMDB-Schlüssel trägt der Nutzer später selbst ein; bis dahin nur Attrappe. Automatik bleibt wie gebaut (Standard aus).

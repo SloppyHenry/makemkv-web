@@ -11,13 +11,14 @@ from pydantic import BaseModel, field_validator
 from app import files, state
 from app.config import OUT_MOUNT
 
-DEFAULTS = {"movies_dir": "", "series_dir": "", "naming": "jellyfin", "action": "verschieben", "tmdb_key": "", "language": "de-DE",
+DEFAULTS = {"movies_dir": "/mnt/datenstein/Filme", "series_dir": "/mnt/datenstein/Serien",   # Vorbelegung; angelegt wird nichts, geprüft nur auf Wunsch (check-dir)
+            "naming": "jellyfin", "action": "verschieben", "tmdb_key": "", "language": "de-DE",
             "id_tags": True, "episode_names": False, "jellyfin_url": "", "jellyfin_key": "", "jellyfin_scan": False, "auto": False}
 
 
 class MediaSettings(BaseModel):
-    movies_dir: str = ""
-    series_dir: str = ""
+    movies_dir: str = DEFAULTS["movies_dir"]
+    series_dir: str = DEFAULTS["series_dir"]
     naming: Literal["jellyfin", "unveraendert"] = "jellyfin"
     action: Literal["verschieben", "kopieren"] = "verschieben"
     tmdb_key: str = ""
