@@ -8,6 +8,12 @@
 - **Titelliste (Punkt 4):** Plakette „Längster“/„Kurz“ steht jetzt unter dem Dateinamen (`css/titles.css`), der Name wird nicht mehr abgeschnitten. Dazu: auf dem Handy (bis 700 px) wird jede Titelzeile zur Karte (Name oben, Dauer · Größe · Spuren darunter), kein waagerechtes Scrollen mehr.
 - `hidden` wirkt jetzt auch bei Knöpfen/Flex-Elementen in Liste, Werkzeugleiste und Fortschrittsfeld (`.secondary{display:inline-block}` überschrieb es vorher).
 
+## Geprüft (lokal, Browser, zwei Instanzen 8800/8801, Konsole ohne Fehler)
+- Ruckel-Kreis: Bei laufender echter Konvertierung (Statusmeldung etwa jede Sekunde, über 14 Messungen mit 9 verschiedenen Texten) bleibt dasselbe Kreis-Element im DOM, `getAnimations()[0].currentTime` steigt durchgehend ohne Rücksetzen. Gleiches mit einem Skript, das alle Auftragsarten (Rippen, Konvertieren lokal/fremd, Übertragen, wartend, pausiert, Fehler, abgebrochen, übergeben, fertig) jede Sekunde neu meldet; ebenso beim unbestimmten Balken der Analyse. Umsortieren der Liste verschiebt nur das tatsächlich umziehende Element (Test von `reconcileJobs`).
+- Breiten 1440 / 1280 / 1050 / 900 / 700 / 375 px: keine waagerechte Seitenverschiebung, Text der Zeile mindestens 191 px, Listenbreiten 463 / 409 / 493 / 418 / 674 / 349 px.
+- Knöpfe (Überspringen/Abbrechen/Details) lösen die alten Handler aus; Protokoll: auf/zu gemerkt, Fehler klappen auf bzw. zeigen die Plakette; Titelliste Desktop und 375 px.
+- Nicht geprüft: Safari/Firefox (Container Queries brauchen Safari 16+/Firefox 110+).
+
 ## In Arbeit
 - Einbau von PFs `mountConvertEditor` in die Titelliste („Nach dem Rippen konvertieren“): warte auf das Angebot in PFs Status-Datei (`status-paket-f.md` existiert noch nicht). Bis dahin bleibt das alte Formular (`cvform.js`).
 
