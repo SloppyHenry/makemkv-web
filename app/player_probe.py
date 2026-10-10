@@ -146,45 +146,80 @@ def audio_ok(a: dict, caps: set[str], mp4: bool = True) -> bool:
     return False
 
 
-def pick_audio(info: dict, audio: int | None) -> dict | None:
-    """Gewählte Tonspur (Ordnungszahl), sonst die als Standard markierte, sonst die erste."""
+LANG_ALIAS = {"de": "deu", "ger": "deu", "en": "eng", "fr": "fra", "fre": "fra", "es": "spa", "it": "ita", "nl": "nld", "dut": "nld", "pt": "por", "ru": "rus",
+              "ja": "jpn", "zh": "zho", "chi": "zho", "ko": "kor", "pl": "pol", "cs": "ces", "cze": "ces", "tr": "tur", "sv": "swe", "da": "dan", "no": "nor",
+              "fi": "fin", "el": "ell", "gre": "ell", "hu": "hun", "ar": "ara", "he": "heb"}
+
+
+def lang_list(s) -> list[str]:
+    """Spracheinstellung ("de, eng") als Liste dreibuchstabiger Codes in Rangfolge."""
+    out = []
+    for x in str(s or "").replace(";", ",").replace(" ", ",").split(","):
+        x = x.strip().lower()
+        if x:
+            out.append(LANG_ALIAS.get(x, x))
+    return out
+
+
+def preferred_tracks(info: dict, audio_langs, sub_langs) -> tuple[int | None, int | None]:
+    """Voreinstellung für Ton und Untertitel: erste passende Sprache der Rangliste, sonst die Vorgabe der Datei
+    (Ton: als Standard markiert, sonst erste Spur; Untertitel: als Standard/erzwungen markierte Textspur, sonst keiner).
+    Untertitel sind nur Textspuren (Bildspuren werden nicht unterstützt); bei gleicher Sprache gewinnt die nicht erzwungene."""
+    ai = None
+    if info["audio"]:
+        for lg in lang_list(audio_langs):
+            hit = next((x for x in info["audio"] if LANG_ALIAS.get(x["lang"].lower(), x["lang"].lower()) == lg), None)
+            if hit:
+                ai = hit["i"]
+                break
+        if ai is None:
+            ai = next((x["i"] for x in info["audio"] if x["default"]), info["audio"][0]["i"])
+    texts = [x for x in info["subs"] if x["kind"] == "text"]
+    si = None
+    for lg in lang_list(sub_langs):
+        cand = [x for x in texts if LANG_ALIAS.get(x["lang"].lower(), x["lang"].lower()) == lg]
+        cand.sort(key=lambda x: x["forced"])
+        if cand:
+            si = cand[0]["i"]
+            break
+    if si is None and not lang_list(sub_langs):
+        si = next((x["i"] for x in texts if x["default"] or x["forced"]), None)
+    return ai, si
+
+
+def pick_audio(info: dict, audio: int | None, pref: int | None = None) -> dict | None:
+    """Gewählte Tonspur (Ordnungszahl), sonst die bevorzugte (`pref`), sonst die als Standard markierte, sonst die erste."""
     a = info["audio"]
     if not a:
         return None
-    if audio is not None and 0 <= audio < len(a):
-        return a[audio]
+    for i in (audio, pref):
+        if i is not None and 0 <= i < len(a):
+            return a[i]
     return next((x for x in a if x["default"]), a[0])
 
 
-def plan(info: dict, caps: set[str], audio: int | None = None, burn: int | None = None, force: str = "auto",
-         transcode_allowed: bool = True, ext: str = ".mkv") -> dict:
-    """Wie wird abgespielt? -> {mode: direct|remux|transcode, video: copy|x264, audio: copy|aac|none, burn, reasons[], ok, error}.
-    `force`: auto | remux | transcode (Nutzerwahl, remux fällt auf Transkodierung zurück, wenn das Video es nicht kann)."""
+def plan(info: dict, caps: set[str], audio: int | None = None, force: str = "auto", transcode_allowed: bool = True, ext: str = ".mkv",
+         pref_audio: int | None = None) -> dict:
+    """Wie wird abgespielt? -> {mode: direct|remux|transcode, video: copy|x264, audio: copy|aac|none, reasons[], ok, error}.
+    Umgewandelt (x264) wird nur, wenn der Browser das Video nicht kann. `force`: auto | remux (kein direktes Abspielen).
+    `pref_audio`: bevorzugte Tonspur (Spracheinstellung); nur sie darf direkt abgespielt werden, andere Spuren gehen über Remux."""
     v = info["video"]
-    out = {"mode": "remux", "video": "copy", "audio": "none", "burn": None, "reasons": [], "ok": True, "error": ""}
+    out = {"mode": "remux", "video": "copy", "audio": "none", "reasons": [], "ok": True, "error": ""}
     if not v:
         return {**out, "ok": False, "error": "Die Datei enthält kein Video."}
-    a = pick_audio(info, audio)
-    default_a = pick_audio(info, None)
+    a = pick_audio(info, audio, pref_audio)
+    default_a = pick_audio(info, None, pref_audio)
     reasons = out["reasons"]
     vok = video_ok(v, caps)
     if not vok:
         reasons.append(f"Der Browser kann {_vname(v)} nicht abspielen.")
-    if v["hdr"] and not vok:
-        reasons.append("HDR wird für die Wiedergabe auf SDR umgerechnet.")
-    bsub = next((s for s in info["subs"] if s["i"] == burn and s["kind"] == "bitmap"), None) if burn is not None else None
-    if burn is not None and not bsub:
-        out["burn"] = None
-    if bsub:
-        out["burn"] = bsub["i"]
-        reasons.append("Bilduntertitel werden ins Video eingebrannt.")
-    transcode = (not vok) or bool(bsub) or force == "transcode"
-    if force == "transcode" and vok and not bsub:
-        reasons.append("Auf Wunsch umgewandelt (kleiner, ruckelfrei).")
+        if v["hdr"]:
+            reasons.append("HDR wird für die Wiedergabe auf SDR umgerechnet.")
+    transcode = not vok
     if transcode and not transcode_allowed:
         return {**out, "ok": False, "error": "Umwandeln ist in den Einstellungen ausgeschaltet; diese Datei lässt sich so nicht abspielen."}
     out["video"] = "x264" if transcode else "copy"
-    # direkt: nur wenn der Browser Container, Video und die Standardtonspur kann und nichts umgewandelt werden muss
+    # direkt: nur wenn der Browser Container, Video und die bevorzugte Tonspur kann und nichts umgewandelt werden muss
     container_ok = ext in (".mp4", ".m4v", ".mov", ".webm") or (ext == ".mkv" and "mkv" in caps)
     if not transcode and force != "remux" and container_ok and (a is None or (audio_ok(a, caps) and a is default_a)):
         return {**out, "mode": "direct", "audio": "copy" if a else "none"}

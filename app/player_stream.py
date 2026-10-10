@@ -98,7 +98,8 @@ def video_filters(info: dict, plan: dict, max_h: int, tonemap: bool) -> str:
         f.append("yadif=deint=interlaced")
     if v["hdr"] and tonemap:
         f.append("zscale=t=linear:npl=100,format=gbrpf32le,zscale=p=bt709,tonemap=tonemap=hable:desat=0,zscale=t=bt709:m=bt709:r=tv")
-    f.append(f"scale=-2:min({int(max_h)}\\,ih):flags=bilinear")
+    if max_h:                                           # 0 = Original, nicht verkleinern
+        f.append(f"scale=-2:min({int(max_h)}\\,ih):flags=bilinear")
     f.append("format=yuv420p")
     return ",".join(f)
 
@@ -109,13 +110,9 @@ def build_args(p: Path, start: float, info: dict, plan: dict, audio_i: int | Non
         a += ["-ss", f"{start:.3f}"]
     a += ["-i", f"file:{p}"]
     trans = plan["video"] == "x264"
-    if plan["burn"] is not None:
-        chain = video_filters(info, plan, cfg["max_height"], tonemap)
-        a += ["-filter_complex", f"[0:v:0][0:s:{plan['burn']}]overlay=eof_action=pass[vo];[vo]{chain}[v]", "-map", "[v]"]
-    else:
-        a += ["-map", "0:v:0"]
-        if trans:
-            a += ["-vf", video_filters(info, plan, cfg["max_height"], tonemap)]
+    a += ["-map", "0:v:0"]
+    if trans:
+        a += ["-vf", video_filters(info, plan, cfg["max_height"], tonemap)]
     if plan["audio"] != "none" and info["audio"]:
         a += ["-map", f"0:a:{audio_i if audio_i is not None else 0}"]
     if trans:

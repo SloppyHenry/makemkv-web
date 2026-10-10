@@ -68,16 +68,19 @@ class PlanTests(unittest.TestCase):
         self.assertEqual(pp.plan(info("hevc", 10), CAPS_CHROME, ext=".mkv")["mode"], "direct")
         self.assertEqual(pp.plan(info("hevc", 10), pp.parse_caps("h264,aac"), ext=".mkv")["video"], "x264")
 
-    def test_erzwingen(self):
-        self.assertEqual(pp.plan(info(), CAPS_CHROME, force="transcode", ext=".mp4")["mode"], "transcode")
+    def test_remux_erzwingen(self):
         self.assertEqual(pp.plan(info(), CAPS_CHROME, force="remux", ext=".mp4")["mode"], "remux")
 
-    def test_bilduntertitel_einbrennen_erzwingt_transkodierung(self):
-        i = info(subs=("hdmv_pgs_subtitle", "subrip"))
-        self.assertEqual(pp.plan(i, CAPS_CHROME, burn=0, ext=".mkv")["burn"], 0)
-        self.assertEqual(pp.plan(i, CAPS_CHROME, burn=0, ext=".mkv")["mode"], "transcode")
-        self.assertIsNone(pp.plan(i, CAPS_CHROME, burn=1, ext=".mkv")["burn"])          # Textspur lässt sich nicht einbrennen
-        self.assertEqual(pp.plan(i, CAPS_CHROME, ext=".mkv")["mode"], "direct")
+    def test_nie_umwandeln_wenn_browser_es_kann(self):
+        """Wenn der Browser das Video kann, wird nie umgewandelt (auch nicht mit Bildspuren)."""
+        p = pp.plan(info(subs=("hdmv_pgs_subtitle", "subrip")), CAPS_CHROME, ext=".mkv")
+        self.assertEqual((p["mode"], p["video"]), ("direct", "copy"))
+        self.assertNotIn("burn", p)
+
+    def test_bevorzugte_tonspur_direkt_andere_remux(self):
+        i = info(audio=(("aac", 2), ("aac", 2)))
+        self.assertEqual(pp.plan(i, CAPS_CHROME, ext=".mp4", pref_audio=1)["mode"], "direct")        # Spracheinstellung wählt Spur 1
+        self.assertEqual(pp.plan(i, CAPS_CHROME, audio=0, ext=".mp4", pref_audio=1)["mode"], "remux")
 
     def test_transkodieren_ausgeschaltet(self):
         p = pp.plan(info("mpeg2video"), CAPS_CHROME, transcode_allowed=False, ext=".mkv")
@@ -92,6 +95,36 @@ class PlanTests(unittest.TestCase):
     def test_ohne_ton(self):
         p = pp.plan(info(audio=()), CAPS_CHROME, ext=".mp4")
         self.assertEqual((p["mode"], p["audio"]), ("direct", "none"))
+
+
+class LangTests(unittest.TestCase):
+    def tracks(self):
+        i = info(audio=(("ac3", 6), ("aac", 2), ("dts", 6)), subs=("subrip", "subrip", "hdmv_pgs_subtitle", "subrip"))
+        for a, l in zip(i["audio"], ("eng", "deu", "fra")):
+            a["lang"] = l
+        for s, l in zip(i["subs"], ("eng", "deu", "deu", "deu")):
+            s["lang"] = l
+        i["subs"][3]["forced"] = True
+        return i
+
+    def test_audio_sprache(self):
+        i = self.tracks()
+        self.assertEqual(pp.preferred_tracks(i, "deu", "")[0], 1)
+        self.assertEqual(pp.preferred_tracks(i, "de", "")[0], 1)                  # 2-Buchstaben-Code
+        self.assertEqual(pp.preferred_tracks(i, "ja, fra,eng", "")[0], 2)         # Rangfolge, erste vorhandene
+        self.assertEqual(pp.preferred_tracks(i, "", "")[0], 0)                    # leer: Vorgabe der Datei (erste, nichts markiert)
+        self.assertEqual(pp.preferred_tracks(i, "jpn", "")[0], 0)                 # nicht vorhanden: Vorgabe
+        i["audio"][0]["default"], i["audio"][2]["default"] = False, True
+        self.assertEqual(pp.preferred_tracks(i, "", "")[0], 2)
+
+    def test_untertitel_sprache(self):
+        i = self.tracks()
+        self.assertEqual(pp.preferred_tracks(i, "", "deu")[1], 1)                 # Textspur deu, nicht erzwungen; die PGS-Spur zählt nicht
+        self.assertEqual(pp.preferred_tracks(i, "", "fra")[1], None)
+        self.assertEqual(pp.preferred_tracks(i, "", "")[1], 3)                     # leer: als erzwungen markierte Textspur der Datei
+        i["subs"][0]["default"] = True
+        self.assertEqual(pp.preferred_tracks(i, "", "")[1], 0)
+        self.assertEqual(pp.preferred_tracks(info(audio=()), "deu", "deu"), (None, None))
 
 
 class SweepTests(unittest.IsolatedAsyncioTestCase):
@@ -183,7 +216,8 @@ class HttpTests(unittest.TestCase):
     def test_probe_und_sitzung_remux(self):
         s, b, _ = call("/api/player/probe?path=" + urllib.parse.quote(FILM) + "&caps=h264,aac")
         d = json.loads(b)
-        self.assertEqual((s, d["plan"]["mode"], len(d["chapters"]), d["subs"][0]["kind"]), (200, "remux", 3, "text"))
+        self.assertEqual((s, d["plan"]["mode"], len(d["chapters"]), d["subs"][0]["kind"], d["subs"][0]["supported"]), (200, "remux", 3, "text", True))
+        self.assertEqual(d["preferred"], {"audio": 0, "sub": None})
         s, d = session(FILM, client="pdt1")
         self.assertEqual(s, 200)
         s, body, h = call(d["url"])
