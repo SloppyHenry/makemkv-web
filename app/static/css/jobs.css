@@ -46,6 +46,8 @@
 .status.run{color:#ff8791;background:#351b24}
 .status.wait{color:#9aa9c1;background:#202938}
 .status.err{color:#ff7480;background:#351b24}
+/* Fortschrittsfeld und Liste: `hidden` soll auch bei Elementen mit eigener display-Regel (Knöpfe, Flex-Boxen) wirken */
+.progress-panel [hidden],.joblist [hidden],.jobtools [hidden]{display:none!important}
 /* Fortschrittsfeld: unbestimmter Balken über transform (kein Layout je Bild) */
 .progress-track.indet .progress-fill{width:35%!important;margin:0;animation:ind 1.2s infinite ease-in-out;transition:none}
 @keyframes ind{0%{transform:translateX(-100%)}100%{transform:translateX(286%)}}
