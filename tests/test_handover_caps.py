@@ -36,5 +36,28 @@ class CfgForPeerTest(unittest.TestCase):
         self.assertIsNone(cluster.cfg_for_peer(d, None)[0])
 
 
+class StartAnPeerTest(unittest.IsolatedAsyncioTestCase):
+    """Regression: /api/convert/start rief die async peer_call über to_thread auf und gab eine Coroutine zurück (500)."""
+
+    async def test_start_auf_anderem_rechner_wartet_den_aufruf_ab(self):
+        from unittest import mock
+        from app import convert_presets, state
+        gesendet = {}
+
+        async def fake_peer_call(name, path, body, timeout=15.0):
+            gesendet.update(name=name, path=path, body=body)
+            return {"started": body["paths"], "skipped": []}
+
+        state.peers_state["alt"] = {**ALT, "name": "alt"}
+        try:
+            with mock.patch.object(cluster, "peer_call", fake_peer_call):
+                r = await convert_presets.api_start(convert_presets.StartReq(target="alt", paths=["a/b.mkv"], convert={"rf": 20}))
+        finally:
+            state.peers_state.pop("alt", None)
+        self.assertEqual(r["started"], ["a/b.mkv"])
+        self.assertEqual((gesendet["name"], gesendet["path"]), ("alt", "library/convert"))
+        self.assertEqual(set(gesendet["body"]["convert"]), {"convert", "rf", "preset", "tune", "extra", "audio"})
+
+
 if __name__ == "__main__":
     unittest.main()
