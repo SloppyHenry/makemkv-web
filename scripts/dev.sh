@@ -35,7 +35,13 @@ while [ $# -gt 0 ]; do
 done
 
 python_bin() {   # Python mit fastapi/uvicorn; sonst eigene virtuelle Umgebung unter $BASE/venv
-  local py="${PYTHON:-python3}"
+  local py="${PYTHON:-}" c
+  if [ -z "$py" ]; then   # die App braucht Python ab 3.10: erstes passende nehmen
+    for c in python3 python3.13 python3.12 python3.11 python3.10; do
+      if command -v "$c" >/dev/null 2>&1 && "$c" -c 'import sys; sys.exit(sys.version_info < (3, 10))' 2>/dev/null; then py="$c"; break; fi
+    done
+    [ -n "$py" ] || { echo "Python ab 3.10 nicht gefunden (PYTHON=… setzen)." >&2; exit 1; }
+  fi
   if "$py" -c 'import fastapi, uvicorn' 2>/dev/null; then echo "$py"; return; fi
   if [ ! -x "$BASE/venv/bin/python" ]; then
     echo "Richte virtuelle Umgebung ein ($BASE/venv) …" >&2

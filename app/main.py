@@ -15,7 +15,7 @@ from fastapi import FastAPI
 
 from app import (auth, cluster, convert, drives, ext, files, library, makemkv, rip, settings, state,
                  ui, upload)
-from app.config import DATA, FEATURES, PEERS_RAW, VERSION
+from app.config import DATA, FEATURES, VERSION
 
 # Optionale Module der Arbeitspakete. Sie melden sich beim Import selbst über app.ext an (Router, Einstellungen, Hooks …).
 # Fehlt ein Modul, wird es übersprungen; ein Fehler darin bricht den Start ab (damit er nicht untergeht).
@@ -52,8 +52,7 @@ async def startup():
     library.load_cache()
     asyncio.create_task(library.lib_probe_worker())
     asyncio.create_task(files.lock_heartbeat())
-    if cluster.parse_peers(PEERS_RAW):
-        asyncio.create_task(cluster.peer_prober())
+    asyncio.create_task(cluster.peer_prober())   # fragt die Rechnerliste ab (auch wenn sie erst später gefüllt wird)
     asyncio.create_task(upload.upload_worker())
     asyncio.create_task(convert.convert_worker())
     ext.start_all()

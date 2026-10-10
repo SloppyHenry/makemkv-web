@@ -11,7 +11,8 @@ from pydantic import BaseModel, field_validator
 from app import files, state
 from app.config import OUT_MOUNT
 
-DEFAULTS = {"movies_dir": "/mnt/datenstein/Filme", "series_dir": "/mnt/datenstein/Serien",   # Vorbelegung; angelegt wird nichts, geprüft nur auf Wunsch (check-dir)
+# Vorbelegung: Ordner direkt im eingehängten Ziel (so heißt es im Container wirklich); angelegt wird nichts, geprüft nur auf Wunsch (check-dir)
+DEFAULTS = {"movies_dir": f"{OUT_MOUNT.rstrip('/')}/Filme", "series_dir": f"{OUT_MOUNT.rstrip('/')}/Serien",
             "naming": "jellyfin", "action": "verschieben", "tmdb_key": "", "language": "de-DE",
             "id_tags": True, "episode_names": False, "jellyfin_url": "", "jellyfin_key": "", "jellyfin_scan": False, "auto": False}
 
