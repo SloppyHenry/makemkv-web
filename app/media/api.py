@@ -201,13 +201,25 @@ def undo(oid: str):
 
 
 # ---- Info für die Bibliothek (PF)
+class InfoReq(BaseModel):
+    paths: list[str]
+
+
+
 @router.get("/info")
 def info_one(path: str):
     return info.info_for(path)
 
 
-class InfoReq(BaseModel):
-    paths: list[str]
+@router.post("/infos")
+def infos(req: InfoReq):
+    """Sammelabfrage für die Bibliothek: {pfad: {kind, title, year, poster, season, episode, …}}; Unbekanntes fehlt."""
+    out = {}
+    for p in req.paths[:2000]:
+        i = info.info_for(p)
+        if i.get("known"):
+            out[p] = {k: v for k, v in i.items() if k != "path"}
+    return out
 
 
 @router.post("/info")
