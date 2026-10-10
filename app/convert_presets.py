@@ -155,6 +155,18 @@ def srcs_of(req: CfgReq) -> list[dict]:
     return out
 
 
+def file_flags(cfg: dict, paths: list[str]) -> dict:
+    """Je Bibliotheksdatei: Grund, warum sie mit diesen Einstellungen nicht geht ('issue'), und ob Dolby Vision verloren ginge ('dovi')."""
+    from app import library
+    from app.library_info import file_issue
+    out = {}
+    for p in paths[:500]:
+        i = (library.lib_cache.get(p) or {}).get("info")
+        if i:
+            out[p] = {"issue": file_issue(cfg, i, p), "dovi": bool(i.get("dovi")) and cfg["video"]["codec"] != "copy"}
+    return out
+
+
 @router.get("/meta")
 def api_meta():
     codecs = {k: {**{a: b for a, b in c.items() if a not in ("rel",)}, "id": k, "available": k in convert_caps.codecs_available()} for k, c in CODECS.items()}
@@ -186,7 +198,7 @@ def api_translate(req: CfgReq):
 def api_estimate(req: CfgReq):
     cfg = clean_convert(req.cfg)
     srcs = srcs_of(req) or [{"size": 24 * 1024 ** 3, "dur": 7200.0, "w": 1920, "h": 1080, "fps": 23.976, "audio": ["dts 6ch", "ac3 6ch"]}]
-    return {**predict(cfg, srcs), "example": not (req.paths or req.files), "files": len(srcs)}
+    return {**predict(cfg, srcs), "example": not (req.paths or req.files), "files": len(srcs), "flags": file_flags(cfg, req.paths)}
 
 
 @router.get("/stats")
