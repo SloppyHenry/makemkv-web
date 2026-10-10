@@ -3,6 +3,7 @@ import { api, baseName, esc, fmtB, fmtD } from './core.js';
 import { L, audioName, byPath, codecName, resName, saveOf, selectable } from './library-model.js';
 import { stBadge, titleOf } from './library-render.js';
 import { fmtT } from './convert-predict.js';
+import { presetById } from './convert-meta.js';
 import { getLibraryActions } from './registry.js';
 
 let handle = null, handlePath = '', est = {};          // eingebetteter Player, Dauer-Schätzungen je Datei
@@ -27,7 +28,7 @@ export function detailHtml(f){
   const kv = i ? `<dl class="lib-kv"><dt>Video</dt><dd>${esc(codecName(i.codec))} · ${i.w}×${i.h}${i.pix ? ' · ' + (/10/.test(i.pix) ? '10 Bit' : '8 Bit') : ''}${i.hdr_fmt ? ' · ' + esc(i.hdr_fmt) : ''}${i.interlaced ? ' · interlaced' : ''}</dd>
     <dt>Bitrate</dt><dd>${i.bitrate ? (i.bitrate / 1e6).toFixed(1).replace('.', ',') + ' Mb/s' : '—'}${i.fps ? ' · ' + String(i.fps).replace('.', ',') + ' Bilder/s' : ''}</dd><dt>Dauer</dt><dd>${i.dur ? fmtD(i.dur) : '—'}${i.chapters ? ` · ${i.chapters} Kapitel` : ''}</dd><dt>Größe</dt><dd>${fmtB(f.size)}</dd></dl>
     <div class="lib-tracks">${(i.alist || []).map(a => `<div><span>Ton</span>${esc(audioName(a))}${a.lang ? ' · ' + esc(a.lang) : ''}${a.title ? ' · ' + esc(a.title) : ''}</div>`).join('')}${(i.slist || []).length ? `<div><span>Unter.</span>${esc([...new Set(i.slist.map(s => s.lang || '?'))].join(', '))} (${i.slist.length}${i.slist.some(s => s.forced) ? ', erzwungen' : ''})</div>` : ''}</div>` : '';
-  const savebox = i && sv ? `<div class="lib-save"><small>Mit dem Standard-Preset${f.est && f.est.preset ? ' „' + esc(f.est.preset) + '“' : ''}</small><b>≈ ${fmtB(f.est.bytes)} <span>(−${Math.round((1 - f.est.bytes / f.size) * 100)} %)</span></b>
+  const savebox = i && sv ? `<div class="lib-save"><small>Mit dem Standard-Preset${f.est && f.est.preset ? ' „' + esc((presetById(f.est.preset) || {name: f.est.preset}).name) + '“' : ''}</small><b>≈ ${fmtB(f.est.bytes)} <span>(−${Math.round((1 - f.est.bytes / f.size) * 100)} %)</span></b>
     <small>Ersparnis ca. ${fmtB(sv)}${loc && loc.ok ? ` · Dauer hier ca. ${fmtT(loc.secs)}` : ''}${f.est.samples >= 2 ? ` · aus ${f.est.samples} Konvertierungen` : ' · Schätzung'}</small></div>` : '';
   const done = i && i.enc_note ? `<p class="hint" style="margin:0">Konvertiert mit: ${esc(i.enc_note)}</p>` : '';
   const warn = i && i.dovi ? '<p class="hint warn" style="margin:0">Enthält Dolby Vision: bei der Konvertierung geht diese Ebene verloren (die HDR10-Basis bleibt). Vor dem Start fragt die Bibliothek nach.</p>' : '';
