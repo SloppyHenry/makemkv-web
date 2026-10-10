@@ -86,7 +86,7 @@ body{padding-bottom:60px}
   <div class="tabs" role="tablist" id="tabs"></div>
 
   <section class="sec" id="s-over">
-    <div class="note"><b>Überlagerung (Desktop).</b> Klick auf einen Dateinamen in der Bibliothek oder bei „Fertige Dateien“ öffnet sie; Esc oder × schließt (der ffmpeg-Prozess endet sofort). Oben Dateiname, Ordner und eine Plakette, <i>wie</i> abgespielt wird (Direkt · Remux · Transkodiert). Rechts die Kapitelliste (entfällt, wenn die Datei keine Kapitel hat). Unten die Bedienleiste: Leiste mit Gepuffertem und Kapitelmarken, Wiedergabe, ±10 s, Lautstärke, Zeit, dann Kapitel, Ton &amp; Untertitel (ein Menü), Wiedergabe-Einstellungen, Vollbild.
+    <div class="note"><b>Überlagerung (Desktop).</b> Klick auf einen Dateinamen in der Bibliothek oder bei „Fertige Dateien“ öffnet sie; Esc oder × schließt (der ffmpeg-Prozess endet sofort). Oben Dateiname, Ordner und eine Plakette, <i>wie</i> abgespielt wird (Direkt · Remux · Transkodiert). Rechts die Kapitelliste (entfällt, wenn die Datei keine Kapitel hat). Unten die Bedienleiste: Leiste mit Gepuffertem und Kapitelmarken, Wiedergabe, ±10 s, Lautstärke, Zeit, dann Kapitel, Ton &amp; Untertitel (ein Menü), Geschwindigkeit/Info (Zahnrad), Vollbild.
       <ul><li>Tastenkürzel: Leertaste/K Pause · ←/→ 10 s (Umschalt: 60 s) · ↑/↓ Lautstärke · M stumm · F Vollbild · C Untertitel · A Tonspur wechseln · B/N Kapitel zurück/vor · 0–9 springen · Esc schließen · ? Übersicht.</li>
       <li>Doppelklick auf das Bild = Vollbild; auf dem Handy Doppeltippen links/rechts = ∓10 s.</li></ul></div>
     <div class="cap"><b>A1</b> Läuft, Remux (Video wird kopiert, Ton DTS → AAC), Untertitel an, Kapitelliste offen</div>
@@ -101,7 +101,7 @@ body{padding-bottom:60px}
   </section>
 
   <section class="sec" id="s-menu">
-    <div class="note"><b>Menüs.</b> Alle Menüs sind einfache Listen mit Häkchen. Spuren, die der Browser nicht kann, werden ohne Zutun umgewandelt und sind mit einer kleinen Plakette gekennzeichnet; was nicht geht, ist ausgegraut und sagt warum.</div>
+    <div class="note"><b>Menüs.</b> Alle Menüs sind einfache Listen mit Häkchen. Tonspuren, die der Browser nicht kann, werden ohne Zutun in AAC umgewandelt und sind mit einer kleinen Plakette gekennzeichnet. Die vorgewählte Spur folgt der Spracheinstellung. Bilduntertitel sind ausgegraut („nicht unterstützt“).</div>
     <div class="gal" id="f-menus"></div>
   </section>
 
@@ -120,14 +120,17 @@ body{padding-bottom:60px}
     <div class="panel set" style="max-width:700px">
       <div class="panel-head"><span class="mini-icon">▶</span><h2>Player</h2><span class="sub">Interner Player in der Bibliothek</span><span class="spacer"></span><button class="primary" style="width:auto">Speichern</button></div>
       <div class="sheet">
-        <label class="chk"><input class="check" type="checkbox" checked> Umwandeln erlauben, wenn der Browser eine Datei nicht direkt abspielen kann</label>
-        <div class="fields" style="grid-template-columns:repeat(3,minmax(0,1fr))">
-          <div class="field"><label>Höchste Auflösung beim Umwandeln</label><select><option>480p</option><option selected>720p</option><option>1080p</option></select></div>
-          <div class="field"><label>Qualität (CRF, kleiner = besser)</label><input value="24"></div>
-          <div class="field"><label>Gleichzeitige Umwandlungen</label><input value="1" disabled></div>
+        <label class="chk"><input class="check" type="checkbox" checked> Umwandeln erlauben, wenn der Browser das Video nicht kann</label>
+        <div class="fields" style="grid-template-columns:repeat(2,minmax(0,1fr))">
+          <div class="field"><label>Bevorzugte Tonsprache</label><input placeholder="z. B. deu, eng (leer: Vorgabe der Datei)" value="deu, eng"></div>
+          <div class="field"><label>Bevorzugte Untertitelsprache</label><input placeholder="z. B. deu (leer: keine, außer erzwungene)" value=""></div>
         </div>
-        <p class="help" style="margin:0">Umwandeln läuft mit niedrigster Priorität und wenigen Kernen, solange Rip, Konvertierung oder Übertragung laufen. Ohne Umwandlung werden nur Dateien abgespielt, die der Browser direkt oder nach Remux (Video unverändert, Ton nach AAC) kann.</p>
-        <div class="empty" style="padding:8px 0;text-align:left;font-size:11px">Dieser Rechner: ffmpeg 7.1 · H.264 (x264) · VAAPI nicht verfügbar · Tonemapping für HDR verfügbar</div>
+        <div class="fields" style="grid-template-columns:repeat(2,minmax(0,1fr))">
+          <div class="field"><label>Höchste Auflösung beim Umwandeln</label><select><option selected>Original</option><option>1080p</option><option>720p</option><option>480p</option></select></div>
+          <div class="field"><label>Qualität beim Umwandeln (CRF, kleiner = besser)</label><input value="24"></div>
+        </div>
+        <p class="help" style="margin:0">Es wird möglichst die Originaldatei abgespielt. Umgewandelt wird nur, wenn der Browser das Video nicht kann (z. B. MPEG-2, VC-1), dann mit niedrigster Priorität und wenigen Kernen, solange Rip, Konvertierung oder Übertragung laufen. Sprachen als Liste in Rangfolge (deu, eng); leer bei Ton nimmt die Sprachliste aus „Allgemein“, sonst die Vorgabe der Datei.</p>
+        <div class="empty" style="padding:8px 0;text-align:left;font-size:11px">Dieser Rechner: ffmpeg 7.1 · H.264 (x264) · Tonemapping für HDR verfügbar</div>
       </div>
     </div>
   </section>
@@ -140,8 +143,8 @@ const chapters=[['Kapitel 1',0],['Kapitel 2','8:12'],['Kapitel 3','17:40'],['Kap
 const notesHtml=(ns)=>ns&&ns.length?`<div class="player-notes">${ns.map(n=>`<div class="player-note ${n.k||''}">${ic(n.i||'info')}<div class="grow">${n.t}</div>${n.b?`<button>${n.b}</button>`:''}<button class="x" aria-label="Schließen">×</button></div>`).join('')}</div>`:'';
 const opt=(l,s,o={})=>`<button class="player-opt" role="menuitemradio" aria-checked="${!!o.on}" ${o.dis?'disabled':''}><span class="lbl">${l}${s?`<small>${s}</small>`:''}</span>${o.tag?`<span class="st ${o.tagk||''}">${o.tag}</span>`:''}</button>`;
 const MENUS={
- tracks:()=>`<div class="player-menu" role="menu"><h4>Tonspur</h4>${opt('Deutsch – DTS-HD 5.1','wird in AAC Stereo umgewandelt',{on:1,tag:'Remux'})}${opt('English – TrueHD 7.1','wird in AAC Stereo umgewandelt',{tag:'Remux'})}${opt('Deutsch – Audiodeskription, AC3 2.0','wird in AAC umgewandelt',{tag:'Remux'})}<h4>Untertitel</h4>${opt('Aus','')}${opt('Deutsch','SRT · Text',{on:1})}${opt('English','SRT · Text')}${opt('Deutsch – erzwungen','PGS · Bildspur, nicht als Text möglich',{dis:1,tag:'Bild',tagk:'warn'})}${opt('Deutsch (PGS) einbrennen','Video wird umgewandelt (Transkodierung)',{tag:'rechnet',tagk:'warn'})}</div>`,
- mode:()=>`<div class="player-menu" role="menu"><h4>Wiedergabe</h4>${opt('Automatisch','Direkt, Remux oder Umwandeln – je nach Datei',{on:1})}${opt('Immer umwandeln','kleiner und ruckelfrei bei langsamem Netz',{})}<h4>Qualität beim Umwandeln</h4>${opt('Niedrig · 480p','')}${opt('Mittel · 720p','',{on:1})}${opt('Hoch · 1080p','')}<h4>Abspielen auf</h4>${opt('Dieser Rechner (vierstein)','4 Kerne · Rip läuft, Wiedergabe mit niedriger Priorität',{on:1})}${opt('maintux','32 Threads · frei – empfohlen zum Umwandeln',{tag:'schneller',tagk:'ok'})}<h4>Geschwindigkeit</h4>${opt('0,75×','')}${opt('1×','',{on:1})}${opt('1,25×','')}${opt('1,5×','')}${opt('2×','')}</div>`,
+ tracks:()=>`<div class="player-menu" role="menu"><h4>Tonspur</h4>${opt('Deutsch – DTS-HD 5.1','wird in AAC Stereo umgewandelt',{on:1,tag:'Remux'})}${opt('English – TrueHD 7.1','wird in AAC Stereo umgewandelt',{tag:'Remux'})}${opt('Deutsch – Audiodeskription, AC3 2.0','wird in AAC umgewandelt',{tag:'Remux'})}<h4>Untertitel</h4>${opt('Aus','')}${opt('Deutsch','SRT · Text',{on:1})}${opt('English','SRT · Text')}${opt('Deutsch – erzwungen','PGS · Bilduntertitel werden nicht unterstützt',{dis:1,tag:'nicht unterstützt',tagk:'warn'})}</div>`,
+ mode:()=>`<div class="player-menu" role="menu"><h4>Geschwindigkeit</h4>${opt('0,75×','')}${opt('1×','',{on:1})}${opt('1,25×','')}${opt('1,5×','')}${opt('2×','')}<hr><h4>So wird abgespielt</h4><p class="help" style="margin:2px 10px 8px"><b style="color:var(--text)">Remux</b> – Video unverändert, Ton (DTS-HD) wird in AAC umgewandelt. Eine andere Tonspur oder ein Sprung außerhalb des Gepufferten startet kurz neu.</p></div>`,
  keys:()=>`<div class="player-menu" role="menu"><h4>Tastenkürzel</h4><div class="player-keys"><kbd>Leertaste</kbd><span>Wiedergabe / Pause (auch K)</span><kbd>← →</kbd><span>10 s zurück / vor (mit Umschalt 60 s)</span><kbd>↑ ↓</kbd><span>Lautstärke</span><kbd>M</kbd><span>Ton aus</span><kbd>F</kbd><span>Vollbild (auch Doppelklick)</span><kbd>C</kbd><span>Untertitel an/aus</span><kbd>A</kbd><span>nächste Tonspur</span><kbd>B N</kbd><span>Kapitel zurück / vor</span><kbd>0–9</kbd><span>an 0–90 % springen</span><kbd>Esc</kbd><span>Schließen</span></div></div>`,
  chapters:()=>`<div class="player-menu" role="menu"><h4>Kapitel</h4>${chapters.map((c,i)=>`<button class="player-chap" ${i==4?'aria-current="true"':''}><time>${c[1]}</time><span>${c[0]}</span></button>`).join('')}</div>`
 };
@@ -170,7 +173,7 @@ function player(o={}){
      </div>
    </div>${o.menu?MENUS[o.menu]():''}</div>`;
 }
-const modeSt={direct:'<span class="st ok">Direkt</span>',remux:'<span class="st">Remux</span>',trans:'<span class="st warn">Transkodiert 720p</span>'};
+const modeSt={direct:'<span class="st ok">Direkt</span>',remux:'<span class="st">Remux</span>',trans:'<span class="st warn">Transkodiert</span>'};
 function win(o){
   const ch=!o.noch;
   return `<div class="player-window ${ch?'':'nochapters'}" role="dialog" aria-label="Player" style="${o.style||''}">
@@ -185,7 +188,7 @@ const backdrop=(inner)=>`<div class="bd">${inner}</div>`;
 
 // --- Reiter A: Überlagerung
 $('#f-over1').innerHTML=backdrop(win({state:'playing',mode:'remux',subs:'Zweite Zeile mit Umlauten: äöü ß',cc:1,notes:[{k:'',i:'info',t:'<b>Remux:</b> Das Video wird unverändert durchgereicht, nur der Ton (DTS-HD) wird in AAC umgewandelt. Springen im nicht Gepufferten startet kurz neu.'}]}));
-$('#f-over2').innerHTML=`<div style="display:grid;gap:22px">${win({state:'paused',mode:'trans',p:.12,b:.2,t:'14:02',notes:[{k:'warn',i:'warn',t:'<b>Wird umgewandelt</b> (MPEG-2 → H.264, 720p), weil der Browser MPEG-2 nicht abspielen kann. Gerade läuft eine Konvertierung: ffmpeg nutzt nur 2 Kerne mit niedrigster Priorität, die Wiedergabe kann ruckeln.',b:'Auf maintux abspielen'}],dot:1,title:'Beispiel DVD (2005).mkv',dir:'Beispiel DVD (2005)',noch:1})}${player({fs:1,state:'playing',subs:'Hallo, das ist ein Untertitel.',cc:1,noch:0,notes:[]})}</div>`;
+$('#f-over2').innerHTML=`<div style="display:grid;gap:22px">${win({state:'paused',mode:'trans',p:.12,b:.2,t:'14:02',notes:[{k:'warn',i:'warn',t:'<b>Wird umgewandelt</b> (MPEG-2 → H.264), weil der Browser MPEG-2 nicht abspielen kann. Gerade läuft eine Konvertierung: ffmpeg nutzt nur 2 Kerne mit niedrigster Priorität, die Wiedergabe kann ruckeln.',b:''}],dot:1,title:'Beispiel DVD (2005).mkv',dir:'Beispiel DVD (2005)',noch:1})}${player({fs:1,state:'playing',subs:'Hallo, das ist ein Untertitel.',cc:1,noch:0,notes:[]})}</div>`;
 
 // --- Reiter B: Bibliothek
 $('#f-lib').innerHTML=`<div class="fl"><b style="padding:6px 8px">Filter</b><span class="a">Alle</span><span>Original</span><span>Konvertiert</span><span>In Arbeit</span><span>Fehler</span><b style="padding:10px 8px 0">Ordner</b><span>Die Reise nach Norden (2019)</span><span>The Walking Dead – Disc 1</span><span class="ph">PF: Filter und Ordner</span></div>
@@ -198,15 +201,15 @@ $('#f-lib').innerHTML=`<div class="fl"><b style="padding:6px 8px">Filter</b><spa
   <div class="d"><b>Die Reise nach Norden (2019).mkv</b><span>1:58:20 · 14,2 GB · H.264 1080p · DTS-HD 5.1, AC3 2.0 · 2 Untertitel · 12 Kapitel</span><div class="ph">PF: weitere Angaben, „Einsparung mit Preset …“, Aktionen (Konvertieren, Einsortieren, Umbenennen, Löschen)</div></div></div>`;
 
 // --- Reiter Menüs
-$('#f-menus').innerHTML=['tracks','mode','keys','chapters'].map(m=>`<div style="width:360px"><div class="cap"><b>${{tracks:'Ton & Untertitel',mode:'Wiedergabe-Einstellungen',keys:'Tastenkürzel (?)',chapters:'Kapitel (schmaler Player)'}[m]}</b></div><div style="position:relative;height:${m=='mode'?'600':m=='chapters'?'520':'330'}px">${MENUS[m]().replace('class="player-menu"','class="player-menu" style="position:absolute;left:0;right:auto;bottom:auto;top:0;width:340px;max-height:none"')}</div></div>`).join('');
+$('#f-menus').innerHTML=['tracks','mode','keys','chapters'].map(m=>`<div style="width:360px"><div class="cap"><b>${{tracks:'Ton & Untertitel',mode:'Zahnrad: Geschwindigkeit und Info',keys:'Tastenkürzel (?)',chapters:'Kapitel (schmaler Player)'}[m]}</b></div><div style="position:relative;height:${m=='mode'?'600':m=='chapters'?'520':'330'}px">${MENUS[m]().replace('class="player-menu"','class="player-menu" style="position:absolute;left:0;right:auto;bottom:auto;top:0;width:340px;max-height:none"')}</div></div>`).join('');
 
 // --- Reiter Hinweise
 const small=(o)=>`<div style="width:460px">${player({alone:true,noch:1,...o})}</div>`;
 const nf=[
- ['Transkodierung (MPEG-2/VC-1, Browser kann es nicht)',{state:'playing',notes:[{k:'warn',i:'warn',t:'<b>Wird umgewandelt</b> (MPEG-2 → H.264, 720p). Das braucht Rechenleistung dieses Rechners.',b:'Auf maintux'}]}],
+ ['Transkodierung (MPEG-2/VC-1, Browser kann es nicht)',{state:'playing',notes:[{k:'warn',i:'warn',t:'<b>Wird umgewandelt</b> (MPEG-2 → H.264) in Originalgröße, weil der Browser MPEG-2 nicht kann. Das braucht Rechenleistung dieses Rechners; ffmpeg läuft mit niedrigster Priorität, solange ein Rip läuft.'}]}],
  ['Datei wird gerade konvertiert / ist gesperrt',{state:'paused',notes:[{k:'warn',i:'warn',t:'<b>Diese Datei wird gerade konvertiert</b> (Rechner maintux). Du kannst sie ansehen; sie kann sich dabei noch ändern oder verschwinden.'}]}],
- ['Zweite Umwandlung nicht möglich',{state:'error',nopic:1,notes:[],fail:['Auf diesem Rechner läuft schon eine Umwandlung','Ein anderer Browser schaut gerade ein umgewandeltes Video auf vierstein. Du kannst warten oder die Umwandlung auf <b>maintux</b> machen lassen.<br>']}],
- ['Bilduntertitel (nur Hinweis, Menü zeigt Einbrennen)',{state:'playing',cc:0,notes:[{k:'',i:'info',t:'Die Untertitel „Deutsch (PGS)“ sind Bilder und können nicht als Text angezeigt werden. Zum <b>Einbrennen</b> muss das Video umgewandelt werden.',b:'Einbrennen'}]}],
+ ['Zweite Umwandlung nicht möglich',{state:'error',nopic:1,notes:[],fail:['Auf diesem Rechner läuft schon eine Umwandlung','Ein anderer Browser schaut gerade ein umgewandeltes Video auf vierstein. Bitte warte, bis er fertig ist, und versuche es dann noch einmal.<br>']}],
+ ['Bilduntertitel (nur Hinweis, im Menü ausgegraut)',{state:'playing',cc:0,notes:[{k:'',i:'info',t:'Die Untertitel „Deutsch (PGS)“ sind Bilder. Bilduntertitel werden nicht unterstützt; Textuntertitel (SRT, ASS, …) gehen.'}]}],
  ['Startet (Neustart nach Sprung / Warten auf ffmpeg)',{state:'loading',wait:'Starte bei 1:12:30 …',p:.61,b:.61,nopic:1}],
  ['Nicht abspielbar (Disc-Abbild)',{state:'error',nopic:1,p:0,b:0,t:'0:00',d:'–',fail:['.iso-Abbilder lassen sich nicht abspielen','Entpacke oder rippe den Titel als MKV, dann ist er hier abspielbar.<br>']}],
  ['Verbindung verloren, Neustart an gleicher Stelle',{state:'loading',wait:'Verbindung unterbrochen – setze bei 36:48 fort …',notes:[{k:'err',i:'warn',t:'Der Strom wurde beendet (Leerlauf oder Server-Neustart).'}]}],
@@ -219,7 +222,7 @@ const phone=(inner)=>`<div class="dev"><div class="scr">${inner}</div></div>`;
 $('#f-phone').innerHTML=
  `<div><div class="cap"><b>Überlagerung</b> (läuft, Remux)</div>${phone(`<div class="player-overlay" style="position:absolute">${win({state:'playing',mode:'remux',subs:'Zweite Zeile mit Umlauten',cc:1,notes:[]})}</div>`)}</div>`+
  `<div><div class="cap"><b>Detailbereich</b> der Bibliothek</div>${phone(`<div class="shell-fake" style="padding:12px;font-size:12px;color:var(--muted);border-bottom:1px solid var(--line)">← Bibliothek &nbsp; <b style="color:var(--text)">Die Reise nach Norden (2019).mkv</b></div>${player({alone:false,state:'paused',notes:[{k:'',i:'info',t:'Remux: Ton DTS-HD → AAC'}],p:0,b:0,t:'0:00'}).replace('class="player ','class="player alone ').replace('alone ','')}<div class="sheet"><b style="color:var(--text)">Die Reise nach Norden (2019).mkv</b><span>1:58:20 · 14,2 GB · H.264 1080p · DTS-HD 5.1 · 12 Kapitel</span><div class="ph">PF: weitere Angaben und Aktionen</div></div>`)}</div>`+
- `<div><div class="cap"><b>Menü</b> als Blatt (Ton &amp; Untertitel; Einstellungen ebenso)</div>${phone(`<div class="player-overlay" style="position:absolute">${win({state:'paused',mode:'trans',menu:'tracks',cc:1,notes:[{k:'warn',i:'warn',t:'<b>Wird umgewandelt</b> (720p).'}]}).replace('class="player-menu"','class="player-menu" style="position:absolute"')}</div>`)}</div>`;
+ `<div><div class="cap"><b>Menü</b> als Blatt (Ton &amp; Untertitel; Zahnrad ebenso)</div>${phone(`<div class="player-overlay" style="position:absolute">${win({state:'paused',mode:'trans',menu:'tracks',cc:1,notes:[{k:'warn',i:'warn',t:'<b>Wird umgewandelt</b> (MPEG-2 → H.264).'}]}).replace('class="player-menu"','class="player-menu" style="position:absolute"')}</div>`)}</div>`;
 
 // --- Reiter
 const TABS=[['over','Überlagerung'],['lib','Im Detailbereich (Bibliothek)'],['menu','Menüs'],['note','Hinweise & Zustände'],['phone','Handy 375 px'],['set','Einstellungen']];
