@@ -1,56 +1,113 @@
-// Einstellungen (vorerst als Dialog). Abschnitte melden sich über registerSettingsSection an; PB ersetzt den Dialog durch eine Seite.
-import { $, S, ago, api, esc, toast } from './core.js';
-import { getSettingsSections, on, registerSettingsSection } from './registry.js';
+// Einstellungsseite (Ansicht „einstellungen“): links die Abschnittsliste, rechts der gewählte Abschnitt mit eigenem Speichern-Knopf.
+// Abschnitte melden sich über registerSettingsSection an (Allgemein/Key/Konvertierung: settings-general.js, Rechner/Medien/…: andere Pakete).
+// Ungespeicherte Änderungen erkennt die Seite am Vergleich von collect() mit dem Stand beim Rendern (input/change im Abschnitt).
+import { $, S, api, esc, toast } from './core.js';
+import { emit, getSettingsSections, on, onState, registerView, routeRest } from './registry.js';
 
-document.body.insertAdjacentHTML('beforeend', `<dialog id="dlg">
-  <form method="dialog" id="setform">
-    <h3>Einstellungen</h3>
-    <div id="setsections" style="display:contents"></div>
-    <div class="rowend"><button type="button" class="secondary" id="s-cancel">Schließen</button><button type="submit" class="primary" style="width:auto" id="s-save" value="save">Speichern</button></div>
-  </form>
-</dialog>`);
-const dlg = $('#dlg');
+const panes = {};            // Abschnitts-Kennung → {s, tab, el, body, base, sig, rendered, dirty}
+let root = null, active = null;
+const lsGet = () => { try{ return localStorage.getItem('setSection'); }catch{ return null; } };
+const lsSet = v => { try{ localStorage.setItem('setSection', v); }catch{} };
+// „convert-basic“ (alte Felder) ist nur ein Ersatz, solange kein Abschnitt „convert“ (PF) angemeldet ist
+const visible = () => { const all = getSettingsSections(); return all.filter(s => !(s.id === 'convert-basic' && all.some(x => x.id === 'convert'))); };
+const anyDirty = () => Object.values(panes).some(p => p.dirty);
 
-// Abschnitt „Allgemein“: die heutigen Felder (Namensraum general) samt MakeMKV-Key
-registerSettingsSection({
-  id: 'general', label: 'Allgemein', order: 10,
-  render(el, s){
-    el.innerHTML = `    <label class="chk"><input class="check" type="checkbox" id="s-auto_scan"> Eingelegte Disc automatisch analysieren</label>
-    <label class="chk"><input class="check" type="checkbox" id="s-auto_eject"> Nach erfolgreichem Rip automatisch auswerfen</label>
-    <div class="two field"><div><label for="s-minlength">Minimale Titellänge (Sekunden)</label><input type="number" id="s-minlength" min="0" step="10"></div>
-      <div><label for="s-conv_segments">Segmente pro Film (0 = automatisch)</label><input type="number" id="s-conv_segments" min="0" max="12" step="1"></div></div>
-    <div class="two field"><div><label for="s-audio_langs">Audio-Sprachen behalten</label><input type="text" id="s-audio_langs" placeholder="alle – z. B. deu,eng"></div>
-      <div><label for="s-sub_langs">Untertitel behalten</label><input type="text" id="s-sub_langs" placeholder="alle – z. B. deu"></div></div>
-    <p class="help" style="margin:-6px 0 0">3-Buchstaben-Sprachcodes (deu, eng, fra …). Video und Spuren ohne Sprachangabe bleiben immer erhalten. Gilt für den nächsten Rip.
-      Segmente: x265 nutzt pro Prozess nur ca. 4–8 Kerne – bei „0“ entscheidet die App vor jeder Konvertierung selbst nach freien Kernen und RAM; 1 = nie teilen.</p>
-    <div class="two field"><div><label for="s-conv_parallel">Gleichzeitige Dateien (Konvertierung)</label><input type="number" id="s-conv_parallel" min="1" max="8" step="1"></div>
-      <div><label for="s-key">Eigener MakeMKV-Key (optional)</label><input type="text" id="s-key" placeholder="leer = öffentlicher Beta-Key"></div></div>
-    <div class="muted" style="font-size:11px" id="keystate"></div>`;
-    $('#s-auto_scan').checked = s.auto_scan; $('#s-auto_eject').checked = s.auto_eject; $('#s-minlength').value = s.minlength;
-    $('#s-conv_parallel').value = s.conv_parallel; $('#s-conv_segments').value = s.conv_segments;
-    $('#s-audio_langs').value = s.audio_langs; $('#s-sub_langs').value = s.sub_langs; $('#s-key').value = s.key;
-    const k = S.key;
-    $('#keystate').innerHTML = k.custom ? 'Eigener Key wird verwendet.' : k.beta ? `Öffentlicher Beta-Key aktiv (geholt ${ago(k.fetched)}). <button type="button" class="secondary" id="keyref">Neu holen</button>` : `Kein Key vorhanden${k.error ? ': '+esc(k.error) : ''}. <button type="button" class="secondary" id="keyref">Beta-Key holen</button>`;
-    const kr = $('#keyref'); if(kr) kr.onclick = async () => { kr.disabled = true; try{ await api('/api/key/refresh'); }catch{} dlg.close(); };
-  },
-  collect(){
-    return { general: { auto_scan: $('#s-auto_scan').checked, auto_eject: $('#s-auto_eject').checked, minlength: +$('#s-minlength').value || 0,
-      conv_parallel: +$('#s-conv_parallel').value || 1, conv_segments: Math.max(0, +$('#s-conv_segments').value || 0),
-      audio_langs: $('#s-audio_langs').value, sub_langs: $('#s-sub_langs').value, key: $('#s-key').value } };
-  },
-});
-
-function openSettings(){
-  if(!S) return;
-  $('#setsections').innerHTML = getSettingsSections().map(s => `<div class="set-section" data-section="${esc(s.id)}"></div>`).join('');
-  getSettingsSections().forEach(s => s.render($(`#setsections [data-section="${s.id}"]`), S.settings));
-  dlg.showModal();
+function isDirty(p){
+  if(p.base == null) return false;
+  try{ return JSON.stringify(p.s.collect()) !== p.base; }catch{ return false; }
 }
-on('settings:open', openSettings);
-$('#s-cancel').addEventListener('click', () => dlg.close());
-$('#setform').addEventListener('submit', async () => {
-  const body = {};
-  for(const s of getSettingsSections()) for(const [ns, vals] of Object.entries(s.collect())) body[ns] = {...(body[ns] || {}), ...vals};
-  await api('/api/settings', 'POST', body);
-  toast('Einstellungen gespeichert ✓');
+function update(p){
+  const was = anyDirty(), d = isDirty(p);
+  p.dirty = d;
+  $('.set-dot', p.tab).hidden = !d;
+  const st = $('.set-state', p.el); st.textContent = d ? '● Ungespeicherte Änderungen' : 'Gespeichert'; st.classList.toggle('dirty', d);
+  $('[data-act=save]', p.el).disabled = !d; $('[data-act=discard]', p.el).disabled = !d;
+  if(was !== anyDirty()) emit('settings:dirty', anyDirty());
+}
+function rebase(p){ try{ p.base = JSON.stringify(p.s.collect()); }catch{ p.base = null; } update(p); }
+
+async function renderPane(p, settings){
+  p.sig = JSON.stringify(settings);
+  try{ await p.s.render(p.body, settings); }
+  catch(e){ console.error(`Einstellungen ${p.s.id}:`, e); p.body.textContent = 'Dieser Abschnitt konnte nicht geladen werden.'; }
+  await Promise.resolve();
+  rebase(p);
+}
+async function save(p){
+  const btn = $('[data-act=save]', p.el); btn.disabled = true;
+  try{
+    const res = await api('/api/settings', 'POST', p.s.collect());
+    toast(`${p.s.label}: gespeichert ✓`);
+    await renderPane(p, res);
+  }catch{ /* api() zeigt den Fehler an */ }
+  update(p);
+}
+
+function buildPane(s){
+  const tab = document.createElement('a');
+  tab.className = 'set-tab'; tab.id = 'settab-' + s.id; tab.href = '#/einstellungen/' + s.id; tab.dataset.sec = s.id;
+  tab.setAttribute('role', 'tab'); tab.setAttribute('aria-controls', 'set-' + s.id);
+  tab.innerHTML = `<span class="nav-ico" aria-hidden="true">${esc(s.icon || '•')}</span>${esc(s.label)}<span class="set-dot" hidden title="Ungespeicherte Änderungen"></span>`;
+  const el = document.createElement('section');
+  el.className = 'panel set-card'; el.id = 'set-' + s.id; el.hidden = true; el.setAttribute('role', 'tabpanel'); el.setAttribute('aria-labelledby', tab.id);
+  el.innerHTML = `<div class="panel-head"><div><h2>${esc(s.label)}</h2>${s.description ? `<div class="sub">${esc(s.description)}</div>` : ''}</div></div>
+    <div class="set-body"></div>
+    <div class="set-foot"><span class="set-state" role="status">Gespeichert</span><span class="spacer"></span>
+      <button type="button" class="secondary" data-act="discard" disabled>Verwerfen</button><button type="button" class="primary" data-act="save" disabled>Speichern</button></div>`;
+  const p = panes[s.id] = {s, tab, el, body: $('.set-body', el), base: null, sig: '', rendered: false, dirty: false};
+  const check = () => update(p);
+  el.addEventListener('input', check); el.addEventListener('change', check);
+  const lock = () => { if(!p.dirty && p.rendered) rebase(p); };      // Stand vor der ersten Bedienung festhalten (falls ein Abschnitt später fertig rendert)
+  for(const ev of ['focusin', 'pointerdown', 'keydown']) el.addEventListener(ev, lock, true);
+  el.addEventListener('click', e => {
+    const b = e.target.closest('[data-act]'); if(!b) return;
+    if(b.dataset.act === 'save') save(p); else if(S) renderPane(p, S.settings);
+  });
+  return p;
+}
+
+// Abschnittsliste und Felder aufbauen bzw. um neu angemeldete Abschnitte ergänzen
+function sync(){
+  const list = visible(), nav = $('#setnav'), host = $('#setpanes');
+  for(const s of list) if(!panes[s.id]){ const p = buildPane(s); nav.append(p.tab); host.append(p.el); }
+  for(const [id, p] of Object.entries(panes)) if(!list.some(s => s.id === id)){ p.tab.hidden = true; p.el.hidden = true; }
+  list.forEach(s => { nav.append(panes[s.id].tab); host.append(panes[s.id].el); });          // Reihenfolge nach order
+  const ids = list.map(s => s.id);
+  if(!ids.includes(active)) select(null);
+}
+function select(id){
+  const ids = visible().map(s => s.id);
+  id = ids.includes(id) ? id : ids.includes(lsGet()) ? lsGet() : ids[0];
+  active = id;
+  for(const i of ids){ const p = panes[i], on_ = i === id; p.el.hidden = !on_; p.tab.setAttribute('aria-selected', on_); p.tab.tabIndex = on_ ? 0 : -1; }
+}
+function ensure(){          // Abschnitte rendern, sobald der Status da ist (und erneut, wenn sich die Einstellungen geändert haben und nichts ungespeichert ist)
+  if(!S || !root) return;
+  for(const p of Object.values(panes)) if(!p.rendered){ p.rendered = true; renderPane(p, S.settings); }
+}
+
+registerView({
+  id: 'einstellungen', label: 'Einstellungen', icon: '⚙', order: 900,
+  mount(el){
+    if(!el.dataset.built){
+      el.dataset.built = '1'; root = el;
+      el.innerHTML = `<div class="page"><div class="page-head"><h1>Einstellungen</h1><p>Jeder Abschnitt wird einzeln gespeichert.</p></div>
+        <div class="set-layout"><div class="panel set-nav" id="setnav" role="tablist" aria-orientation="vertical" aria-label="Einstellungsabschnitte"></div><div id="setpanes"></div></div></div>`;
+      $('#setnav').addEventListener('keydown', e => {
+        const tabs = [...document.querySelectorAll('#setnav .set-tab')].filter(t => !t.hidden), i = tabs.indexOf(document.activeElement);
+        if(i < 0) return;
+        const to = {ArrowDown: tabs[(i + 1) % tabs.length], ArrowRight: tabs[(i + 1) % tabs.length], ArrowUp: tabs[(i - 1 + tabs.length) % tabs.length],
+          ArrowLeft: tabs[(i - 1 + tabs.length) % tabs.length], Home: tabs[0], End: tabs[tabs.length - 1]}[e.key];
+        if(to){ e.preventDefault(); tabs.forEach(t => { t.tabIndex = t === to ? 0 : -1; }); to.focus(); }
+        else if(e.key === ' '){ e.preventDefault(); tabs[i].click(); }
+      });
+    }
+    sync(); select(routeRest().split('/')[0]); ensure();
+    // Beim erneuten Öffnen: unveränderte Abschnitte mit dem aktuellen Stand neu zeichnen
+    if(S) for(const p of Object.values(panes)) if(p.rendered && !p.dirty && p.sig !== JSON.stringify(S.settings)) renderPane(p, S.settings);
+  },
 });
+on('route', rest => { const id = rest.split('/')[0]; if(root && !root.hidden){ select(id); if(panes[id]) lsSet(id); } });
+on('settings:open', () => { location.hash = '#/einstellungen'; });
+onState(ensure);
+addEventListener('beforeunload', e => { if(anyDirty()){ e.preventDefault(); e.returnValue = ''; } });

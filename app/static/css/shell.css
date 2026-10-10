@@ -1,19 +1,87 @@
-/* Rahmen: Kopfzeile, Laufwerks-Chips, Menü, Hinweisleisten (Besitzer: PB) */
-.topbar{height:62px;display:flex;align-items:center;gap:24px;padding:0 24px;border-bottom:1px solid var(--line);background:#0d121a;position:sticky;top:0;z-index:5}
+/* Rahmen: Kopfzeile, Navigation, Laufwerksleiste, Einstellungsseite, Hinweisleisten (Besitzer: PB) */
+.topbar{height:62px;display:flex;align-items:center;gap:22px;padding:0 24px;border-bottom:1px solid var(--line);background:#0d121a;position:sticky;top:0;z-index:5}
 .brand{display:flex;align-items:center;gap:10px;font-size:20px;font-weight:750;white-space:nowrap;letter-spacing:-.5px}
 .brand-mark{width:27px;height:27px;border:5px solid var(--red);border-radius:50%;position:relative;flex:none}
 .brand-mark:after{content:"";position:absolute;width:7px;height:7px;right:-2px;top:-3px;border-radius:50%;background:var(--red)}
-.drives{display:flex;gap:8px;min-width:0;overflow-x:auto}
+.brand em{font-style:normal;font-weight:450;color:#a9bdd8}
+.nav{flex:1;min-width:0;align-self:stretch;display:flex}
+.nav-list{display:flex;align-items:stretch;gap:2px;flex:1;min-width:0;overflow-x:auto;scrollbar-width:none}
+.nav-list::-webkit-scrollbar{display:none}
+.nav-tab{position:relative;display:flex;align-items:center;gap:9px;padding:3px 14px 0;border-top:3px solid transparent;border-bottom:3px solid transparent;color:#b8c5d8;text-decoration:none;font-weight:620;white-space:nowrap}
+.nav-tab:hover{color:#fff;background:#121a25}
+.nav-tab[aria-selected=true]{color:#fff;border-bottom-color:var(--red)}
+.nav-tab:focus-visible{outline:2px solid var(--red);outline-offset:-4px;border-radius:6px}
+.nav-ico{font-size:16px;color:#8497b5;line-height:1}
+.nav-tab[aria-selected=true] .nav-ico{color:var(--red)}
+.nav-tab.end{margin-left:auto}
+.nav-badge{min-width:19px;height:19px;padding:0 6px;border-radius:99px;background:var(--red);color:#fff;font-size:11px;font-weight:750;display:grid;place-items:center}
+.nav-more{background:transparent;border:0;border-top:3px solid transparent;font:inherit;font-weight:620;display:none}
+.nav-more[aria-expanded=true]{color:#fff}
+.drivebar{display:flex;align-items:center;gap:8px 10px;padding:10px 24px;background:#0d121a;border-bottom:1px solid var(--line)}
+.drivebar[hidden]{display:none}
+.drivebar>.lbl{font-size:11px;color:var(--muted);letter-spacing:.06em;text-transform:uppercase;font-weight:650;flex:none}
+.drives{display:flex;flex-wrap:wrap;gap:8px;min-width:0}
 .drive{display:flex;align-items:center;gap:10px;padding:8px 12px;border:1px solid var(--line);border-radius:9px;color:#d9e2f1;background:#121a25;white-space:nowrap;text-align:left}
-.drive.sel{border-color:#3a4a62}
+.drive.sel{border-color:#3a4a62;box-shadow:inset 0 0 0 1px #3a4a62}
 .drive:not(.sel){opacity:.75}
-.top-spacer{flex:1}
-.menuwrap{position:relative}
-.menu{position:absolute;right:0;top:44px;min-width:190px;background:#121a25;border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow);padding:6px;z-index:8}
-.menu button{display:block;width:100%;text-align:left;border:0;background:transparent;color:var(--text);padding:9px 12px;border-radius:7px}
-.menu button:hover{background:#1a2330}
-.menu button.on{color:var(--red);font-weight:650}
 .banner{padding:9px 24px;font-size:12px;border-bottom:1px solid var(--line)}
 .banner.warn{background:#2a2412;color:#f0c36a}
+/* Seiten und Einstellungen */
+.page{padding:4px 0 0}
+.page-head{margin:0 0 16px}
+.page-head h1{margin:0 0 3px;font-size:20px;letter-spacing:-.3px}
+.page-head p{margin:0;color:var(--muted);font-size:12px}
+.set-layout{display:grid;grid-template-columns:250px minmax(0,1fr);gap:18px;align-items:start}
+.set-nav{position:sticky;top:80px;display:flex;flex-direction:column;gap:2px;padding:8px}
+.set-tab{display:flex;align-items:center;gap:10px;padding:9px 11px;border-radius:8px;color:#c4d0e1;text-decoration:none;white-space:nowrap}
+.set-tab:hover{background:#151d28}
+.set-tab[aria-selected=true]{background:#1a2330;color:#fff;font-weight:650;box-shadow:inset 3px 0 0 var(--red)}
+.set-tab:focus-visible{outline:2px solid var(--red);outline-offset:-2px}
+.set-tab .nav-ico{width:18px;text-align:center}
+.set-dot{width:8px;height:8px;border-radius:50%;background:var(--amber);margin-left:auto;flex:none}
+.set-card .set-body{padding:18px 20px;display:grid;gap:14px;max-width:760px}
+.set-foot{display:flex;align-items:center;gap:10px;padding:12px 20px;border-top:1px solid var(--line);background:var(--panel2)}
+.set-foot .spacer{flex:1}
+.set-foot .primary{width:auto;padding:8px 18px}
+.set-state{font-size:12px;color:var(--muted)}
+.set-state.dirty{color:#f0c36a}
+.set-note{font-size:11px;color:var(--muted);border:1px dashed #33445c;border-radius:8px;padding:8px 10px}
+.set-card h3{margin:0;font-size:13px}
+.set-body label{display:block;font-size:11px;color:var(--muted);margin-bottom:5px}
+.set-body input[type=text],.set-body input[type=number],.set-body select{width:100%;height:34px;background:#0c121a;color:var(--text);border:1px solid #2b3748;border-radius:7px;padding:0 9px}
+.set-row{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--line);border-radius:9px;background:#0e141d;font-size:12px}
+.set-row strong{font-size:13px}.set-row .spacer{flex:1}
+/* Handy: Tab-Leiste unten, Chips als Streifen, Einstellungen untereinander */
+@media(max-width:700px){
+  .topbar{padding:0 13px;gap:12px;height:54px}.brand{font-size:17px}
+  .nav{position:fixed;left:0;right:0;bottom:0;z-index:6;background:#0d121a;border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom)}
+  .nav-list{justify-content:space-around;overflow:visible}
+  .nav-tab{flex:1;flex-direction:column;gap:3px;justify-content:center;padding:8px 4px 7px;min-height:56px;font-size:11px;border-bottom:0}
+  .nav-tab[aria-selected=true]{border-top-color:var(--red)}
+  .nav-tab.end{margin-left:0}
+  .nav-more{display:flex}.nav-tab.extra{display:none}
+  .nav-ico{font-size:20px}
+  .nav-badge{position:absolute;top:4px;left:calc(50% + 6px);min-width:17px;height:17px;font-size:10px}
+  .drivebar{padding:8px 13px;overflow-x:auto;scrollbar-width:none}.drivebar::-webkit-scrollbar{display:none}.drivebar[hidden]{display:none}
+.drivebar>.lbl{display:none}
+  .drives{flex-wrap:nowrap}.drive{font-size:11px;padding:7px 9px}
+  main{padding-bottom:84px}
+  .set-layout{grid-template-columns:1fr;gap:12px}
+  .set-nav{position:static;flex-direction:row;overflow-x:auto;padding:6px;scrollbar-width:none}
+  .set-tab{padding:8px 11px}.set-tab[aria-selected=true]{box-shadow:inset 0 -3px 0 var(--red)}
+  .set-card .set-body{padding:14px}.set-foot{padding:10px 14px;flex-wrap:wrap}
+  .banner{padding:9px 13px}
+}
+.sheet[hidden]{display:none}
+.sheet{position:fixed;left:0;right:0;bottom:56px;z-index:7;background:#121a25;border:1px solid var(--line);border-radius:14px 14px 0 0;padding:8px;box-shadow:0 -10px 35px #0006}
+.sheet a{display:flex;gap:12px;align-items:center;padding:13px 14px;border-radius:9px;color:var(--text);text-decoration:none}
+.sheet .nav-ico{width:24px;text-align:center}
+.sheet a:hover{background:#1a2330}
+/* Zum Inhalt springen, Plakette „ungespeichert“ am Reiter, Hinweisleiste */
+.skip{position:absolute;left:12px;top:-60px;z-index:20;background:var(--red);color:#fff;border:0;border-radius:8px;padding:9px 14px;font-weight:700}
+.skip:focus{top:8px}
+.nav-dot{width:8px;height:8px;border-radius:50%;background:var(--amber);flex:none}
 .banner.err{background:#2c151c;color:#ff8791}
-@media(max-width:700px){.topbar{padding:0 13px;gap:12px}.brand{font-size:17px}.drive{font-size:11px;padding:7px}.drive .pill:not(.online):not(.warnpill):not(.busypill){display:none}.banner{padding:9px 13px}}
+.set-card[hidden]{display:none}
+.nav-badge[hidden],.nav-dot[hidden],.set-dot[hidden]{display:none}
+@media(prefers-reduced-motion:reduce){.nav-tab{transition:none}}
