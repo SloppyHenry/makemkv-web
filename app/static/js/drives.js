@@ -1,5 +1,6 @@
 // Laufwerke aller Rechner: Auswahl, Chips in der Kopfzeile, Fortschrittsfeld. Registriert die Ansicht „Laufwerke“.
 import { $, S, delegate, esc, fmtB, fmtD, hostName, pad, setHtml, ui } from './core.js';
+import { syncSpin } from './jobs-list.js';
 import { buildLayout, isActive, onState, registerPanel, registerView, rerender } from './registry.js';
 
 export const driveUrl = (d, act) => d.host ? `/api/peer/${d.host}/drives/${d.id}/${act}` : `/api/drives/${d.id}/${act}`;
@@ -61,11 +62,31 @@ function renderProgress(d){
     title = {ready:'Disc erkannt', open:'Schublade ist offen', loading:'Laufwerk liest die Disc ein …'}[d.status] || 'Bitte eine DVD oder Blu-ray einlegen';
     line = {empty:'Sie wird automatisch erkannt und analysiert.', open:'Disc einlegen oder Schublade schließen.', ready:'Die Analyse startet gleich.'}[d.status] || '';
   }
-  const mets = [['◉','Geschwindigkeit'],['◴','Laufzeit'],['◷','Restzeit'],['▤','Titel']];
-  setHtml($('#prog'), `<div class="progress-title"><div><h1>${esc(title)}</h1><p class="${lineErr?'err':''}">${esc(line + (line ? remote : ''))}</p></div>
-      ${(pct!==null||cancel) ? `<div class="percent">${pct!==null ? pct+' %' : ''}${cancel ? '<button class="secondary danger" data-act="cancel">Abbrechen</button>' : ''}</div>` : ''}</div>
-    <div class="progress-track ${indet?'indet':''}" role="progressbar" aria-valuenow="${bar}" aria-valuemin="0" aria-valuemax="100" aria-label="Fortschritt"><div class="progress-fill" style="width:${bar}%"></div></div>
-    <div class="metrics">${mets.map(([s,l],i) => `<div class="metric"><span class="symbol">${s}</span><div><strong>${esc(m[i])}</strong><small>${l}</small></div></div>`).join('')}</div>`);
+  paintProgress({title, line: line + (line ? remote : ''), lineErr, pct, bar, indet, cancel, m});
+}
+
+// Das Fortschrittsfeld wird nur einmal aufgebaut; danach ändern sich Text, Balkenbreite und Knopf (Animationen laufen ungestört weiter).
+const METS = [['◉','Geschwindigkeit'],['◴','Laufzeit'],['◷','Restzeit'],['▤','Titel']];
+function buildProgress(el){
+  el.innerHTML = `<div class="progress-title"><div><h1></h1><p></p></div><div class="percent"><span class="pct"></span><button class="secondary danger" data-act="cancel" hidden>Abbrechen</button></div></div>
+    <div class="progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-label="Fortschritt"><div class="progress-fill"></div></div>
+    <div class="metrics">${METS.map(([s,l]) => `<div class="metric"><span class="symbol">${s}</span><div><strong></strong><small>${l}</small></div></div>`).join('')}</div>`;
+  el._r = {h1: el.querySelector('h1'), p: el.querySelector('p'), pctBox: el.querySelector('.percent'), pct: el.querySelector('.pct'), cancel: el.querySelector('[data-act=cancel]'),
+           track: el.querySelector('.progress-track'), fill: el.querySelector('.progress-fill'), mv: [...el.querySelectorAll('.metric strong')]};
+  el._v = {};
+}
+function paintProgress(v){
+  const el = $('#prog'); if(!el.querySelector('.progress-title')) buildProgress(el);
+  const r = el._r, last = el._v, put = (k, val, fn) => { if(last[k] !== val){ last[k] = val; fn(val); } };
+  put('title', v.title, x => r.h1.textContent = x);
+  put('line', v.line, x => r.p.textContent = x);
+  put('err', v.lineErr, x => r.p.classList.toggle('err', x));
+  put('box', (v.pct!==null || v.cancel) ? 1 : 0, x => r.pctBox.hidden = !x);
+  put('pct', v.pct===null ? '' : v.pct + ' %', x => r.pct.textContent = x);
+  put('cancel', v.cancel, x => r.cancel.hidden = !x);
+  put('indet', v.indet, x => { r.track.classList.toggle('indet', x); if(x) syncSpin(r.fill, 1200); });
+  put('bar', v.bar, x => { r.fill.style.width = x + '%'; r.track.setAttribute('aria-valuenow', x); });
+  v.m.forEach((t, i) => put('m' + i, t, x => r.mv[i].textContent = x));
 }
 
 delegate('#drivechips', 'click', (e) => { const b = e.target.closest('[data-drive]'); if(b){ selDrive = b.dataset.drive; ui.sig.titles = ''; ui.sig.action = ''; rerender(); } });
