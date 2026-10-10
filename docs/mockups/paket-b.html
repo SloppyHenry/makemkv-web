@@ -1,0 +1,277 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Mockup PB – Navigation und Einstellungen</title>
+<!-- Mockup Paket PB. Ohne Parameter: Übersicht (Reiter, Szenen als eingebettete Rahmen in fester Breite).
+     Mit ?s=<szene>: eine einzelne Szene in voller Fenstergröße (so sieht die App aus). Die Szenen nutzen die echten CSS-Dateien der App;
+     das CSS unten im <style> ist der Entwurf für css/shell.css. -->
+<link rel="stylesheet" href="../../app/static/css/base.css">
+<link rel="stylesheet" href="../../app/static/css/layout.css">
+<link rel="stylesheet" href="../../app/static/css/components.css">
+<link rel="stylesheet" href="../../app/static/css/jobs.css">
+<style>
+/* ===== Entwurf css/shell.css ===== */
+.topbar{height:62px;display:flex;align-items:center;gap:22px;padding:0 24px;border-bottom:1px solid var(--line);background:#0d121a;position:sticky;top:0;z-index:5}
+.brand{display:flex;align-items:center;gap:10px;font-size:20px;font-weight:750;white-space:nowrap;letter-spacing:-.5px}
+.brand-mark{width:27px;height:27px;border:5px solid var(--red);border-radius:50%;position:relative;flex:none}
+.brand-mark:after{content:"";position:absolute;width:7px;height:7px;right:-2px;top:-3px;border-radius:50%;background:var(--red)}
+.brand em{font-style:normal;font-weight:450;color:#a9bdd8}
+.nav{flex:1;min-width:0;align-self:stretch;display:flex}
+.nav-list{display:flex;align-items:stretch;gap:2px;flex:1;min-width:0;overflow-x:auto;scrollbar-width:none}
+.nav-list::-webkit-scrollbar{display:none}
+.nav-tab{position:relative;display:flex;align-items:center;gap:9px;padding:3px 14px 0;border-top:3px solid transparent;border-bottom:3px solid transparent;color:#b8c5d8;text-decoration:none;font-weight:620;white-space:nowrap}
+.nav-tab:hover{color:#fff;background:#121a25}
+.nav-tab[aria-selected=true]{color:#fff;border-bottom-color:var(--red)}
+.nav-tab:focus-visible{outline:2px solid var(--red);outline-offset:-4px;border-radius:6px}
+.nav-ico{font-size:16px;color:#8497b5;line-height:1}
+.nav-tab[aria-selected=true] .nav-ico{color:var(--red)}
+.nav-tab.end{margin-left:auto}
+.nav-badge{min-width:19px;height:19px;padding:0 6px;border-radius:99px;background:var(--red);color:#fff;font-size:11px;font-weight:750;display:grid;place-items:center}
+.nav-more{background:transparent;border:0;border-top:3px solid transparent;font:inherit;font-weight:620;display:none}
+.nav-more[aria-expanded=true]{color:#fff}
+.drivebar{display:flex;align-items:center;gap:8px 10px;padding:10px 24px;background:#0d121a;border-bottom:1px solid var(--line)}
+.drivebar>.lbl{font-size:11px;color:var(--muted);letter-spacing:.06em;text-transform:uppercase;font-weight:650;flex:none}
+.drives{display:flex;flex-wrap:wrap;gap:8px;min-width:0}
+.drive{display:flex;align-items:center;gap:10px;padding:8px 12px;border:1px solid var(--line);border-radius:9px;color:#d9e2f1;background:#121a25;white-space:nowrap;text-align:left}
+.drive.sel{border-color:#3a4a62;box-shadow:inset 0 0 0 1px #3a4a62}
+.drive:not(.sel){opacity:.75}
+.drive-pick{margin-left:auto;display:flex;gap:6px;align-items:center}
+.banner{padding:9px 24px;font-size:12px;border-bottom:1px solid var(--line)}
+.banner.warn{background:#2a2412;color:#f0c36a}
+/* Seitenleiste (Variante B) */
+.rail-shell{display:grid;grid-template-columns:78px minmax(0,1fr);min-height:100vh}
+.rail{background:#0d121a;border-right:1px solid var(--line);display:flex;flex-direction:column;align-items:stretch;padding:12px 8px;gap:4px;position:sticky;top:0;height:100vh}
+.rail .brand-mark{margin:4px auto 14px}
+.rail .nav-list{flex-direction:column;overflow:visible;gap:4px}
+.rail .nav-tab{flex-direction:column;gap:4px;padding:10px 4px 8px;border:0;border-radius:10px;font-size:11px;text-align:center}
+.rail .nav-tab .nav-ico{font-size:20px}
+.rail .nav-tab[aria-selected=true]{background:#1a2330;box-shadow:inset 3px 0 0 var(--red)}
+.rail .nav-tab.end{margin:auto 0 0}
+.rail .nav-badge{position:absolute;top:4px;right:10px}
+.rail-main{min-width:0}
+.rail-top{display:flex;align-items:center;gap:12px;padding:12px 24px;border-bottom:1px solid var(--line);background:#0d121a}
+.rail-top h1{margin:0;font-size:17px;letter-spacing:-.3px;flex:none}
+.rail-top .drives{flex:1}
+/* Seiten und Einstellungen */
+.page{max-width:1540px;margin:0 auto;padding:20px 24px 28px}
+.page-head{margin:0 0 16px}
+.page-head h1{margin:0 0 3px;font-size:20px;letter-spacing:-.3px}
+.page-head p{margin:0;color:var(--muted);font-size:12px}
+.set-layout{display:grid;grid-template-columns:250px minmax(0,1fr);gap:18px;align-items:start}
+.set-nav{position:sticky;top:80px;display:flex;flex-direction:column;gap:2px;padding:8px}
+.set-tab{display:flex;align-items:center;gap:10px;padding:9px 11px;border-radius:8px;color:#c4d0e1;text-decoration:none;white-space:nowrap}
+.set-tab:hover{background:#151d28}
+.set-tab[aria-selected=true]{background:#1a2330;color:#fff;font-weight:650;box-shadow:inset 3px 0 0 var(--red)}
+.set-tab:focus-visible{outline:2px solid var(--red);outline-offset:-2px}
+.set-tab .nav-ico{width:18px;text-align:center}
+.set-dot{width:8px;height:8px;border-radius:50%;background:var(--amber);margin-left:auto;flex:none}
+.set-card .set-body{padding:18px 20px;display:grid;gap:14px;max-width:760px}
+.set-foot{display:flex;align-items:center;gap:10px;padding:12px 20px;border-top:1px solid var(--line);background:var(--panel2)}
+.set-foot .spacer{flex:1}
+.set-foot .primary{width:auto;padding:8px 18px}
+.set-state{font-size:12px;color:var(--muted)}
+.set-state.dirty{color:#f0c36a}
+.set-note{font-size:11px;color:var(--muted);border:1px dashed #33445c;border-radius:8px;padding:8px 10px}
+.set-card h3{margin:0;font-size:13px}
+.set-body label{display:block;font-size:11px;color:var(--muted);margin-bottom:5px}
+.set-body input[type=text],.set-body input[type=number],.set-body select{width:100%;height:34px;background:#0c121a;color:var(--text);border:1px solid #2b3748;border-radius:7px;padding:0 9px}
+.set-row{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--line);border-radius:9px;background:#0e141d;font-size:12px}
+.set-row strong{font-size:13px}.set-row .spacer{flex:1}
+/* Handy: Tab-Leiste unten, Chips als Streifen, Einstellungen untereinander */
+@media(max-width:700px){
+  .topbar{padding:0 13px;gap:12px;height:54px}.brand{font-size:17px}
+  .nav{position:fixed;left:0;right:0;bottom:0;z-index:6;background:#0d121a;border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom)}
+  .nav-list{justify-content:space-around;overflow:visible}
+  .nav-tab{flex:1;flex-direction:column;gap:3px;justify-content:center;padding:8px 4px 7px;min-height:56px;font-size:11px;border-bottom:0}
+  .nav-tab[aria-selected=true]{border-top-color:var(--red)}
+  .nav-tab.end{margin-left:0}
+  .nav-more{display:flex}.nav-tab.extra{display:none}
+  .nav-ico{font-size:20px}
+  .nav-badge{position:absolute;top:4px;left:calc(50% + 6px);min-width:17px;height:17px;font-size:10px}
+  .drivebar{padding:8px 13px;overflow-x:auto;scrollbar-width:none}.drivebar::-webkit-scrollbar{display:none}.drivebar>.lbl{display:none}
+  .drives{flex-wrap:nowrap}.drive{font-size:11px;padding:7px 9px}
+  .page{padding:14px 12px 84px}
+  main{padding-bottom:84px}
+  .set-layout{grid-template-columns:1fr;gap:12px}
+  .set-nav{position:static;flex-direction:row;overflow-x:auto;padding:6px;scrollbar-width:none}
+  .set-tab{padding:8px 11px}.set-tab[aria-selected=true]{box-shadow:inset 0 -3px 0 var(--red)}
+  .set-card .set-body{padding:14px}.set-foot{padding:10px 14px;flex-wrap:wrap}
+  .banner{padding:9px 13px}
+}
+.sheet{position:fixed;left:0;right:0;bottom:56px;z-index:7;background:#121a25;border:1px solid var(--line);border-radius:14px 14px 0 0;padding:8px;box-shadow:0 -10px 35px #0006}
+.sheet a{display:flex;gap:12px;align-items:center;padding:13px 14px;border-radius:9px;color:var(--text);text-decoration:none}
+.sheet .nav-ico{width:24px;text-align:center}
+.sheet a:hover{background:#1a2330}
+/* ===== Ende shell.css ===== */
+
+/* ---- nur Übersichtsseite ---- */
+body.gal{padding:0 0 60px}
+.gal header{padding:18px 24px 0;background:#0d121a;border-bottom:1px solid var(--line);position:sticky;top:0;z-index:20}
+.gal h1{margin:0 0 4px;font-size:20px}.gal header p{margin:0 0 12px;color:var(--muted);font-size:12px;max-width:900px}
+.gtabs{display:flex;gap:2px;overflow-x:auto}
+.gtabs button{border:0;border-bottom:3px solid transparent;background:transparent;color:#b8c5d8;padding:9px 14px;font-weight:620;white-space:nowrap}
+.gtabs button[aria-selected=true]{color:#fff;border-bottom-color:var(--red)}
+.gsec{max-width:1500px;margin:0 auto;padding:20px 24px}
+.gsec h2{font-size:16px;margin:26px 0 4px}.gsec h2:first-child{margin-top:0}
+.gsec .lead{color:var(--muted);font-size:13px;margin:0 0 12px;max-width:860px}
+.gsec ul{color:#c4d0e1;font-size:13px;line-height:1.7;max-width:900px}
+.gsec code{background:#1a2330;border-radius:5px;padding:1px 6px;font-size:12px}
+.frames{display:flex;flex-wrap:wrap;gap:22px;align-items:flex-start}
+.fr{border:1px solid var(--line);border-radius:12px;overflow:hidden;background:#000;flex:none;position:relative}
+.fr iframe{border:0;display:block;transform-origin:0 0;background:var(--bg)}
+.cap{font-size:12px;color:var(--muted);margin:6px 2px 0}.cap a{color:var(--blue)}
+.fwrap{display:inline-block;max-width:100%}
+@media(prefers-reduced-motion:no-preference){.nav-tab{transition:background .12s,color .12s}}
+</style>
+</head>
+<body>
+<script>
+const Q = new URLSearchParams(location.search), SC = Q.get('s');
+const $ = (s, r=document) => r.querySelector(s);
+/* ---------- Bausteine ---------- */
+const V = {player:['Player','▶'], laufwerke:['Laufwerke','▣'], bibliothek:['Bibliothek','▤'], nodes:['Rechner','⬡'], media:['Medien','▦'], einstellungen:['Einstellungen','⚙']};
+function nav(active, ids=['laufwerke','bibliothek','einstellungen'], badge=3){
+  const rest = ids.filter(i => i !== 'einstellungen'), more = rest.length > 4;   // ab 6 Ansichten: 3 + Einstellungen + „Mehr“
+  const extra = more ? rest.slice(3) : [], shown = ids;
+  return `<nav class="nav" aria-label="Hauptnavigation"><div class="nav-list" role="tablist" aria-label="Ansichten">${shown.map(id => {
+    const sel = id === active, b = id === 'laufwerke' && badge ? `<span class="nav-badge" aria-label="${badge} laufende Aufträge">${badge}</span>` : '';
+    return `<a class="nav-tab${id==='einstellungen'?' end':''}${extra.includes(id)?' extra':''}" role="tab" href="#/${id}" aria-selected="${sel}" tabindex="${sel?0:-1}"><span class="nav-ico" aria-hidden="true">${V[id][1]}</span><span class="nav-label">${V[id][0]}</span>${b}</a>`;
+  }).join('')}${more ? `<button class="nav-tab nav-more" aria-haspopup="menu" aria-expanded="${sheetOpen}"><span class="nav-ico" aria-hidden="true">⋯</span><span class="nav-label">Mehr</span></button>` : ''}</div></nav>`;
+}
+let sheetOpen = false;
+const brand = `<div class="brand"><span class="brand-mark"></span><span>MakeMKV <em>Web</em></span></div>`;
+const pill = (t, c='') => `<span class="pill ${c}">${t}</span>`;
+const chip = (name, dev, host, st, c, sel) => `<button class="drive${sel?' sel':''}">${name} ${pill(dev)}${host?pill(host):''}${pill('● '+st, c)}</button>`;
+const CH = {
+  bd: chip('MATSHITA BD-MLT UJ240AS','sr0','vierstein','rippt …','busypill',true),
+  dvd: chip('HL-DT-ST DVDRAM GH24','sr0','maintux','Disc erkannt','online',false),
+  bd2: chip('ASUS BW-16D1HT','sr1','maintux','Laufwerk verbunden','online',false),
+  x: n => chip('PIONEER BD-RW BDR-XD07','sr'+n,'wohnzimmer','Laufwerk verbunden','online',false),
+};
+const drivebar = (inner, extra='') => `<div class="drivebar"><span class="lbl">Laufwerke</span><div class="drives" id="drivechips">${inner}</div>${extra}</div>`;
+const job = (cls, ic, name, small, pct) => `<div class="job"><span class="status-check ${ic}">${ic==='run'?'':'✓'}</span><div class="job-main"><strong>${name}</strong><small>${small}</small>${pct!=null?`<div class="mini-bar"><div style="width:${pct}%"></div></div>`:''}</div><span class="status ${cls}">${cls==='run'?'Läuft':cls==='wait'?'Wartet':'Fertig'}</span></div>`;
+const laufwerke = `<div class="layout"><section class="left">
+  <section class="panel progress-panel"><div class="progress-title"><div><h1>The Walking Dead – Disc 1</h1><p>Titel 02 von 5: The Walking Dead - Disc 1 - Titel 02.mkv</p></div><div class="percent">42 %<button class="secondary danger">Abbrechen</button></div></div>
+    <div class="progress-track"><div class="progress-fill" style="width:42%"></div></div>
+    <div class="metrics">${[['◉','38,2 MB/s','Geschwindigkeit'],['◴','14:08','Laufzeit'],['◷','19:41','Restzeit'],['▤','2 / 5','Titel']].map(m=>`<div class="metric"><span class="symbol">${m[0]}</span><div><strong>${m[1]}</strong><small>${m[2]}</small></div></div>`).join('')}</div></section>
+  <section class="panel"><div class="panel-head"><span class="mini-icon">≡</span><h2>Aufträge</h2><span class="spacer"></span><span class="sub">3 laufen</span></div><div class="section-content">
+    ${job('run','run','The Walking Dead – Disc 1 – Rip','Rippen 42 % · 38,2 MB/s · Restzeit 19:41',42)}
+    ${job('run','run','Heat (1995).mkv <span class="st">maintux</span>','Konvertierung 61 % · 11,4 fps · Restzeit 38:10',61)}
+    ${job('run','run','Alien.mkv','Übertragung 8 % · 74 MB / 912 MB',8)}</div></section></section>
+  <aside class="right"><section class="panel"><div class="panel-head"><span class="mini-icon">▱</span><h2>Fertige Dateien</h2><span class="spacer"></span><button class="secondary">Aktualisieren</button></div>
+    <div class="table-wrap"><table class="file-table"><thead><tr><th>Dateiname</th><th>Größe</th><th>Status</th></tr></thead><tbody>
+    <tr><td class="file-name">Alien.mkv</td><td>9,4 GB</td><td class="muted">vor 2 Std.</td></tr><tr><td class="file-name">Heat (1995).mkv</td><td>6,1 GB</td><td class="muted">vor 5 Std.</td></tr></tbody></table></div></section></aside></div>`;
+const biblio = `<div class="panel"><div class="panel-head"><span class="mini-icon">▤</span><h2>Bibliothek</h2><span class="pill">/mnt/datenstein/dump</span><span class="spacer"></span><span class="sub">Inhalt wie heute – PF baut sie um</span></div><div class="empty">Dateiliste …</div></div>`;
+const bannerHtml = '';
+/* ---------- Einstellungen ---------- */
+const SECS = [['general','Allgemein','⚙'],['key','MakeMKV-Key','⚷'],['nodes','Rechner','⬡'],['media','Medien / Jellyfin','▦'],['convert','Konvertierung & Presets','⎘']];
+const OWN = {nodes:'Paket PC', media:'Paket PE', convert:'Paket PF'};
+function setNav(active, dirty=[]){
+  return `<div class="panel set-nav" role="tablist" aria-orientation="vertical" aria-label="Einstellungsabschnitte">${SECS.map(([id,l,ic]) =>
+    `<a class="set-tab" role="tab" href="#/einstellungen/${id}" aria-selected="${id===active}" tabindex="${id===active?0:-1}"><span class="nav-ico" aria-hidden="true">${ic}</span>${l}${dirty.includes(id)?'<span class="set-dot" title="Ungespeicherte Änderungen"></span>':''}</a>`).join('')}</div>`;
+}
+const chk = (t, on) => `<label class="chk" style="margin:0;font-size:13px;color:var(--text)"><input class="check" type="checkbox" ${on?'checked':''}> ${t}</label>`;
+const fld = (l, v, ph='', type='text') => `<div><label>${l}</label><input type="${type}" value="${v}" placeholder="${ph}"></div>`;
+const SET = {
+  general: {desc:'Verhalten beim Einlegen und Rippen von Discs.', dirty:true, html:`${chk('Eingelegte Disc automatisch analysieren',true)}${chk('Nach erfolgreichem Rip automatisch auswerfen',false)}
+    <div class="two">${fld('Minimale Titellänge (Sekunden)','120','','number')}<div></div></div>
+    <div class="two">${fld('Audio-Sprachen behalten','deu,eng','alle – z. B. deu,eng')}${fld('Untertitel behalten','','alle – z. B. deu')}</div>
+    <p class="help" style="margin:0">3-Buchstaben-Sprachcodes (deu, eng, fra …). Video und Spuren ohne Sprachangabe bleiben immer erhalten. Gilt für den nächsten Rip.</p>`},
+  key: {desc:'Ohne eigenen Key nutzt die App den öffentlichen Beta-Key von MakeMKV.', html:`${fld('Eigener MakeMKV-Key (optional)','','leer = öffentlicher Beta-Key')}
+    <div class="set-row"><span class="st ok">● aktiv</span><div><strong>Öffentlicher Beta-Key</strong><div class="muted" style="font-size:11px">geholt vor 3 Tagen</div></div><span class="spacer"></span><button class="secondary">Neu holen</button></div>`},
+  nodes: {desc:'Rechner im Verbund, automatische Suche, Kopplung.', ex:1, html:`<div class="set-row"><span class="st ok">● online</span><div><strong>maintux</strong><div class="muted" style="font-size:11px">192.168.178.189:8780 · v2.0 · 32 Threads</div></div><span class="spacer"></span><button class="secondary">Verbindung testen</button><button class="secondary danger">Entfernen</button></div>
+    <div class="set-row"><span class="st warn">● älter</span><div><strong>secondtux</strong><div class="muted" style="font-size:11px">192.168.178.160:8780 · ältere Version</div></div><span class="spacer"></span><button class="secondary danger">Entfernen</button></div>
+    <div class="rowend" style="justify-content:flex-start"><button class="secondary">Rechner im Netz suchen</button><button class="secondary">Rechner hinzufügen …</button></div>`},
+  media: {desc:'Fertige Dateien nach dem Jellyfin-Schema einsortieren.', ex:1, html:`<div class="two">${fld('Filme-Ordner','/mnt/datenstein/Filme')}${fld('Serien-Ordner','/mnt/datenstein/Serien')}</div>
+    <div class="two"><div><label>Benennung</label><select><option>Nach Jellyfin-Schema umbenennen</option></select></div><div><label>Aktion</label><select><option>Verschieben</option></select></div></div>
+    ${fld('TMDB-API-Schlüssel','••••••••••••••••')}`},
+  convert: {desc:'Preset-Karten, Standard je Disc-Art, Segmente, Parallelität.', ex:1, html:`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px">${['DVD optimal','Blu-ray optimal','Blu-ray Animation','Klein & schnell'].map((n,i)=>`<div class="set-row" style="display:block;${i==1?'border-color:var(--red)':''}"><strong>${n}</strong><div class="muted" style="font-size:11px">x265 · RF ~${19+i}</div></div>`).join('')}</div>`},
+};
+function settings(active, nav_ids, dirty, extra=''){
+  const s = SET[active], lbl = SECS.find(x=>x[0]===active)[1], d = s.dirty;
+  return `<div class="page"><div class="page-head"><h1>Einstellungen</h1><p>Jeder Abschnitt wird einzeln gespeichert.</p></div>
+  <div class="set-layout">${setNav(active, dirty)}
+  <section class="panel set-card" role="tabpanel" aria-label="${lbl}"><div class="panel-head"><div><h2>${lbl}</h2><div class="sub">${s.desc}</div></div></div>
+    <div class="set-body">${s.ex?`<div class="set-note">Beispiel – dieser Abschnitt kommt von ${OWN[active]} und erscheint erst, wenn das Paket sich anmeldet. Eigentliche Gestaltung: deren Mockup.</div>`:''}${s.html}</div>
+    <div class="set-foot"><span class="set-state${d?' dirty':''}" role="status">${d?'● Ungespeicherte Änderungen':'Gespeichert'}</span><span class="spacer"></span>
+      <button class="secondary"${d?'':' disabled'}>Verwerfen</button><button class="primary"${d?'':' disabled'}>Speichern</button></div></section></div></div>`;
+}
+/* ---------- Szenen ---------- */
+const sheet = `<div class="sheet" role="menu" aria-label="Weitere Ansichten"><a href="#/media" role="menuitem"><span class="nav-ico">▦</span>Medien</a><a href="#/player" role="menuitem"><span class="nav-ico">▶</span>Player</a></div>`;
+const MANY = ['laufwerke','bibliothek','nodes','media','player','einstellungen'];
+const S = {
+  'a-laufwerke': () => `<header class="topbar">${brand}${nav('laufwerke')}</header>${drivebar(CH.bd+CH.dvd+CH.bd2)}<main>${laufwerke}</main>`,
+  'a-bibliothek': () => `<header class="topbar">${brand}${nav('bibliothek')}</header><main>${biblio}</main>`,
+  'a-einstellungen': () => `<header class="topbar">${brand}${nav('einstellungen')}</header>${settings('general',0,['general','key'])}`,
+  'b-laufwerke': () => `<div class="rail-shell"><aside class="rail"><span class="brand-mark"></span>${nav('laufwerke')}</aside><div class="rail-main"><div class="rail-top"><h1>Laufwerke</h1><div class="drives" id="drivechips">${CH.bd+CH.dvd+CH.bd2}</div></div><main>${laufwerke}</main></div></div>`,
+  'b-einstellungen': () => `<div class="rail-shell"><aside class="rail"><span class="brand-mark"></span>${nav('einstellungen')}</aside><div class="rail-main"><div class="rail-top"><h1>Einstellungen</h1></div>${settings('media',0,[])}</div></div>`,
+  'chips-1': () => `<header class="topbar">${brand}${nav('laufwerke',undefined,0)}</header>${drivebar(CH.bd)}`,
+  'chips-2': () => `<header class="topbar">${brand}${nav('laufwerke')}</header>${drivebar(CH.bd+CH.dvd+CH.bd2+CH.x(2)+CH.x(3))}`,
+  'chips-3': () => `<header class="topbar">${brand}${nav('laufwerke')}</header><div class="drivebar"><span class="lbl">Laufwerk</span><div class="drives">${CH.bd}</div><div class="drive-pick"><button class="secondary">+ 4 weitere ▾</button></div></div>
+    <div style="position:absolute;right:24px;top:150px;width:540px" class="panel set-nav" role="listbox"><div class="lbl" style="padding:4px 8px;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em">vierstein (dieser Rechner)</div>${CH.bd.replace('drive sel','drive sel" style="width:100%')}<div class="lbl" style="padding:8px 8px 4px;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em">maintux</div>${CH.dvd.replace('class="drive','style="width:100%" class="drive')}${CH.bd2.replace('class="drive','style="width:100%" class="drive')}<div class="lbl" style="padding:8px 8px 4px;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em">wohnzimmer</div>${CH.x(2).replace('class="drive','style="width:100%" class="drive')}</div>`,
+  'set-general': () => `<header class="topbar">${brand}${nav('einstellungen')}</header>${settings('general',0,['general','key'])}`,
+  'set-key': () => `<header class="topbar">${brand}${nav('einstellungen')}</header>${settings('key',0,[])}`,
+  'set-nodes': () => `<header class="topbar">${brand}${nav('einstellungen')}</header>${settings('nodes',0,[])}`,
+  'set-media': () => `<header class="topbar">${brand}${nav('einstellungen')}</header>${settings('media',0,[])}`,
+  'm-laufwerke': () => `<header class="topbar">${brand}</header>${drivebar(CH.bd+CH.dvd+CH.bd2)}<main>${laufwerke}</main>${nav('laufwerke')}`,
+  'm-mehr': () => { sheetOpen = true; return `<header class="topbar">${brand}</header>${drivebar(CH.bd)}<main>${laufwerke}</main>${sheet}${nav('laufwerke',MANY)}`; },
+  'm-set': () => `<header class="topbar">${brand}</header>${settings('general',0,['general'])}${nav('einstellungen')}`,
+  'm-set-key': () => `<header class="topbar">${brand}</header>${settings('key',0,[])}${nav('einstellungen')}`,
+};
+if(SC && S[SC]){ document.body.innerHTML = S[SC](); document.title = 'Szene ' + SC; }
+/* ---------- Übersichtsseite ---------- */
+function fr(scene, w, h, cap){
+  return `<div class="fwrap"><div class="fr" data-w="${w}" data-h="${h}"><iframe src="?s=${scene}" width="${w}" height="${h}" title="${cap}" loading="lazy"></iframe></div><div class="cap">${cap} · <a href="?s=${scene}" target="_blank">in voller Größe öffnen</a></div></div>`;
+}
+const GAL = [
+ ['A · Reiter oben (Empfehlung)', `<h2>Desktop: Reiter in der Kopfzeile</h2>
+  <p class="lead">Logo links, daneben die Ansichten als Reiter. Aktive Ansicht: weiß mit rotem Unterstrich. Die Zahl laufender Aufträge (alle Rechner, Rippen, Konvertieren, Übertragen) steht als rote Plakette am Reiter „Laufwerke“, weil dort die Auftragsliste liegt. „Einstellungen“ sitzt rechts außen. Weitere Ansichten (Rechner, Medien …) reihen sich automatisch ein. Die Laufwerks-Chips wandern in eine eigene Leiste unter der Kopfzeile.</p>
+  <div class="frames">${fr('a-laufwerke',1440,820,'Laufwerke (1440 px)')}${fr('a-bibliothek',1440,300,'Bibliothek aktiv – ohne Laufwerksleiste, kein „← Laufwerke“ mehr nötig')}</div>
+  <h2>Handy: Tab-Leiste unten</h2><p class="lead">Unter 700 px wird dieselbe Navigation zur festen Leiste am unteren Rand (Symbol über Text, mind. 56 px hoch, Daumen-tauglich). Die Chips laufen als wischbarer Streifen unter dem Logo. Ab sechs Ansichten zeigt die Leiste vier plus „Mehr“.</p>
+  <div class="frames">${fr('m-laufwerke',375,760,'Handy: Laufwerke')}${fr('m-mehr',375,760,'Handy mit vielen Ansichten: „Mehr“ geöffnet')}</div>`],
+ ['B · Seitenleiste', `<h2>Alternative: schmale Seitenleiste mit Symbolen</h2>
+  <p class="lead">Eine 78 px breite Leiste links (Symbol über kurzem Text). Die Kopfzeile entfällt; oben steht nur der Seitentitel, rechts daneben die Laufwerks-Chips. Gewinnt in der Höhe, verliert 78 px in der Breite; skaliert gut bei vielen Ansichten (senkrecht scrollbar). Auf dem Handy dieselbe Tab-Leiste wie in A.</p>
+  <div class="frames">${fr('b-laufwerke',1440,820,'Seitenleiste: Laufwerke')}${fr('b-einstellungen',1440,640,'Seitenleiste: Einstellungen')}</div>`],
+ ['Laufwerks-Chips', `<h2>Wohin mit den Laufwerken?</h2>
+  <p class="lead">Die Chips (heute in der Kopfzeile) bekommen eine eigene Leiste unter den Reitern, nur in der Ansicht „Laufwerke“ sichtbar, denn nur dort wählen sie das aktive Laufwerk. Technisch bleibt <code>#drivechips</code> und die Chip-Darstellung aus <code>drives.js</code> unverändert, das Element zieht nur um.</p>
+  <h2>1 Laufwerk, kein Verbund</h2><div class="frames">${fr('chips-1',1440,150,'Ein Laufwerk')}</div>
+  <h2>Mehrere Laufwerke und Rechner: Chips brechen um</h2><div class="frames">${fr('chips-2',1440,190,'5 Laufwerke auf 3 Rechnern (Desktop: umbrechend, Handy: wischbar, siehe Reiter „Handy“)')}</div>
+  <h2>Optional bei sehr vielen Laufwerken: Auswahlmenü</h2><p class="lead">Ab etwa fünf Chips zeigt die Leiste nur das gewählte Laufwerk und „+ n weitere“; das Menü gruppiert nach Rechner. Dafür müsste PA eine Funktion bereitstellen, die Chips in einen Container rendert (und ein kompaktes Chip-Layout). Wenn nicht gewünscht, bleibt es beim Umbrechen.</p><div class="frames">${fr('chips-3',1440,330,'Auswahlmenü (optional)')}</div>`],
+ ['Einstellungsseite', `<h2>Einstellungen als eigene Seite</h2>
+  <p class="lead">Links die Abschnittsliste (Pfeiltasten wählen, aktiver Abschnitt rot markiert, gelber Punkt = ungespeicherte Änderungen), rechts der Inhalt des gewählten Abschnitts in einer Karte mit eigenem Speichern-Knopf. „Speichern“ und „Verwerfen“ sind erst bei Änderungen aktiv; die Karte zeigt „● Ungespeicherte Änderungen“. Beim Verlassen der Seite oder dem Neuladen mit offenen Änderungen fragt der Browser nach. Abschnitte von PC, PE und PF erscheinen nur in der Liste, wenn sie sich anmelden (hier als Beispiel gezeigt, mit gestrichelter Kennzeichnung).</p>
+  <div class="frames">${fr('set-general',1440,720,'Allgemein (mit ungespeicherten Änderungen)')}${fr('set-key',1440,560,'MakeMKV-Key')}</div>
+  <h2>Beispiele für Abschnitte der anderen Pakete</h2><div class="frames">${fr('set-nodes',1440,640,'Rechner (Beispiel, PC)')}${fr('set-media',1440,640,'Medien / Jellyfin (Beispiel, PE)')}</div>`],
+ ['Handy', `<h2>Einstellungen auf dem Handy</h2><p class="lead">Die Abschnittsliste wird zu einem wischbaren Streifen oben, der Inhalt folgt untereinander. Die Tab-Leiste bleibt unten.</p>
+  <div class="frames">${fr('m-set',375,820,'Einstellungen: Allgemein')}${fr('m-set-key',375,820,'Einstellungen: MakeMKV-Key')}${fr('m-laufwerke',375,760,'Laufwerke mit wischbarem Chip-Streifen')}</div>`],
+ ['Verhalten & Tastatur', `<h2>Verhalten</h2><ul>
+  <li>Die Navigation liest <code>getViews()</code>: jede Ansicht, die sich mit <code>registerView</code> anmeldet, bekommt automatisch einen Reiter (Reihenfolge nach <code>order</code>), auch wenn sie erst später dazukommt. „Einstellungen“ wird nach rechts gesetzt.</li>
+  <li>Die Plakette zählt laufende Aufträge (Rippen, Analyse, Konvertierung, Übertragung) auf diesem und allen erreichbaren Rechnern. Eine Ansicht kann mit <code>badge(S)</code> eine eigene Plakette liefern.</li>
+  <li>Einstellungsabschnitte kommen über <code>registerSettingsSection</code>; die Liste entsteht daraus. Erwartete Kennungen: <code>general</code>, <code>key</code>, <code>nodes</code> (PC), <code>media</code> (PE), <code>convert</code> (PF). Bis PF liefert, zeigt PB die beiden alten Felder „Gleichzeitige Dateien“ und „Segmente“ als Abschnitt „Konvertierung“ an.</li>
+  <li>Verlinkbar per Hash: <code>#/laufwerke</code>, <code>#/bibliothek</code>, <code>#/einstellungen</code>; Abschnitt: <code>#/einstellungen/medien</code> (benötigt eine kleine Anpassung in <code>registry.js</code>, siehe Status-Datei).</li></ul>
+  <h2>Tastatur und Barrierefreiheit</h2><ul>
+  <li>Navigation und Abschnittsliste sind <code>role="tablist"</code> mit <code>role="tab"</code> (<code>aria-selected</code>, <code>aria-controls</code>); die Ansicht ist <code>role="tabpanel"</code>. Nur der aktive Reiter ist per Tab erreichbar, innerhalb der Liste wechseln ←/→ (bzw. ↑/↓ in der Abschnittsliste), Pos1/Ende springen, Enter/Leertaste öffnen.</li>
+  <li>Sichtbarer roter Fokusrahmen, „Zum Inhalt springen“ als erster Tabstopp, <code>aria-label</code> an Plaketten („3 laufende Aufträge“), Statusmeldungen mit <code>role="status"</code>, Kontrast mind. AA, <code>prefers-reduced-motion</code> wird beachtet.</li>
+  <li>Handy: Tab-Leiste mit Platz für die Home-Anzeige (<code>safe-area-inset-bottom</code>), Ziele mind. 44 px.</li></ul>
+  <h2>Entfällt</h2><ul><li>Burger-Menü, Zahnrad-Dialog, „Nachträglich konvertieren“ bei „Fertige Dateien“ und „← Laufwerke“ in der Bibliothek.</li></ul>`],
+];
+if(!SC || !S[SC]){
+  document.body.className = 'gal';
+  document.body.innerHTML = `<header><h1>Mockup PB – Navigation und Einstellungsseite</h1><p>Statisches Mockup (Paket PB). Die Rahmen zeigen die App in fester Breite; mit „in voller Größe öffnen“ siehst du dieselbe Szene in deinem Fenster, inklusive Umbruch bei schmalen Fenstern. Alle Inhalte sind Beispieldaten.</p>
+    <div class="gtabs" role="tablist">${GAL.map((g,i) => `<button role="tab" aria-selected="${i==0}" data-i="${i}">${g[0]}</button>`).join('')}</div></header>
+    ${GAL.map((g,i) => `<section class="gsec" role="tabpanel" ${i?'hidden':''} data-i="${i}">${g[1]}</section>`).join('')}`;
+  const scale = () => document.querySelectorAll('.gsec:not([hidden]) .fr').forEach(f => {
+    const w = +f.dataset.w, h = +f.dataset.h, max = f.closest('.gsec').clientWidth - 48, k = Math.min(1, max / w);
+    f.style.width = w*k + 'px'; f.style.height = h*k + 'px'; f.firstElementChild.style.transform = `scale(${k})`;
+  });
+  document.querySelectorAll('.gtabs button').forEach(b => b.onclick = () => {
+    document.querySelectorAll('.gtabs button').forEach(x => x.setAttribute('aria-selected', x === b));
+    document.querySelectorAll('.gsec').forEach(s => s.hidden = s.dataset.i !== b.dataset.i);
+    scale(); scrollTo(0, 0);
+  });
+  addEventListener('resize', scale); scale();
+}
+</script>
+</body>
+</html>
