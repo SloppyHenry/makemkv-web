@@ -1,0 +1,138 @@
+#!/usr/bin/env python3
+"""Attrappe für makemkvcon (nur Entwicklung, scripts/dev.sh stellt sie in den PATH).
+
+Versteht die Aufrufe der App: `info dev:<Pfad>`, `info disc:9999` (Laufwerksliste), `mkv dev:<Pfad> <Titel> <Ordner>` und
+`backup --decrypt disc:<N> <Ordner>`. Die Disc stammt aus <DEV_DRIVE_DIR>/<Laufwerk>.json oder ist die Serien-Disc unten.
+Gerippt wird eine winzige Videodatei; der Fortschritt läuft in einigen Sekunden durch (DEV_RIP_SECONDS, Standard 8).
+"""
+import json
+import os
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+DRIVES = Path(os.environ.get("DEV_DRIVE_DIR", "."))
+SECONDS = float(os.environ.get("DEV_RIP_SECONDS", "8"))
+EPISODES = [(2652, 7.1), (2620, 7.0), (2695, 7.2), (2601, 6.9), (2648, 7.1)]       # (Sekunden, GB)
+
+
+def hms(s):
+    return f"{s // 3600}:{s % 3600 // 60:02d}:{s % 60:02d}"
+
+
+def default_disc(label):
+    titles = []
+    for i, (secs, gb) in enumerate(EPISODES):
+        titles.append({"name": f"The Walking Dead - Disc 1", "secs": secs, "bytes": int(gb * 1e8), "chapters": 8})
+    play = sum(s for s, _ in EPISODES[:4])
+    titles.append({"name": "The Walking Dead - Disc 1", "secs": play, "bytes": int(2.8e9), "chapters": 32})
+    titles.append({"name": "Extras", "secs": 190, "bytes": int(9e7), "chapters": 1})
+    return {"type": "Blu-ray disc", "name": "The Walking Dead - Disc 1", "volume": label, "titles": titles}
+
+
+def load_disc(dev):
+    f = Path(dev).with_suffix(".json")
+    if f.exists():
+        return json.loads(f.read_text())
+    return default_disc("THE_WALKING_DEAD_S1_D1")
+
+
+def out(line):
+    print(line, flush=True)
+
+
+def drive_list():
+    n = 0
+    for p in sorted(DRIVES.glob("sr[0-9]*")):
+        if p.suffix:
+            continue
+        if p.read_text().strip() == "ready":
+            out(f'DRV:{n},2,999,12,"BD-ROM Attrappe","{load_disc(str(p))["volume"]}","{p}"')
+        n += 1
+
+
+def info(dev):
+    disc = load_disc(dev)
+    out('MSG:1005,0,1,"MakeMKV (Attrappe) gestartet","%1 gestartet","MakeMKV"')
+    out(f'DRV:0,2,999,12,"BD-ROM Attrappe","{disc["volume"]}","{dev}"')
+    steps = 12
+    for i in range(steps + 1):
+        out(f'PRGV:{i * 100},{i * 100},{steps * 100}')
+        out('PRGT:3404,0,"Disc wird analysiert"')
+        time.sleep(0.25)
+    out(f'TCOUNT:{len(disc["titles"])}')
+    out(f'CINFO:1,6206,"{disc["type"]}"')
+    out(f'CINFO:2,0,"{disc["name"]}"')
+    out(f'CINFO:32,0,"{disc["volume"]}"')
+    for t, ti in enumerate(disc["titles"]):
+        out(f'TINFO:{t},2,0,"{ti["name"]}"')
+        out(f'TINFO:{t},8,0,"{ti["chapters"]}"')
+        out(f'TINFO:{t},9,0,"{hms(ti["secs"])}"')
+        out(f'TINFO:{t},10,0,"{ti["bytes"] / 1e9:.1f} GB"')
+        out(f'TINFO:{t},11,0,"{ti["bytes"]}"')
+        out(f'TINFO:{t},16,0,"{t:05d}.mpls"')
+        out(f'TINFO:{t},27,0,"{ti["name"]}_t{t:02d}.mkv"')
+        for s, (typ, codec, lang, code, extra) in enumerate([("Video", "MPEG-4 AVC", "", "", "1920x1080"), ("Audio", "DTS-HD MA", "Englisch", "eng", "5.1"),
+                                                             ("Audio", "AC3", "Deutsch", "deu", "5.1"), ("Subtitles", "PGS", "Deutsch", "deu", "")]):
+            out(f'SINFO:{t},{s},1,0,"{typ}"')
+            out(f'SINFO:{t},{s},6,0,"{codec}"')
+            out(f'SINFO:{t},{s},28,0,"{code}"')
+            out(f'SINFO:{t},{s},29,0,"{lang}"')
+            out(f'SINFO:{t},{s},30,0,"{codec} {lang}"'.strip())
+            if typ == "Video":
+                out(f'SINFO:{t},{s},19,0,"{extra}"')
+            if typ == "Audio":
+                out(f'SINFO:{t},{s},40,0,"{extra}"')
+    out(f'MSG:5011,0,1,"Operation erfolgreich abgeschlossen","%1","x"')
+
+
+def progress(text, secs):
+    steps = max(2, int(secs / 0.3))
+    out(f'PRGT:5011,0,"{text}"')
+    for i in range(steps + 1):
+        out(f'PRGV:{i * 1000},{i * 1000},{steps * 1000}')
+        time.sleep(secs / steps)
+
+
+def mkv(dev, tid, folder):
+    disc = load_disc(dev)
+    t = disc["titles"][tid]
+    out(f'MSG:3007,0,0,"Titel {tid} wird gespeichert","%1","x"')
+    progress("Titel wird gespeichert", SECONDS)
+    target = Path(folder) / f'{t["name"]}_t{tid:02d}.mkv'
+    subprocess.run(["ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-f", "lavfi", "-i", "testsrc2=size=320x180:rate=10",
+                    "-f", "lavfi", "-i", "sine=frequency=440", "-t", "3", "-c:v", "libx264", "-preset", "ultrafast", "-c:a", "aac",
+                    "-metadata", f'title={t["name"]}', str(target)], check=True)
+    out('MSG:5036,0,1,"1 Titel gespeichert","%1 Titel gespeichert","1"')
+
+
+def backup(folder):
+    out('MSG:3007,0,0,"Backup wird erstellt","%1","x"')
+    progress("Backup wird erstellt", SECONDS)
+    d = Path(folder) / "BDMV" / "STREAM"
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "00000.m2ts").write_bytes(b"\0" * 2**20)
+    (Path(folder) / "BDMV" / "index.bdmv").write_bytes(b"INDX0300")
+    out('MSG:5037,0,1,"Backup abgeschlossen","%1","x"')
+
+
+def main():
+    args = [a for a in sys.argv[1:] if not a.startswith("-") or a == "--decrypt"]
+    args = [a for a in args if a != "--decrypt"]
+    cmd = args[0] if args else ""
+    if cmd == "info" and args[1] == "disc:9999":
+        drive_list()
+    elif cmd == "info":
+        info(args[1].removeprefix("dev:"))
+    elif cmd == "mkv":
+        mkv(args[1].removeprefix("dev:"), int(args[2]), args[3])
+    elif cmd == "backup":
+        backup(args[2])
+    else:
+        print("Attrappe: unbekannter Aufruf", args, file=sys.stderr)
+        return 2
+    return 0
+
+
+sys.exit(main())
