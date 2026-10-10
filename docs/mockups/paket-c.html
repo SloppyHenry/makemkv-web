@@ -1,0 +1,346 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Mockup Paket C – Rechner (Verbund, Erkennung, Kopplung)</title>
+<link rel="stylesheet" href="../../app/static/css/base.css">
+<link rel="stylesheet" href="../../app/static/css/components.css">
+<link rel="stylesheet" href="../../app/static/css/layout.css">
+<style>
+/* ===== Mockup-Rahmen (nicht Teil der App) ===== */
+.mk-head{max-width:1280px;margin:0 auto;padding:22px 24px 6px}
+.mk-head h1{margin:0 0 4px;font-size:20px}
+.mk-head p{margin:4px 0;color:var(--muted);font-size:12px;max-width:900px}
+.mk-tabs{display:flex;gap:6px;flex-wrap:wrap;margin:14px 0 0}
+.mk-tabs a{padding:7px 12px;border:1px solid var(--line);border-radius:99px;font-size:12px;color:#c4d0e1;text-decoration:none;background:#131b27}
+.mk-tabs a:hover{border-color:#3a4a62}
+.mk-scene{max-width:1280px;margin:0 auto;padding:18px 24px 10px;border-top:1px solid var(--line);margin-top:18px}
+.mk-scene h2{margin:0 0 4px;font-size:15px}
+.mk-scene .why{color:var(--muted);font-size:12px;margin:0 0 12px;max-width:900px}
+.mk-frames{display:flex;gap:22px;align-items:flex-start;flex-direction:column}
+.mk-frame{display:flex;flex-direction:column;gap:6px}
+.mk-frame>span{font-size:11px;color:var(--muted);letter-spacing:.06em;text-transform:uppercase}
+.mk-frame iframe{border:1px solid var(--line);border-radius:10px;background:var(--bg);display:block}
+.mk-frame.desk{width:100%;min-width:0}
+.mk-frame.desk iframe{width:100%}
+.mk-frame.phone iframe{width:375px}
+body.in-frame{background:var(--bg)}
+body.in-frame .mk-only{display:none}
+body:not(.in-frame) .scene-body{display:none}
+/* Einbettung in die Einstellungsseite von PB (nur Andeutung) */
+.setpage{display:grid;grid-template-columns:190px minmax(0,1fr);gap:16px;padding:16px;align-items:start}
+.setnav{display:flex;flex-direction:column;gap:2px;position:sticky;top:12px}
+.setnav a{padding:8px 11px;border-radius:8px;color:#b8c5d8;font-size:13px;text-decoration:none}
+.setnav a.on{background:#1a2330;color:var(--text);font-weight:650;box-shadow:inset 2px 0 var(--red)}
+@media(max-width:700px){.setpage{grid-template-columns:1fr;padding:12px}.setnav{flex-direction:row;overflow-x:auto;position:static}.setnav a{white-space:nowrap}}
+.dim{opacity:.45;pointer-events:none}
+
+/* ===== Ab hier: spätere css/nodes.css ===== */
+.node-section{display:grid;gap:14px;min-width:0}
+.node-section h3{margin:0;font-size:15px}
+.node-lead{color:var(--muted);font-size:12px;margin:-6px 0 0}
+.node-self{padding:14px 16px;display:grid;gap:14px}
+.node-self-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.4fr);gap:16px;align-items:start}
+.node-field label{display:block;font-size:11px;color:var(--muted);margin-bottom:5px}
+.node-field .input{width:100%}
+.node-seg{display:inline-flex;border:1px solid #2b3748;border-radius:9px;overflow:hidden;background:#0c121a;max-width:100%}
+.node-seg label{margin:0;padding:8px 14px;font-size:12px;color:#b8c5d8;cursor:pointer;border-left:1px solid #2b3748;white-space:nowrap}
+.node-seg label:first-child{border-left:0}
+.node-seg input{position:absolute;opacity:0;pointer-events:none}
+.node-seg label:has(input:checked){background:var(--red);color:#fff;font-weight:650}
+.node-seg label:has(input:focus-visible){outline:2px solid #f04452;outline-offset:-2px}
+.node-opt{display:flex;gap:10px;align-items:flex-start;font-size:13px}
+.node-opt .help{margin:2px 0 0;font-size:11px}
+.node-actionsbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-left:auto}
+.node-list{display:grid}
+.node{padding:13px 16px;border-bottom:1px solid #222d3b;display:grid;gap:8px}
+.node:last-child{border-bottom:0}
+.node-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.node-dot{width:10px;height:10px;border-radius:50%;background:#4a5568;flex:none}
+.node.on .node-dot{background:var(--green);box-shadow:0 0 0 3px #36c98b22}
+.node.old .node-dot{background:var(--amber)}
+.node.off{background:#0e131b}
+.node.off .node-name{color:#b8c5d8}
+.node-name{font-size:14px;font-weight:700;overflow-wrap:anywhere}
+.node-badges{display:flex;gap:6px;flex-wrap:wrap}
+.node-btns{display:flex;gap:6px;flex-wrap:wrap;margin-left:auto}
+.node-meta{display:flex;gap:6px 16px;flex-wrap:wrap;color:var(--muted);font-size:12px;padding-left:20px}
+.node-meta b{color:#c9d5e6;font-weight:550}
+.node-facts{display:flex;gap:6px;flex-wrap:wrap;padding-left:20px}
+.node-chip{font-size:11px;color:#b8c5d8;background:#182130;border:1px solid #243044;border-radius:99px;padding:3px 9px;white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis}
+.node-chip.work{color:#ff8791;background:#351b24;border-color:#4a2530}
+.node-note{margin:0 0 0 20px;padding:8px 11px;border-radius:8px;font-size:12px;border:1px solid #2b3748;background:#101620;color:#c4d0e1}
+.node-note.warn{background:#2a2412;border-color:#4a3d1a;color:#f0c36a}
+.node-note.err{background:#2c151c;border-color:#5a2a33;color:#ffb0b8}
+.node-note.info{background:#12202f;border-color:#243a52;color:#a9c7ee}
+.node-note strong{font-weight:650}
+.node-test{color:#75e6b3}
+.node-add{display:grid;grid-template-columns:minmax(0,1fr) 190px auto;gap:10px;align-items:end;padding:14px 16px;border-top:1px solid var(--line);background:#0e141d}
+.node-found{display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid #222d3b;flex-wrap:wrap}
+.node-found:last-child{border-bottom:0}
+.node-found .grow{flex:1 1 220px;min-width:0}
+.node-found .grow small{display:block;color:var(--muted);font-size:11px;margin-top:2px}
+.node-scanbar{height:5px;background:#252e3d;border-radius:9px;overflow:hidden;margin:0 16px 12px}
+.node-scanbar>div{height:100%;background:var(--red);border-radius:9px}
+.node-scan-head{padding:12px 16px 10px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:12px;color:var(--muted)}
+.node-scan-head .spin{width:16px;height:16px;border-radius:50%;border:3px solid #3a2a31;border-top-color:var(--red);flex:none;animation:nodespin 1s linear infinite}
+@keyframes nodespin{to{transform:rotate(360deg)}}
+.node-code{font:700 22px/1 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.14em;color:var(--text);background:#0c121a;border:1px solid #2b3748;border-radius:9px;padding:10px 14px;display:inline-block}
+.node-banner{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 24px;font-size:12px;background:#12202f;color:#a9c7ee;border-bottom:1px solid #243a52}
+.node-banner strong{color:#d8e6fa}
+.node-banner .grow{flex:1 1 240px}
+.node-dlg{width:min(480px,100%);margin:0 auto;border:1px solid var(--line);border-radius:14px;background:var(--panel);box-shadow:0 20px 60px #0008}
+.node-dlg form,.node-dlg .body{padding:20px;display:grid;gap:14px}
+.node-dlg h3{margin:0;font-size:16px}
+.node-dlg dl{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;margin:0;font-size:12px}
+.node-dlg dt{color:var(--muted)}
+.node-dlg dd{margin:0;overflow-wrap:anywhere}
+.node-veil{background:rgba(0,0,0,.55);padding:26px 14px;border-radius:12px}
+.node-two{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.node-sidetitle{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:0 0 8px}
+.node-steps{margin:0;padding-left:18px;color:var(--muted);font-size:12px;display:grid;gap:4px}
+.node-steps b{color:#c9d5e6;font-weight:600}
+@media(max-width:760px){
+  .node-self-grid{grid-template-columns:1fr}
+  .node-add{grid-template-columns:1fr}
+  .node-two{grid-template-columns:1fr}
+  .node-btns{margin-left:20px;width:100%}
+  .node-btns .secondary{flex:1 1 auto;text-align:center}
+  .node-actionsbar{margin-left:0;width:100%}
+  .node-actionsbar .secondary{flex:1 1 auto;text-align:center}
+  .node-banner{padding:10px 13px}
+  .node-seg label{padding:8px 11px}
+}
+</style>
+</head>
+<body>
+
+<!-- ===================== Übersicht (Doppelklick öffnet diese Seite) ===================== -->
+<div class="mk-only">
+  <div class="mk-head">
+    <h1>Mockup Paket C: Rechner im Verbund</h1>
+    <p>Neuer Abschnitt <b>„Rechner“</b> auf der Einstellungsseite (Rahmen und Navigation: Paket B, hier nur angedeutet). Jede Szene steht oben in Desktop-Breite und darunter in 375 px (echte Rahmen, die Seite reagiert wirklich auf die Breite). Farben und Bausteine stammen aus <code>base.css</code>/<code>components.css</code>.</p>
+    <p>Gezeigt: Betriebsart und Auffindbarkeit, Rechnerliste mit Zustand/Version/Laufwerken/Last, „Rechner im Netz suchen“, Kopplung mit Bestätigung auf dem anderen Rechner, manuelles Hinzufügen, und alle Sonderzustände (offline, ältere Version, nicht gekoppelt, Gegenseite hat entkoppelt).</p>
+    <nav class="mk-tabs">
+      <a href="#sz-liste">1 Rechnerliste</a><a href="#sz-eigen">2 Eigenständig</a><a href="#sz-suche">3 Im Netz suchen</a>
+      <a href="#sz-kopplung-a">4 Kopplung: anfragende Seite</a><a href="#sz-kopplung-b">5 Kopplung: bestätigende Seite</a>
+      <a href="#sz-hinzu">6 Per Adresse hinzufügen</a><a href="#sz-zustaende">7 Sonderzustände</a>
+    </nav>
+  </div>
+  <div id="overview"></div>
+</div>
+
+<!-- ===================== Szenen (jede wird in einem Rahmen gezeigt) ===================== -->
+<div class="scene-body" id="scene-liste" data-title="1 Rechnerliste" data-why="Normalfall im Verbund: Dieser Rechner oben (Name, Betriebsart, auffindbar), darunter die Liste. Jede Zeile zeigt Zustand, Adresse, online seit, Version, Laufwerke, Kerne/RAM und laufende Arbeit. Die Knöpfe je Rechner: Verbindung testen, Umbenennen, Entkoppeln, Entfernen.">
+  <div class="setpage"><nav class="setnav"><a href="#">Allgemein</a><a class="on" href="#">Rechner</a><a href="#">Konvertierung</a><a href="#">Medien</a></nav>
+  <div class="node-section">
+    <h3>Rechner</h3>
+    <p class="node-lead">Mehrere Installationen von MakeMKV-Web bilden einen Verbund: gemeinsame Aufträge, Übergabe von Konvertierungen, Fernsteuerung der Laufwerke.</p>
+    <section class="panel node-self">
+      <div class="node-self-grid">
+        <div class="node-field"><label for="n1">Name dieses Rechners</label><input class="input" id="n1" value="vierstein"><p class="help">So sehen ihn die anderen Rechner. Standard: der Hostname.</p></div>
+        <div class="node-field"><label>Betriebsart</label>
+          <div class="node-seg" role="radiogroup" aria-label="Betriebsart"><label><input type="radio" name="m1" checked>Im Verbund</label><label><input type="radio" name="m1">Eigenständig</label></div>
+          <p class="help">Eigenständig: keine anderen Rechner, keine Suche, keine Verbund-Knöpfe.</p></div>
+      </div>
+      <label class="node-opt"><input class="check" type="checkbox" checked><span>Im Netz auffindbar<p class="help">Andere Rechner können diesen hier bei „Rechner im Netz suchen“ finden und eine Kopplung anfragen. Gekoppelt wird nur nach deiner Bestätigung. Aus = nur per Adresse erreichbar.</p></span></label>
+      <div class="rowend"><button class="primary" style="width:auto">Speichern</button></div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head"><div><h2>Rechner im Verbund</h2><span class="sub">3 eingetragen · 2 online</span></div>
+        <div class="node-actionsbar"><button class="secondary">Rechner im Netz suchen</button><button class="secondary">+ Adresse hinzufügen</button></div></div>
+      <div class="node-list">
+        <article class="node on">
+          <div class="node-head"><span class="node-dot" title="Online"></span><span class="node-name">maintux</span><span class="node-badges"><span class="st ok">Gekoppelt</span></span>
+            <div class="node-btns"><button class="secondary">Verbindung testen</button><button class="secondary">Umbenennen</button><button class="secondary danger">Entkoppeln</button></div></div>
+          <div class="node-meta"><span>192.168.178.189:8780</span><span>online seit <b>3 Tagen</b></span><span>Version <b>0.4.0</b></span></div>
+          <div class="node-facts"><span class="node-chip">Kein Laufwerk</span><span class="node-chip">32 Threads · 31 GB RAM</span><span class="node-chip">Last 4,1</span><span class="node-chip work">Konvertiert 2 Dateien · 56 %</span><span class="node-chip">x265 · x264 · AV1</span></div>
+        </article>
+        <article class="node on">
+          <div class="node-head"><span class="node-dot"></span><span class="node-name">wohnzimmer-pi</span><span class="node-badges"><span class="st ok">Gekoppelt</span></span>
+            <div class="node-btns"><button class="secondary">Verbindung testen</button><button class="secondary">Umbenennen</button><button class="secondary danger">Entkoppeln</button></div></div>
+          <div class="node-meta"><span>192.168.178.52:8780</span><span>online seit <b>5 Std.</b></span><span>Version <b>0.4.0</b></span></div>
+          <div class="node-facts"><span class="node-chip">1 Laufwerk · MATSHITA BD-MLT UJ240AS</span><span class="node-chip">4 Kerne · 7 GB RAM</span><span class="node-chip work">Rippt „The Walking Dead – Disc 2“ · 38 %</span></div>
+        </article>
+        <article class="node off old">
+          <div class="node-head"><span class="node-dot"></span><span class="node-name">secondtux</span><span class="node-badges"><span class="st">Offline</span><span class="st warn">Ältere Version</span></span>
+            <div class="node-btns"><button class="secondary">Verbindung testen</button><button class="secondary">Umbenennen</button><button class="secondary danger">Entfernen</button></div></div>
+          <div class="node-meta"><span>192.168.178.160:8780</span><span>zuletzt gesehen <b>vor 2 Std.</b></span><span>Version <b>unbekannt (alt)</b></span></div>
+        </article>
+      </div>
+    </section>
+  </div></div>
+</div>
+
+<div class="scene-body" id="scene-eigen" data-title="2 Eigenständig" data-why="Betriebsart „Eigenständig“: Die Liste bleibt gespeichert, ruht aber. Es wird nichts abgefragt, nichts gesucht, der Rechner ist nicht auffindbar, und in der Oberfläche verschwinden Verbund-Elemente (Übergabe, Rechner-Auswahl, fremde Laufwerke und Aufträge).">
+  <div class="setpage"><nav class="setnav"><a href="#">Allgemein</a><a class="on" href="#">Rechner</a><a href="#">Konvertierung</a><a href="#">Medien</a></nav>
+  <div class="node-section">
+    <h3>Rechner</h3>
+    <section class="panel node-self">
+      <div class="node-self-grid">
+        <div class="node-field"><label for="n2">Name dieses Rechners</label><input class="input" id="n2" value="vierstein"></div>
+        <div class="node-field"><label>Betriebsart</label>
+          <div class="node-seg" role="radiogroup" aria-label="Betriebsart"><label><input type="radio" name="m2">Im Verbund</label><label><input type="radio" name="m2" checked>Eigenständig</label></div></div>
+      </div>
+      <p class="node-note info" style="margin:0"><strong>Eigenständiger Betrieb.</strong> Dieser Rechner arbeitet für sich: keine Verbindung zu anderen Rechnern, nicht auffindbar, keine Verbund-Knöpfe. Die Liste unten (3 Rechner) bleibt gespeichert und wird beim Zurückschalten wieder aktiv.</p>
+      <label class="node-opt dim"><input class="check" type="checkbox" disabled><span>Im Netz auffindbar<p class="help">Nur im Verbund möglich.</p></span></label>
+      <div class="rowend"><button class="primary" style="width:auto">Speichern</button></div>
+    </section>
+    <section class="panel dim" aria-disabled="true">
+      <div class="panel-head"><div><h2>Rechner im Verbund</h2><span class="sub">ruht · 3 eingetragen</span></div></div>
+      <div class="node-list">
+        <article class="node off"><div class="node-head"><span class="node-dot"></span><span class="node-name">maintux</span><span class="node-badges"><span class="st">Gekoppelt</span></span></div><div class="node-meta"><span>192.168.178.189:8780</span></div></article>
+        <article class="node off"><div class="node-head"><span class="node-dot"></span><span class="node-name">secondtux</span><span class="node-badges"><span class="st">Ältere Version</span></span></div><div class="node-meta"><span>192.168.178.160:8780</span></div></article>
+      </div>
+    </section>
+  </div></div>
+</div>
+
+<div class="scene-body" id="scene-suche" data-title="3 Rechner im Netz suchen" data-why="Der Knopf durchsucht das eigene Netz (/24) aktiv nach MakeMKV-Web. Gefunden werden nur Rechner, auf denen „Im Netz auffindbar“ an ist. Ergebnisse erscheinen live; „Verbinden“ startet die Kopplung (Szene 4/5). Optional: laufende Suche im Hintergrund (Hinweis in der Kopfzeile, wenn etwas Neues gefunden wurde).">
+  <div class="setpage"><nav class="setnav"><a href="#">Allgemein</a><a class="on" href="#">Rechner</a><a href="#">Konvertierung</a><a href="#">Medien</a></nav>
+  <div class="node-section">
+    <section class="panel">
+      <div class="panel-head"><div><h2>Rechner im Netz suchen</h2><span class="sub">Netz 192.168.178.0/24 · Port 8780</span></div>
+        <div class="node-actionsbar"><button class="secondary">Abbrechen</button></div></div>
+      <div class="node-scan-head"><span class="spin"></span><span>Suche läuft … 187 von 254 Adressen geprüft</span></div>
+      <div class="node-scanbar"><div style="width:73%"></div></div>
+      <div class="node-list">
+        <div class="node-found"><span class="node-dot" style="background:var(--green)"></span>
+          <div class="grow"><strong>maintux</strong><small>192.168.178.189:8780 · Version 0.4.0 · 32 Threads · 31 GB RAM</small></div>
+          <button class="primary" style="width:auto">Verbinden</button></div>
+        <div class="node-found"><span class="node-dot" style="background:var(--green)"></span>
+          <div class="grow"><strong>wohnzimmer-pi</strong><small>192.168.178.52:8780 · Version 0.4.0 · 4 Kerne · 7 GB RAM</small></div>
+          <button class="primary" style="width:auto">Verbinden</button></div>
+        <div class="node-found"><span class="node-dot" style="background:#4a5568"></span>
+          <div class="grow"><strong>vierstein</strong><small>192.168.178.7:8780 · dieser Rechner</small></div>
+          <span class="st">Das bist du</span></div>
+      </div>
+    </section>
+    <p class="node-note info" style="margin:0"><strong>Nicht gefunden?</strong> Ein Rechner taucht nur auf, wenn bei ihm unter Einstellungen › Rechner „Im Netz auffindbar“ eingeschaltet ist. Rechner mit älterer Version (z. B. secondtux) lassen sich nur per Adresse hinzufügen. Läuft dieser Rechner in Docker, durchsucht er das Netz, über das du die Seite aufgerufen hast (192.168.178.0/24); ein anderes Netz kannst du unter „Netz für die Suche“ eintragen.</p>
+    <div class="node-field"><label for="n3">Netz für die Suche (optional)</label><input class="input" id="n3" placeholder="automatisch, z. B. 192.168.178.0/24, 10.0.0.0/24"></div>
+    <label class="node-opt"><input class="check" type="checkbox"><span>Im Hintergrund regelmäßig suchen<p class="help">Alle 10 Minuten. Neue Rechner werden nur vorgeschlagen, nie automatisch verbunden.</p></span></label>
+  </div></div>
+</div>
+
+<div class="scene-body" id="scene-kopplung-a" data-title="4 Kopplung: auf dem anfragenden Rechner (vierstein)" data-why="Nach „Verbinden“ wartet die Zeile auf die Bestätigung des anderen Rechners. Beide Seiten zeigen denselben Code; wer ihn vergleicht, erkennt eine fremde Anfrage. Läuft nach 10 Minuten ohne Antwort ab. Abbrechen jederzeit möglich.">
+  <div class="setpage"><nav class="setnav"><a href="#">Allgemein</a><a class="on" href="#">Rechner</a><a href="#">Konvertierung</a><a href="#">Medien</a></nav>
+  <div class="node-section">
+    <section class="panel">
+      <div class="panel-head"><div><h2>Rechner im Verbund</h2><span class="sub">1 eingetragen · 1 Kopplung offen</span></div></div>
+      <div class="node-list">
+        <article class="node">
+          <div class="node-head"><span class="node-dot" style="background:var(--amber)"></span><span class="node-name">maintux</span><span class="node-badges"><span class="st warn">Wartet auf Bestätigung</span></span>
+            <div class="node-btns"><button class="secondary">Anfrage zurückziehen</button></div></div>
+          <div class="node-meta"><span>192.168.178.189:8780</span><span>Version <b>0.4.0</b></span></div>
+          <p class="node-note info"><strong>Bitte auf maintux bestätigen.</strong> Dort erscheint die Anfrage „vierstein möchte sich verbinden“ mit diesem Code:
+            <span style="display:block;margin-top:8px"><span class="node-code">482 913</span></span></p>
+        </article>
+      </div>
+    </section>
+  </div></div>
+</div>
+
+<div class="scene-body" id="scene-kopplung-b" data-title="5 Kopplung: auf dem bestätigenden Rechner (maintux)" data-why="Auf dem angefragten Rechner erscheint auf jeder Seite ein Hinweis in der Kopfzeile und ein Bestätigungsdialog. Ohne Bestätigung passiert nichts; „Ablehnen“ sagt dem anderen Rechner Bescheid. Mit „Verbinden“ tauschen beide ein gemeinsames Token aus; danach tragen alle Aufrufe zwischen den beiden dieses Token (funktioniert auch bei gesetztem Passwortschutz).">
+  <div class="node-banner"><span class="grow"><strong>vierstein</strong> möchte sich mit diesem Rechner verbinden.</span><button class="secondary">Ansehen</button></div>
+  <div class="node-veil">
+    <div class="node-dlg" role="dialog" aria-labelledby="kd1"><div class="body">
+      <h3 id="kd1">„vierstein“ möchte sich verbinden</h3>
+      <dl><dt>Adresse</dt><dd>192.168.178.7:8780</dd><dt>Version</dt><dd>0.4.0</dd><dt>Anfrage</dt><dd>vor 20 Sekunden</dd><dt>Code</dt><dd><span class="node-code" style="font-size:18px;padding:7px 11px">482 913</span></dd></dl>
+      <p class="help" style="margin:0;font-size:12px">Prüfe, dass derselbe Code auf vierstein steht. Nach dem Verbinden dürfen beide Rechner einander Konvertierungen übergeben, Laufwerke fernsteuern und Aufträge sehen. Entkoppeln geht jederzeit.</p>
+      <div class="rowend"><button class="secondary">Ablehnen</button><button class="primary" style="width:auto">Verbinden</button></div>
+    </div></div>
+  </div>
+</div>
+
+<div class="scene-body" id="scene-hinzu" data-title="6 Rechner per Adresse hinzufügen" data-why="Für Rechner, die nicht auffindbar sind oder in einem anderen Netz stehen. Die Adresse wird geprüft, dann entscheidet sich der Weg: neue Version, Kopplung anfragen wie in Szene 4/5; alte Version (ohne Kopplung), nur mit ausdrücklicher Zustimmung ohne Token hinzufügen.">
+  <div class="setpage"><nav class="setnav"><a href="#">Allgemein</a><a class="on" href="#">Rechner</a><a href="#">Konvertierung</a><a href="#">Medien</a></nav>
+  <div class="node-section">
+    <section class="panel">
+      <div class="panel-head"><div><h2>Rechner im Verbund</h2><span class="sub">2 eingetragen</span></div>
+        <div class="node-actionsbar"><button class="secondary">Rechner im Netz suchen</button><button class="secondary">+ Adresse hinzufügen</button></div></div>
+      <div class="node-add">
+        <div class="node-field"><label for="a1">Adresse</label><input class="input" id="a1" value="192.168.178.189"><p class="help">IP oder Name, optional mit Port (Standard 8780).</p></div>
+        <div class="node-field"><label for="a2">Anzeigename (optional)</label><input class="input" id="a2" placeholder="wird vom Rechner übernommen"></div>
+        <button class="primary" style="width:auto">Prüfen</button>
+      </div>
+      <div class="node-list">
+        <article class="node on" style="border-top:1px solid var(--line)">
+          <div class="node-head"><span class="node-dot"></span><span class="node-name">maintux</span><span class="node-badges"><span class="st ok">Erreichbar</span></span>
+            <div class="node-btns"><button class="primary" style="width:auto">Kopplung anfragen</button></div></div>
+          <div class="node-meta"><span>192.168.178.189:8780</span><span>Version <b>0.4.0</b></span></div>
+        </article>
+        <article class="node on">
+          <div class="node-head"><span class="node-dot" style="background:var(--amber)"></span><span class="node-name">secondtux</span><span class="node-badges"><span class="st warn">Ältere Version</span></span>
+            <div class="node-btns"><button class="secondary">Ohne Kopplung hinzufügen</button></div></div>
+          <div class="node-meta"><span>192.168.178.160:8780</span><span>Version <b>unbekannt (alt)</b></span></div>
+          <p class="node-note warn"><strong>Kann nicht gekoppelt werden.</strong> secondtux kennt die Kopplung noch nicht. Er lässt sich trotzdem wie bisher nutzen (Aufträge sehen, Laufwerke steuern, Übergabe), aber ohne Token und ohne neuere Funktionen; Passwortschutz dort würde den Zugriff verhindern.</p>
+        </article>
+      </div>
+    </section>
+  </div></div>
+</div>
+
+<div class="scene-body" id="scene-zustaende" data-title="7 Sonderzustände der Rechnerzeilen" data-why="Wie jede Zeile aussieht, wenn etwas nicht stimmt. Jeder Zustand nennt Grund und nächsten Schritt; Funktionen, die der Rechner nicht kann, sind in der übrigen Oberfläche ausgegraut (z. B. Übergabe, neue Konvertier-Einstellungen).">
+  <div class="setpage"><nav class="setnav"><a href="#">Allgemein</a><a class="on" href="#">Rechner</a><a href="#">Konvertierung</a><a href="#">Medien</a></nav>
+  <div class="node-section">
+    <section class="panel">
+      <div class="node-list">
+        <article class="node off">
+          <div class="node-head"><span class="node-dot"></span><span class="node-name">maintux</span><span class="node-badges"><span class="st">Offline</span><span class="st ok">Gekoppelt</span></span>
+            <div class="node-btns"><button class="secondary">Verbindung testen</button><button class="secondary">Umbenennen</button><button class="secondary danger">Entkoppeln</button></div></div>
+          <div class="node-meta"><span>192.168.178.189:8780</span><span>zuletzt gesehen <b>vor 2 Std.</b></span><span>Version <b>0.4.0</b></span></div>
+          <p class="node-note">Nicht erreichbar (Zeitüberschreitung). Rechner aus, im Ruhezustand oder Netzwerk getrennt? Die Kopplung bleibt bestehen, sobald er wieder da ist, geht es weiter.</p>
+        </article>
+        <article class="node on old">
+          <div class="node-head"><span class="node-dot"></span><span class="node-name">secondtux</span><span class="node-badges"><span class="st warn">Ältere Version</span></span>
+            <div class="node-btns"><button class="secondary">Verbindung testen</button><button class="secondary">Umbenennen</button><button class="secondary danger">Entfernen</button></div></div>
+          <div class="node-meta"><span>192.168.178.160:8780</span><span>online seit <b>9 Tagen</b></span><span>Version <b>unbekannt (alt)</b></span></div>
+          <div class="node-facts"><span class="node-chip">1 Laufwerk · ASUS BW-16D1HT</span><span class="node-chip">4 Kerne</span><span class="node-chip">nur x265</span></div>
+          <p class="node-note warn">Läuft noch auf dem alten Stand: ohne Kopplung und ohne Fähigkeitsmeldung. Aufträge sehen, Übergabe und Fernsteuerung gehen wie bisher; neue Konvertier-Einstellungen (Codec, AV1 …) sind für diesen Rechner ausgegraut.</p>
+        </article>
+        <article class="node on">
+          <div class="node-head"><span class="node-dot"></span><span class="node-name">vierstein</span><span class="node-badges"><span class="st warn">Nicht gekoppelt</span></span>
+            <div class="node-btns"><button class="primary" style="width:auto">Koppeln</button><button class="secondary">Umbenennen</button><button class="secondary danger">Entfernen</button></div></div>
+          <div class="node-meta"><span>192.168.178.7:8780</span><span>online seit <b>3 Tagen</b></span><span>Version <b>0.4.0</b></span></div>
+          <p class="node-note info">Aus der früheren Einstellung <code>PEERS</code> übernommen und wie bisher ohne Prüfung genutzt. „Koppeln“ ersetzt das durch ein Token, das nur ihr beide kennt.</p>
+        </article>
+        <article class="node on">
+          <div class="node-head"><span class="node-dot" style="background:var(--amber)"></span><span class="node-name">wohnzimmer-pi</span><span class="node-badges"><span class="st warn">Kopplung gelöst</span></span>
+            <div class="node-btns"><button class="primary" style="width:auto">Neu koppeln</button><button class="secondary danger">Entfernen</button></div></div>
+          <div class="node-meta"><span>192.168.178.52:8780</span><span>online seit <b>5 Std.</b></span><span>Version <b>0.4.0</b></span></div>
+          <p class="node-note err">wohnzimmer-pi hat die Kopplung gelöst oder abgelehnt. Aufträge und Fernsteuerung sind aus, bis ihr euch neu koppelt.</p>
+        </article>
+      </div>
+    </section>
+  </div></div>
+</div>
+
+<script>
+(function(){
+  const q = new URLSearchParams(location.search), s = q.get('s');
+  if(s){
+    document.body.classList.add('in-frame');
+    document.querySelectorAll('.scene-body').forEach(e => { e.style.display = e.id === 'scene-' + s ? 'block' : 'none'; });
+    const sendH = () => parent.postMessage({mkScene: s, h: document.documentElement.scrollHeight}, '*');
+    addEventListener('load', sendH); new ResizeObserver(sendH).observe(document.body);
+    return;
+  }
+  const ov = document.getElementById('overview'), frames = {};
+  document.querySelectorAll('.scene-body').forEach(e => {
+    const id = e.id.replace('scene-', ''), sec = document.createElement('section');
+    sec.className = 'mk-scene'; sec.id = 'sz-' + id;
+    sec.innerHTML = `<h2>${e.dataset.title}</h2><p class="why">${e.dataset.why}</p><div class="mk-frames">
+      <div class="mk-frame desk"><span>Desktop (volle Breite, ca. 1230 px)</span><iframe title="Desktop" data-s="${id}" src="?s=${id}" style="height:520px"></iframe></div>
+      <div class="mk-frame phone"><span>Handy (375 px)</span><iframe title="Handy" data-s="${id}" src="?s=${id}" style="height:520px"></iframe></div></div>`;
+    ov.append(sec);
+  });
+  addEventListener('message', ev => {
+    if(!ev.data || !ev.data.mkScene) return;
+    document.querySelectorAll(`iframe[data-s="${ev.data.mkScene}"]`).forEach(f => { if(f.contentWindow === ev.source) f.style.height = ev.data.h + 'px'; });
+  });
+})();
+</script>
+</body>
+</html>
