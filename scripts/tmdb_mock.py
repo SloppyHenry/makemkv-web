@@ -10,7 +10,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
 KEY = "testkey"
-EP = [("Days Gone Bye", 67), ("Guts", 44), ("Tell It to the Frogs", 45), ("Vatos", 44), ("Wildfire", 44), ("TS-19", 66)]
+EP = [("Days Gone Bye", 45), ("Guts", 44), ("Tell It to the Frogs", 45), ("Vatos", 44), ("Wildfire", 44), ("TS-19", 66)]
 MOVIES = {603: {"id": 603, "title": "Matrix", "original_title": "The Matrix", "release_date": "1999-03-30", "overview": "Ein Hacker entdeckt die wahre Natur seiner Welt.",
                 "poster_path": "/matrix.jpg", "runtime": 136, "imdb_id": "tt0133093"},
           335984: {"id": 335984, "title": "Blade Runner 2049", "original_title": "Blade Runner 2049", "release_date": "2017-10-04",

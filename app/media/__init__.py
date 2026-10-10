@@ -7,12 +7,12 @@ Upload-Hook (echten Zielpfad nachtragen), Fähigkeit `media`, Statusfeld `media`
 from pathlib import Path
 
 from app import ext
-from app.media import api, conf, organize, store
+from app.media import api, auto, conf, organize, store
 
 ext.register_router(api.router)
 ext.register_settings("media", conf.MediaSettings, conf.DEFAULTS, secret=("tmdb_key", "jellyfin_key"))
 ext.register_rip_hook(store.remember_rip)
-ext.register_capability("media", {"v": 1, "naming": ["jellyfin", "unveraendert"], "tmdb": True})
+ext.register_capability("media", {"v": 1, "naming": ["jellyfin", "unveraendert"]})
 
 
 def _on_upload(item: dict):
@@ -20,6 +20,7 @@ def _on_upload(item: dict):
     dest = item.get("dest")
     if dest and item.get("name"):
         store.rekey_file(item["name"], organize.key_for(Path(dest)))
+    auto.schedule(str(Path(item.get("name") or "").parent) if "/" in (item.get("name") or "") else "")
 
 
 ext.register_upload_hook(_on_upload)

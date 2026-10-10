@@ -229,6 +229,31 @@ class RunTest(OrganizeBase):
         self.assertIsNotNone(store.sidecar(rel))
 
 
+class SeriesTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.old = store.DATA
+        store.DATA = Path(self.tmp.name)
+        store.reset_memory()
+        self.addCleanup(lambda: (setattr(store, "DATA", self.old), store.reset_memory(), self.tmp.cleanup()))
+
+    def test_progress(self):
+        k = series.key("The Walking Dead", 2010, 1402)
+        self.assertIsNone(series.next_episode(k, 1, 1))
+        old = series.remember(k, 1, 1, 1, 5)
+        self.assertIsNone(old)
+        self.assertEqual(series.next_episode(k, 1, 2), 6)
+        self.assertEqual(series.next_episode(k, 1, 1), 6)                  # Rest derselben Disc
+        self.assertIsNone(series.next_episode(k, 2, 1))
+        series.remember(k, 1, 3, 11, 15)
+        self.assertIsNone(series.next_episode(k, 1, 2))                    # Disc 2 kommt nach Disc 3: unbekannt
+        series.restore(k, 1, None)
+        self.assertIsNone(series.next_episode(k, 1, 1))
+
+    def test_key_without_tmdb(self):
+        self.assertEqual(series.key(" Serie ", 2020, None), "serie|2020")
+
+
 class InfoTest(unittest.TestCase):
     def test_from_name(self):
         i = info.info_for("Film (2021) [imdbid-tt1234567]/Film (2021) [imdbid-tt1234567].mkv")

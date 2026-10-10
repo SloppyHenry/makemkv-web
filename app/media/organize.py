@@ -89,7 +89,7 @@ async def _run(oid: str, req: dict, p: dict):
                 removed += moves.prune_empty(d, out_base)
         prev = _remember(req, op, done_rows, p)
         entry = {"id": oid, "t": time.time(), "title": req.get("title") or "", "kind": req["kind"], "action": st["action"], "rows": done_rows,
-                 "created_dirs": [str(d) for d in created], "removed_dirs": [str(d) for d in removed], "undone": False, "progress": prev}
+                 "created_dirs": [str(d) for d in created], "removed_dirs": [str(d) for d in removed], "undone": False, "progress": prev, "auto": bool(req.get("auto"))}
         if done_rows:
             h = history()
             h.append(entry)
