@@ -39,7 +39,7 @@
 .set-tab:focus-visible{outline:2px solid var(--red);outline-offset:-2px}
 .set-tab .nav-ico{width:18px;text-align:center}
 .set-dot{width:8px;height:8px;border-radius:50%;background:var(--amber);margin-left:auto;flex:none}
-.set-card .set-body{padding:18px 20px;display:grid;gap:14px;max-width:760px}
+.set-card .set-body{padding:18px 20px;display:grid;grid-template-columns:minmax(0,1fr);gap:14px;max-width:760px}
 .set-foot{display:flex;align-items:center;gap:10px;padding:12px 20px;border-top:1px solid var(--line);background:var(--panel2)}
 .set-foot .spacer{flex:1}
 .set-foot .primary{width:auto;padding:8px 18px}
@@ -66,7 +66,7 @@
 .drivebar>.lbl{display:none}
   .drives{flex-wrap:nowrap}.drive{font-size:11px;padding:7px 9px}
   main{padding-bottom:84px}
-  .set-layout{grid-template-columns:1fr;gap:12px}
+  .set-layout{grid-template-columns:minmax(0,1fr);gap:12px}
   .set-nav{position:static;flex-direction:row;overflow-x:auto;padding:6px;scrollbar-width:none}
   .set-tab{padding:8px 11px}.set-tab[aria-selected=true]{box-shadow:inset 0 -3px 0 var(--red)}
   .set-card .set-body{padding:14px}.set-foot{padding:10px 14px;flex-wrap:wrap}

@@ -112,7 +112,7 @@ function onClick(e){
   if(q('[data-reload]')){ load(); return; }
   if(q('#libmore')){ L.limit += 200; draw('rows'); return; }
   if(q('[data-start]')){ startConversion(); return; }
-  if(q('[data-cvopen]')){ if(!L.sel.size && L.cur){ const f = byPath(L.cur); if(f && selectable(f)) L.sel.add(L.cur); } if(!selectedFiles().length) return; L.cvOpen = true; refreshEst(0); draw('all'); return; }
+  if(q('[data-cvopen]')){ if(!L.sel.size && L.cur){ const f = byPath(L.cur); if(f && selectable(f)) L.sel.add(L.cur); } if(!selectedFiles().length) return; L.cvOpen = true; refreshEst(0); draw('all'); if(innerWidth <= 700) setTimeout(() => $('#libside').scrollIntoView({block:'start'}), 50); return; }
   if(q('[data-cvclose]')){ closeSide(); draw('all'); return; }
   if((b = q('[data-file]')) && !q('input,button,a,select')){ L.cur = b.dataset.file; if(L.cvOpen) closeSide(); L.cvOpen = false; draw('rows'); }
 }
