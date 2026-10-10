@@ -1,4 +1,4 @@
-# Status PD (Interner Player) – Stand 2026-10-10 (Backend fertig, Oberfläche wartet auf Freigabe des Mockups)
+# Status PD (Interner Player) – Stand 2026-10-10 (Backend und Oberfläche fertig, Mockup vom Nutzer freigegeben)
 
 ## Erledigt
 - Auftrag, Schnittstellen und Code gelesen; Fähigkeiten geprüft (siehe „Befunde“); Format-Konzept festgelegt (siehe „Entscheidungen“).
@@ -7,13 +7,19 @@
 
 - **Backend fertig und getestet** (`app/player.py` Router/Einstellungen/Fähigkeiten, `app/player_probe.py` Pfadprüfung/Probe/Entscheidung, `app/player_stream.py` Sitzungen/ffmpeg/Untertitel/Wächter; je < 400 Zeilen). Tests: `tests/test_player.py` (siehe „Getestet“).
 
+- **Oberfläche gebaut** (Mockup vom Nutzer freigegeben, 1:1 umgesetzt): `js/player.js` (Überlagerung `openPlayer`, eingebettet `mountPlayer`, Bedienung, Tastenkürzel, Vollbild), `js/player-engine.js` (Probe, Sitzung, Seek-Neustart, Wiederaufnahme, Untertitel), `js/player-ui.js` (Markup/Menüs), `js/player-settings.js` (Abschnitt „Player“), `css/player.css`. Primäre Bibliotheks-Aktion `play`; in „Fertige Dateien“ ist der Dateiname ein Knopf (Änderung in `js/files.js`, siehe unten).
+
 ## In Arbeit
-- Nichts, bis das Mockup freigegeben ist. Danach: `js/player.js` (Überlagerung, eingebettet, Menüs, Tastenkürzel, Untertitel-Anzeige, Seek-Neustart, Abschnitt „Player“ mit den Sprachfeldern) 1:1 nach dem Mockup, `registerLibraryAction({id:'play', primary:true})`, `registerSettingsSection` „Player“.
+- Nichts. Offen für PF: Einbetten im Detailbereich (siehe „Brauche von anderen“).
 
 ## Getestet (lokal, scripts/dev.sh, Chromium 152)
 - `python3 -m unittest tests.test_player` (Python >= 3.10; mit `PLAYER_URL=http://127.0.0.1:8830 PLAYER_OUT=<MKW_DEV_DIR>/output` laufen zusätzlich die HTTP-Tests gegen die Dev-Instanz): 26 Tests grün. Entscheidungsmatrix (Chrome-/Safari-Fähigkeiten, MPEG-2/VC-1/HEVC10, Erzwingen, Einbrennen, ohne Ton/Video), Pfadausbruch (`../`, absolut, NUL, Punktdateien/Sperrdatei, Symlink nach außen, Ordner, .iso, Nicht-Video -> 400/415/404), Range (206), Untertitel-WebVTT mit Umlauten, Sperrdatei -> `locked.by`, nur ein Transkodier-Strom (409), Ersetzen durch denselben Browser, **ffmpeg endet** bei Verbindungsabriss, bei `/stop` und im Wächter (Leerlauf/nie abgeholt).
 - Im Browser (echte `<video>`-Elemente gegen die Dev-Instanz): Remux (H.264+AC3 -> AAC) spielt, Neustart mit `start=61.5` beginnt exakt am Keyframe (52,083 s, vom Server gemeldet), MPEG-2 wird transkodiert und spielt, HEVC 10-bit wird ohne HEVC-Fähigkeit transkodiert, mit Fähigkeit + `mkv` **direkt** abgespielt (natives Suchen, Range). zweite Tonspur und Spracheinstellung wirken (geprüft: `audio_lang=de` wählt die deutsche Spur), Umwandeln in Originalgröße (1920x1080 bleibt 1920x1080). Einbrennen wurde getestet und dann auf Wunsch des Nutzers entfernt.
 - **Nicht getestet:** Safari und Firefox (fMP4-Strom ohne Range; Rückfall HLS nur falls nötig), HDR-Tonemapping (lokales ffmpeg ohne zscale; Filterkette nach ffmpeg-Wiki, auf dem Produktions-ffmpeg vorhanden), VAAPI.
+
+## Oberfläche geprüft (Chromium 152, Desktop 1440 und 375 px)
+Überlagerung und eingebettet: Remux, Transkodierung (MPEG-2), direkt (HEVC 10-bit), Fehler (.iso, Nicht-Video), Kapitelliste und -sprung, Suchleiste (im Gepufferten nativ, sonst Neustart), Pause, ±10 s, Tastenkürzel (Leertaste, Pfeile, 0–9, C, ?, Esc), Tonspur wechseln (Neustart an derselben Stelle), Untertitel wechseln/aus, Geschwindigkeit, Menüs (Desktop: Popover, 375 px: Blatt), Schließen beendet ffmpeg, Hash-Wechsel schließt, Klick auf Dateinamen in „Fertige Dateien“ und Bibliothek, Abschnitt „Player“ im Einstellungsdialog (Speichern, Werte kommen an). Konsole: keine Fehler außer den absichtlich provozierten 415-Antworten.
+**Nicht geprüft** (bitte selbst ansehen): echtes Vollbild und das Ausblenden der Leiste, Doppeltippen auf dem Handy, Safari/Firefox (fMP4-Strom ohne Range), iPhone-Vollbild, lange Wiedergabe mit Pause > 5 min (Wiederaufnahme), HDR.
 
 ## Bekannte Grenzen
 - Textuntertitel werden in einem Durchgang aus der ganzen Datei gelesen (Matroska hat dafür keinen Index): bei großen Dateien am NAS dauert der erste Abruf (Zwischenspeicher in `DATA/player-cache`, nie zwei gleichzeitig, `nice`). Die Oberfläche zeigt dann „Untertitel werden geladen …“.
@@ -53,7 +59,7 @@ Backend, Präfix `/api/player` (alle Pfade relativ zum Ausgabeordner; Fehler: 40
 - **PZ**: nichts am Dockerfile nötig.
 
 ## Fremde Dateien angefasst
-Keine.
+- `app/static/js/files.js` (P0/PZ), mit Erlaubnis des Koordinators: Dateiname in „Fertige Dateien“ wird ein Knopf (`.player-link`, Klasse in `player.css`), der die primäre Bibliotheks-Aktion (`getLibraryActions()`) ausführt; 6 Zeilen (Import, `prim()`, Delegation `#filesBody`). Falls PB/PZ in `files.js` ebenfalls ändern: nur diese Zeilen übernehmen.
 
 ## Fragen an den Nutzer
 Beantwortet (Entscheidung des Nutzers, über den Koordinator): beides (Überlagerung per Klick auf den Dateinamen und Abspielen-Knopf im Detailbereich); „Ton & Untertitel“ ein Menü; Transkodieren auf vierstein auch während eines Rips (niedrigste Priorität, Hinweis); **kein** „Abspielen auf maintux“ (Player bleibt lokal); **kein** Einbrennen (Bilduntertitel nur „nicht unterstützt“); Standard: möglichst die Originaldatei abspielen, kein Herunterskalieren (`max_height` 0 = Original), umgewandelt wird nur, wenn der Browser das Video nicht kann; bevorzugte Sprache für Ton und Untertitel in den Einstellungen.

@@ -119,7 +119,7 @@ class View {
   toggleFull(){
     if(this.isFull()){ (document.exitFullscreen || document.webkitExitFullscreen).call(document); return; }
     const r = this.root, f = r.requestFullscreen || r.webkitRequestFullscreen;
-    if(f) f.call(r); else if(this.e.v.webkitEnterFullscreen) this.e.v.webkitEnterFullscreen();     // iPhone: nur das Video
+    if(f) Promise.resolve(f.call(r)).catch(() => {}); else if(this.e.v.webkitEnterFullscreen) this.e.v.webkitEnterFullscreen();     // iPhone: nur das Video
   }
   wake(){ this.root.classList.remove('idle'); clearTimeout(this.idle); if(this.isFull()) this.idle = setTimeout(() => { if(this.e.state === 'playing') this.root.classList.add('idle'); }, 3000); }
   click(ev){
@@ -160,7 +160,7 @@ class View {
   seekUp(ev){ if(this.drag == null) return; const f = this.frac(ev); this.drag = null; this.seekEl.classList.remove('drag'); this.e.seek(f * this.e.duration()); }
   key(ev){
     const e = this.e, t = ev.target;
-    if(!e.info || ev.ctrlKey || ev.metaKey || ev.altKey || (t.tagName === 'INPUT' && t.type !== 'range') || t.tagName === 'SELECT') return;
+    if(!e.info || ev.ctrlKey || ev.metaKey || ev.altKey || t.tagName === 'INPUT' || t.tagName === 'SELECT') return;
     const k = ev.key, step = ev.shiftKey ? 60 : 10; let used = true;
     if(k === ' ' || k === 'k' || k === 'K'){ if(t.tagName === 'BUTTON' && k === ' ') return; e.toggle(); }
     else if(k === 'ArrowLeft') e.skip(-step); else if(k === 'ArrowRight') e.skip(step);
@@ -188,7 +188,7 @@ export function openPlayer(path, {start = 0} = {}){
   const prev = document.activeElement;
   document.body.insertAdjacentHTML('beforeend', windowHtml());
   const el = document.body.lastElementChild, win = el.querySelector('.player-window'), view = new View(win, {alone: false});
-  const onKey = ev => view.key(ev), onHash = () => closePlayer();
+  const onKey = ev => { if(ev.key === 'Tab' && !win.contains(document.activeElement)){ ev.preventDefault(); win.focus(); return; } view.key(ev); }, onHash = () => closePlayer();
   const prevOverflow = document.body.style.overflow; document.body.style.overflow = 'hidden';
   document.addEventListener('keydown', onKey, true); window.addEventListener('hashchange', onHash);
   el.addEventListener('click', ev => { if(ev.target === el) closePlayer(); });
