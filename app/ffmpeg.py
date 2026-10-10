@@ -47,7 +47,7 @@ class SkipConversion(Exception):
 
 
 async def probe(path: Path) -> dict:
-    p = await asyncio.create_subprocess_exec("ffprobe", "-v", "error", "-print_format", "json", "-show_format", "-show_streams", str(path),
+    p = await asyncio.create_subprocess_exec("ffprobe", "-v", "error", "-print_format", "json", "-show_format", "-show_streams", "-show_chapters", str(path),
                                              stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
     out, err = await p.communicate()
     if p.returncode:
