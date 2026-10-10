@@ -50,7 +50,7 @@ Backend, Präfix `/api/player` (alle Pfade relativ zum Ausgabeordner; Fehler: 40
 ## Brauche von anderen
 - **PF** (`js/library.js`): Stelle im Detailbereich der neuen Bibliothek für `mountPlayer(…)` (siehe Mockup, Variante B); Klick auf Dateinamen löst sonst die primäre Aktion (Überlagerung) aus. Status: offen, wartet auf PF-Mockup.
 - **P0/PZ** (`js/files.js`): „Fertige Dateien“ hat keine Aktionen; Klick auf den Dateinamen soll `getLibraryActions().find(primary)` ausführen. Status: offen (Koordinator entscheidet).
-- **PC** (später): Strom-Adresse eines Rechners (`peers[i].url` ist schon in `/api/state`), `allow_proxy`-Eintrag meldet PD selbst an. Status: offen, niedrige Priorität.
+- **PC** (später, optional): Für „Abspielen auf maintux“ holt der Browser Strom und Datei direkt unter `peers[i].url` (steht in `/api/state`). PCs Rechner-Token gilt dort nicht; bei gesetztem `AUTH_PASS` auf dem Zielrechner fragt der Browser per Basic-Anmeldung. Bitte PC prüfen, ob `/api/player/stream|file|subtitle` unter der Token-Prüfung für Browser-Direktaufrufe erreichbar bleiben (`auth.py` Pfadliste), sonst reicht der Verbund nur für `probe/session/stop` per Proxy. Status: offen, niedrige Priorität.
 - **PZ**: nichts am Dockerfile nötig.
 
 ## Fremde Dateien angefasst
