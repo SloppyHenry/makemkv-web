@@ -82,3 +82,4 @@
 .node-code-inline{display:block;margin-top:8px}
 .node-add-result{border-top:1px solid var(--line)}
 @media(max-width:760px){.node-dlg dl{grid-template-columns:1fr}}
+.node-section [hidden],.node-banner[hidden]{display:none!important}

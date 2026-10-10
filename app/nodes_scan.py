@@ -128,7 +128,15 @@ async def probe(host: str, port: int, sem: asyncio.Semaphore):
             r, w = await asyncio.wait_for(asyncio.open_connection(host, port), 0.7)
             w.write(f"GET /api/discovery/hello HTTP/1.0\r\nHost: {host}:{port}\r\nUser-Agent: makemkv-web-scan\r\n\r\n".encode())
             await w.drain()
-            raw = await asyncio.wait_for(r.read(65536), 2.0)
+            raw = b""
+            async def _all():
+                nonlocal raw
+                while len(raw) < 65536:           # Kopf und Inhalt kommen oft in getrennten Stücken
+                    chunk = await r.read(8192)
+                    if not chunk:
+                        break
+                    raw += chunk
+            await asyncio.wait_for(_all(), 2.0)
             head, _, body = raw.partition(b"\r\n\r\n")
             if b" 200 " not in head.split(b"\r\n", 1)[0]:
                 return None
