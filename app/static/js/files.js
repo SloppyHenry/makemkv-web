@@ -1,15 +1,20 @@
 // „Fertige Dateien“ (kompakte Liste der letzten Dateien im Ziel).
 import { $, ago, baseName, delegate, esc, fmtB, setHtml, toast, ui } from './core.js';
-import { emit, navigate, on, onState, registerPanel } from './registry.js';
+import { emit, getLibraryActions, navigate, on, onState, registerPanel } from './registry.js';
 
 export async function loadFiles(){
   try{ ui.files = (await (await fetch('/api/files')).json()).files; }catch{ return; }
   if(!$('#filesBody')) return;
   const f = ui.files.slice(0,6);
   $('#nofiles').hidden = f.length > 0;
-  setHtml($('#filesBody'), f.map(x => `<tr><td class="file-name" title="${esc(x.path)}">${esc(baseName(x.path))}</td><td>${fmtB(x.size)}</td><td class="muted">${ago(x.mtime)}</td>
+  const prim = x => getLibraryActions().find(a => a.primary && a.when([x]));      // primäre Aktion (Abspielen) am Dateinamen
+  setHtml($('#filesBody'), f.map(x => `<tr><td class="file-name" title="${esc(x.path)}">${prim(x) ? `<button type="button" class="player-link" data-fprim="${esc(x.path)}">${esc(baseName(x.path))}</button>` : esc(baseName(x.path))}</td><td>${fmtB(x.size)}</td><td class="muted">${ago(x.mtime)}</td>
     <td><a class="file-action" title="Download" aria-label="Download" href="/api/download?path=${encodeURIComponent(x.path)}">↓</a></td></tr>`).join(''));
 }
+delegate('#filesBody', 'click', e => {
+  const b = e.target.closest('[data-fprim]'), x = b && ui.files.find(f => f.path === b.dataset.fprim), a = x && getLibraryActions().find(a => a.primary && a.when([x]));
+  if(a) a.run([x]);
+});
 delegate('#to-lib', 'click', () => navigate('bibliothek'));
 delegate('#files-reload', 'click', () => { loadFiles(); toast('Dateiliste aktualisiert.'); });
 

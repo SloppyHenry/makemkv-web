@@ -1,5 +1,6 @@
 /* Interner Player (Besitzer: PD). Überlagerung (.player-overlay > .player-window) und eingebettet (.player allein).
    Die Maße richten sich nach der Breite des Players bzw. des Fensters (Container Queries), nicht nach dem Browserfenster. */
+.player [hidden],.player-window [hidden]{display:none!important}
 .player-icons{position:absolute;width:0;height:0;overflow:hidden}
 .player svg,.player-window svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none}
 
@@ -129,3 +130,8 @@
   .player-stage{max-height:none}
 }
 @media(prefers-reduced-motion:reduce){.player-spin{animation-duration:2.4s}}
+
+/* Dateiname als Knopf in Listen (Fertige Dateien, Bibliothek): Klick spielt ab */
+.player-link{background:none;border:0;color:var(--text);font:inherit;padding:0;text-align:left;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;text-decoration:underline dotted #5b6b83;text-underline-offset:3px}
+.player-link:hover{color:#fff;text-decoration-color:var(--red)}
+.player-embed{min-width:0}
