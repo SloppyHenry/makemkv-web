@@ -3,9 +3,10 @@
 ## Erledigt
 - Auftrag, Schnittstellen und Code gelesen; Fähigkeiten geprüft (siehe „Befunde“); Format-Konzept festgelegt (siehe „Entscheidungen“).
 
+- **Mockup fertig: docs/mockups/paket-d.html** (Reiter: Überlagerung · Im Detailbereich (Bibliothek) · Menüs · Hinweise & Zustände · Handy 375 px · Einstellungen). Es nutzt schon die endgültige `app/static/css/player.css` (Klassen `.player…`, Container Queries am Player/Fenster); beim Bauen wird nur das Markup in `js/player.js` erzeugt, 1:1 wie im Mockup. Ansehen: Datei im Browser öffnen (file://) oder `python3 -m http.server` im Repo-Stamm, dann `/docs/mockups/paket-d.html`.
+
 ## In Arbeit
-- Mockup `docs/mockups/paket-d.html` (Überlagerung + Variante im Detailbereich der Bibliothek, Desktop und 375 px).
-- Danach Backend: Probe/Plan, Remux/Transkodierung, Untertitel (WebVTT), Prozess-Aufräumen, Tests.
+- Backend (ohne neue Oberfläche): Probe/Plan, Remux/Transkodierung, Untertitel (WebVTT), Prozess-Aufräumen, Tests. Die Oberfläche (`js/player.js`) folgt erst nach Freigabe des Mockups.
 
 ## Befunde (lokal und lesend auf vierstein)
 - **Browser (Chromium 152, Mac):** H.264 (inkl. High10), HEVC 8/10-bit, AV1, VP9, AAC, Opus, FLAC im MP4 gehen; **AC3/E-AC3 gehen nicht**; Matroska nur „maybe“ (MediaSource: nein). Safari kann kein Matroska, dafür HEVC. VC-1, MPEG-2, DTS, TrueHD kann kein Browser. Der Browser meldet seine Fähigkeiten selbst (`canPlayType`/`MediaSource.isTypeSupported`), der Server entscheidet danach.
@@ -37,4 +38,9 @@
 Keine.
 
 ## Fragen an den Nutzer
-(folgen mit dem Mockup)
+1. Soll es **beides** geben: Klick auf den Dateinamen öffnet die Überlagerung, ein Abspielen-Knopf im Detailbereich der Bibliothek bettet den Player ein (Empfehlung), oder nur eines von beiden?
+2. Ton und Untertitel liegen in **einem** Menü („Ton & Untertitel“), damit auf dem Handy alles in eine Zeile passt. Recht so?
+3. Darf auf dem Rechner mit dem Laufwerk (vierstein, 4 Kerne) **transkodiert werden, während ein Rip läuft** (mit niedrigster Priorität, Hinweis im Player)? Oder lieber sperren und nur „Auf maintux abspielen“ anbieten?
+4. Soll es „Abspielen auf maintux“ (Umwandeln auf dem stärkeren Rechner, Browser holt den Strom direkt dort ab) geben? Setzt voraus, dass der Browser maintux:8780 erreicht.
+5. Bilduntertitel (PGS/VobSub) **einbrennen** anbieten (kostet Transkodierung) oder nur „nicht unterstützt“ anzeigen?
+6. Standard-Qualität beim Umwandeln: 720p, CRF 24 (Mockup-Annahme). Passt das?
