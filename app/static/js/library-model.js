@@ -34,7 +34,7 @@ export function statusOf(f, live){
   if(f.state === 'probing') return 'probing';
   if(f.state === 'unknown') return 'err';
   if(!f.info) return 'other';
-  return f.info.codec === 'hevc' || f.info.codec === 'av1' ? 'conv' : 'orig';
+  return f.info.codec === 'hevc' || f.info.codec === 'av1' || f.info.encoded ? 'conv' : 'orig';
 }
 export function decorate(files){
   const live = liveJobs();

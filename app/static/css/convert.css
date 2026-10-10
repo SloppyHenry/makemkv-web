@@ -122,3 +122,4 @@ tr.cvs-edit td{padding:6px 0 12px;white-space:normal}
 .cv-cmp.img{height:auto;aspect-ratio:16/9}
 .cv-cmp.img .after{filter:none}
 .cv-cmp-cmd{max-height:240px;overflow:auto}
+@container cv (max-width:520px){ .cv-scale span:first-child{display:none} }
