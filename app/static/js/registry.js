@@ -23,6 +23,8 @@ export function registerView(v){
 export const getViews = () => views.slice();
 export const isActive = id => current === id;
 export const currentView = () => current;
+// Rest der Adresse nach der Ansicht: #/einstellungen/media → 'media' (für Unterabschnitte; Ereignis 'route' bei jeder Hash-Änderung)
+export const routeRest = () => location.hash.replace(/^#\//, '').split('/').slice(1).join('/').split('?')[0];
 export const navigate = id => { const v = views.find(x => x.id === id); if(v && location.hash !== '#/' + v.hash) location.hash = '#/' + v.hash; else if(v) show(v.id); };
 
 function container(id){
@@ -41,8 +43,8 @@ function show(id){
   rerender();
 }
 export function startRouter(){
-  const fromHash = () => { const h = location.hash.replace(/^#\//, ''); return (views.find(v => v.hash === h) || views[0] || {}).id; };
-  window.addEventListener('hashchange', () => show(fromHash()));
+  const fromHash = () => { const h = location.hash.replace(/^#\//, '').split(/[/?]/)[0]; return (views.find(v => v.hash === h) || views[0] || {}).id; };
+  window.addEventListener('hashchange', () => { show(fromHash()); emit('route', routeRest()); });
   show(fromHash());
 }
 
