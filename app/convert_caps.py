@@ -85,7 +85,7 @@ def publish():
 
 def unusable(cfg: dict, info: dict) -> str:
     """Warum dieser Rechner den Auftrag nicht ausführen kann ('' = geht). Ohne abgeschlossene Prüfung wird nur auf das Offensichtliche geachtet."""
-    v, p, s = cfg["video"], cfg["picture"], cfg["sound"]
+    v, s = cfg["video"], cfg["sound"]
     if caps["probed"]:
         if v["codec"] in SW and SW[v["codec"]] not in caps["encoders"]:
             return f"{CODECS[v['codec']]['label']} ist auf diesem Rechner nicht installiert"

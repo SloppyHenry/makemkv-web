@@ -1,0 +1,81 @@
+# Status PF (Konvertierungs-Einstellungen + neue Bibliothek) – Stand 2026-10-10
+
+Mockup fertig: docs/mockups/paket-f.html (liegt mit `paket-f.css` und `paket-f.js` im selben Ordner; Doppelklick genügt, bei `file://` in manchen Browsern/Vorschauen läuft JS nicht: dann im Repo-Stamm `python3 -m http.server` und `/docs/mockups/paket-f.html` öffnen)
+
+## Erledigt
+- **Mockup** (Teil 1: Preset-Karten, Anpassen in drei Ebenen, Vorhersage; Teil 2: neue Bibliothek), Varianten siehe unten.
+- **Backend** (alles getestet, `python3 -m unittest discover -s tests -t .`, 49 Tests, davon 12 mit echten Konvertierungen):
+  - `app/convert_schema.py`: Schema v2, Prüfung, Migration von v1, Spiegel der alten Felder, `is_v1_compatible`/`to_v1`, Qualitätsskala je Codec.
+  - `app/ffmpeg_args.py`: Argumente je Codec (x265, x264, SVT-AV1, Hardware VAAPI/QSV/NVENC/VideoToolbox, nur remuxen), Filter (Deinterlace auto/an/IVTC, Zuschneiden auto/aus/manuell, Entrauschen, Skalieren ohne Hochskalieren, HDR→SDR), Ton (kopieren/AAC/Opus/AC3/E-AC3, Kanäle, Bitrate), Untertitel (alle/erzwungene/Sprachen/keine), Zielgröße/Bitrate mit 2 Durchgängen (x265/x264), HDR10-Durchreichung (x265, Hardware-HEVC). Für alte Einstellungen entsteht **derselbe Befehl wie vorher** (Test vergleicht gegen den alten Code).
+  - `app/ffmpeg.py`: Prozesse, Zeilensprung-Erkennung (`idet`), HDR-Probe, 2 Durchgänge mit Fortschritt, Segment-Modus für alle Software-Codecs (für Hardware, 2 Durchgänge, Telecine-Entfernung automatisch aus, mit Grund in `item.mode`).
+  - `app/convert.py`: **Worker-Fehler behoben** (`ensure_conv_workers()` startet jetzt wirklich bis zu `conv_parallel` Worker, kleiner stellen beendet überzählige; ein Fehler im Aufräumen beendet keinen Worker mehr; Test mit 3/5/1 Workern). Neue Ausnahme `Unsupported`: fehlt Encoder/Filter, gibt es keinen zweiten Versuch und das Original bleibt unverändert.
+  - `app/convert_caps.py`: Fähigkeiten beim Start (ffmpeg `-encoders`/`-filters`, Hardware-Encoder mit **Probelauf** auf dem Gerät), `ext.register_capability('encoders', [...])` und `('convert', {...})`; `peer_ok()` = Verbund-Regel.
+  - `app/convert_stats.py`: `DATA/conv_stats.json`, Vorhersage Größe (Modell × Median „tatsächlich/Modell“) und Dauer (Bilder/s je Kern, je Rechner gemessen).
+  - `app/convert_builtin.py` + `app/convert_presets.py`: sechs mitgelieferte Presets, eigene Presets, Standard je Disc-Art, Namensraum `convert`, API `/api/convert/…`.
+  - `app/library_info.py` + `app/library.py`: `/api/library` liefert zusätzlich je Datei `kind`, `est`, mehr `info` (Spuren, Bitrate, Kapitel, HDR-Art) und `summary`; Konvertieren prüft pro Datei gegen die Einstellungen (HDR-Material geht jetzt mit HDR-Presets).
+  - Wichtig: Alte Clients (alte Oberfläche, alte Rechner) funktionieren weiter: `clean_convert` nimmt v1 und v2, liefert v2 **mit Spiegel** `rf/preset/tune/extra/audio`; alte Oberfläche speichert weiter `presets.bluray/dvd` flach.
+
+## In Arbeit / noch offen (Backend)
+- Zwei-Instanzen-Test (Verbund, v2-Auftrag an neuen Rechner, Sperre gegen „alten Stand“), Prüfung der HTTP-Endpunkte im Browser-Alltag.
+- Oberfläche (`convert-editor.js`, neue `library.js`, `css/convert.css`, `css/library.css`, Abschnitt `convert`) erst **nach Freigabe des Mockups** (1:1).
+
+## Mockup: Aufbau und Varianten
+Teil 1 (Konvertierung einstellen) – ein Editor in drei Ebenen: (1) Preset-Karten (6 mitgelieferte + eigene + „Eigenes Preset“), (2) Anpassen mit Codec-Segment (x265 · x264 · SVT-AV1 · Hardware · nur remuxen), Bit-Tiefe, Qualitätsregler mit Wortskala („sehr klein … optisch verlustfrei“, Zahl daneben, Marke „Preset“), Zielgröße/Bitrate, Geschwindigkeit, Bild, Ton, Untertitel; geänderte Werte mit Punkt, „zurück auf Preset“, (3) Experten (freie Parameter + Befehl). Vorhersage: Größe vorher→nachher, Dauer je Rechner (alter Stand ausgegraut mit Grund), Probe mit Vorher/Nachher-Schieber.
+- **A** Karten + Akkordeon (eine Spalte, gut für Titelliste/Seitenleiste/Handy). **B** Karten + Reiter + Vorhersage-Spalte rechts (breit). **C** Einstellungsabschnitt „Konvertierung & Presets“. **D** Titelliste „Nach dem Rippen konvertieren“ (kompakt, „Anpassen“ klappt A darunter auf).
+Teil 2 (Bibliothek): Kopfzeile mit Speicherplatz des Ziels und „mögliche Einsparung“; Filter links (Status, Art, Ordner, Rechner), Liste oder Raster mittig, Detailbereich rechts (mit Platz für den Player von PD), Auswahlleiste unten (Summe, Ersparnis, Preset, „Ausführen auf“ mit Dauer, „Anpassen …“ öffnet den Editor als Seitenleiste), laufende Arbeit direkt an der Datei, Plaketten (Codec, Auflösung, HDR, Ton, Status).
+- **A** Liste + Filterspalte + Detail. **B** Raster mit Postern, Filter als Chips, Detail als Schublade. Beide mit Umschalter Liste/Raster. Bei 375 px: Filter hinter „Filter“, Detail unter der Liste, Auswahlleiste kompakt.
+
+## Preset-Werte und Begründung
+Quellen: HandBrake-Dokumentation „Adjust Quality“ (empfohlene RF-Bereiche: SD 18–22, 720p 19–23, 1080p 20–24, 2160p 22–28 für x264/x265; SVT-AV1: SD 22–32, 720p/1080p 25–35, 2160p 25–40; die Skalen der Encoder sind **nicht** direkt vergleichbar), x265-Dokumentation „Presets and tunes“ (grain: aq-mode 0, cutree 0, psy-rd 4.0, psy-rdoq 10, sao 0; animation: psy-rd 0.4, aq-strength 0.4, deblock 1:1, bframes +2), SVT-AV1 `Docs/Ffmpeg.md` (CRF 1–70, 30 als Start für 1080p, Preset 0–13, 4–6 für Privatgebrauch, `film-grain` 8 für Live-Action, 10-Bit empfohlen), ffmpeg-Wiki (x265 CRF 28 ≈ x264 CRF 23).
+| Preset | Werte | Begründung |
+|---|---|---|
+| DVD optimal | x265 10-bit, RF 19, slow, aq-mode=3:no-sao=1, Deinterlace auto, Entrauschen leicht (hqdn3d 2:1:2:3), Ton kopieren | SD-Bereich 18–22; MPEG-2-Rauschen kostet sonst Bits; viele DVDs sind interlaced/telecined (idet → bwdif bzw. IVTC) |
+| Blu-ray optimal | x265 10-bit, RF 20, slow, aq-mode=3:no-sao=1, Ton kopieren | 1080p-Bereich 20–24; bisheriger Standard (vorher RF 21) |
+| Blu-ray Animation | x265 10-bit, RF 22, slow, tune animation, keine eigenen aq-Parameter | glatte Flächen vertragen höheres RF; eigene aq-Parameter würden den Tune überschreiben |
+| Film mit starkem Korn | x265 10-bit, RF 19, slow, tune grain | Tune setzt aq-mode 0/psy-rd 4/psy-rdoq 10/sao 0; Korn kostet Bits, deshalb niedrigeres RF; kein aq-mode=3 |
+| UHD / HDR erhalten | x265 10-bit, RF 22, medium, aq-mode=3, HDR10 durchreichen | 2160p-Bereich 22–28; `slow` wäre bei 4K sehr langsam; Mastering-Display/MaxCLL/BT.2020-PQ aus der Quelle; Dolby Vision geht verloren (HDR10-Basis bleibt) |
+| Klein & schnell | x265 10-bit, RF 26, faster, ≤ 720p, Deinterlace auto, AAC Stereo 160 kb/s | ca. 4× schneller als slow und deutlich kleiner; AAC überall abspielbar |
+Qualitätsskala je Codec (Regler „kleiner ← → besser“, 0–100): x265 RF 30→14, x264 CRF 28→12, SVT-AV1 CRF 45→18, Hardware QP 34→16. Gleiche Reglerstellung = ungefähr gleiche Wahrnehmung (x265 RF 20 ≙ x264 CRF 18 ≙ SVT-AV1 CRF 28 ≙ Hardware QP 23). Das ist eine begründete Näherung, kein Messwert: Die Probe (zwei kurze Ausschnitte) soll das später im Einzelfall prüfen. Wortmarken: ab 80 „optisch verlustfrei“, ab 56 „hoch“, ab 33 „ausgewogen“, ab 12 „klein“.
+
+## ffmpeg im Produktions-Image (nur lesend geprüft: vierstein, Debian 13, ffmpeg 7.1.5, Python 3.13)
+Vorhanden: libx265, libx264, libsvtav1 (+ libaom, librav1e), libopus, aac/ac3/eac3; Hardware-Encoder h264/hevc/av1 für vaapi, qsv, nvenc (nvenc ohne Treiber unbrauchbar); Filter bwdif, yadif, hqdn3d, fieldmatch, decimate, idet, tonemap, **zscale** (alle da); `/dev/dri/renderD128` ist im Container sichtbar. vierstein: Intel i5-7300U (2 Kerne/4 Threads, Kaby Lake).
+**Fehlt: ein VA-API-Treiber** (`/usr/lib/x86_64-linux-gnu/dri/*_drv_video.so` gibt es im Image nicht, nur libva2/libvpl2): Hardware-Encoding würde dort daher nicht funktionieren; die Probe beim Start meldet es deshalb zu Recht nicht. Kaby Lake kann ohnehin nur 8-Bit-HEVC kodieren (kein 10 Bit).
+**Wünsche an PZ (Dockerfile):** (1) `intel-media-va-driver` (iHD, in Debian trixie main) in die Laufzeitstufe, optional `vainfo` zum Prüfen; (2) Compose: `devices: /dev/dri:/dev/dri` ist vorhanden, ggf. `group_add` für die Gruppe `render`/`video`, wenn das Gerät sonst nicht lesbar ist. Alles andere ist schon im Image.
+
+## Angebotene Schnittstellen
+**Einstellungs-Schema v2** (`cfg`, überall dort, wo bisher die fünf Felder standen): siehe Kopf von `app/convert_schema.py`. Abschnitte `video`, `quality`, `picture`, `sound` (nicht `audio`!), `subs`, `origin` (Kennung des Presets); darüber der **Spiegel** der alten Felder `rf, preset, tune, extra, audio` (damit alte Oberflächen/Rechner nichts Falsches lesen).
+**API** (alle `GET/POST /api/convert/…`; nicht im Proxy, der Browser ruft den eigenen Rechner):
+- `GET /meta` → Codecs (mit `available`), Skalen, Wortmarken, `presets` (mitgelieferte + eigene, je `{id, name, desc, builtin, cfg}`), `defaults` je Disc-Art `{bluray|dvd|uhd: {id, cfg}}`, `caps`, `stats`.
+- `POST /normalize {cfg}` → `{cfg (v2 vollständig), v1_compatible, summary, command}`; `POST /translate {cfg, files:[{to:"x264"}]}` → Codec wechseln mit gleicher Wahrnehmungsstufe.
+- `POST /estimate {cfg, paths?:[…], files?:[{size,dur,w,h,fps,audio}]}` → `{in_bytes, out_bytes, samples, nodes:[{name, local, ok, reason, secs, samples, cores, load}]}` (ohne Dateien: Beispielfilm 24 GB/2 h). `ok:false` + `reason` = ausgrauen.
+- `POST /presets {name, desc, cfg}`, `PATCH /presets/{id}`, `DELETE /presets/{id}`, `POST /defaults {kind, preset}`; `GET /stats`.
+- `POST /start {target:"local"|<Rechner>, paths, convert:cfg, takeover_from?}` → wie `/api/library/convert` (`{started, skipped}`); fremde Rechner nur, wenn `peer_ok` (alter Stand/fehlender Encoder → 409 mit Grund). **Die Oberfläche soll künftig diesen Endpunkt statt `/api/peer/<name>/library/convert` verwenden.**
+- `GET /api/library` zusätzlich: je Datei `kind` (`sd|hd|uhd`), `est {preset, bytes, samples, issue}`, `info.{fps,bitrate,alist,slist,chapters,hdr_fmt,interlaced,abytes}`; `summary {count, bytes, orig_count, orig_bytes, save_bytes, free}`.
+- Einstellungen: Namensraum `convert` = `{presets:{id:{name,desc,cfg}}, default_for:{bluray|dvd|uhd: id}}`; `conv_parallel`, `conv_segments` bleiben in `general` (mit PB so abgesprochen: mein Abschnitt `convert` liefert in `collect()` beides: `{general:{conv_parallel, conv_segments}, convert:{…}}`). Die alten flachen `presets.bluray/dvd` bleiben die **maßgebliche** Standardvorgabe je Disc-Art (alte Oberflächen schreiben sie weiter); `default_for` benennt nur das gewählte Preset und schreibt es in die flachen Felder.
+- Fähigkeiten in `/api/state` → `capabilities`: `encoders` (Liste ffmpeg-Namen, getestet) und `convert {schema:2, codecs:[x265,x264,svtav1,hw,copy], hw:[…], hw10:[…], filters:[…], audio:[…], cores, speed:{codec: Bilder/s je Kern}}`.
+**Frontend (nach Freigabe):** `import { mountConvertEditor, getDefaultConfig, cvSummary } from './convert-editor.js'`
+- `const ed = mountConvertEditor(el, value, {target, onChange, mode, discKind, files})`
+  - `value`: Einstellungen v1 **oder** v2 (wird geprüft/migriert; `null` = Standard der `discKind`), das Feld `convert` (an/aus) wird unverändert durchgereicht, der Schalter bleibt beim Panel (PA).
+  - `target`: Name des Rechners für Fähigkeiten/Vorhersage (`''` = dieser), optional; `files`: optional Beispieldateien `[{path}]` bzw. `[{size,dur,w,h,fps,audio}]` für die Vorhersage; `mode`: `'full'` (Karten, Ebenen, Vorhersage) | `'compact'` (Karten-Reihe + Zusammenfassung, „Anpassen“ klappt auf; für die Titelliste) | `'side'` (Seitenleiste in der Bibliothek).
+  - `onChange(cfg)` bekommt die vollständige v2-Einstellung (mit Spiegel der alten Felder, also auch für `POST /api/rip` brauchbar); Rückgabe `{get(), set(cfg), destroy()}`.
+- `getDefaultConfig(discKind)` (async, aus `/api/convert/meta`), `cvSummary(cfg)` (Kurztext).
+- **Bibliotheks-Aktionen (Ankündigung, rückwärtsverträglich):** `registerLibraryAction({id, label, icon, primary?, when(files, ctx), run(files, ctx)})`. `files` = Array der betroffenen Dateien (`{path,size,mtime,state,info,job,locked,kind,est}`), `ctx = {where:'row'|'detail'|'bar'|'folder', folder?}` (zweites Argument ist neu und optional). Aufgerufen wird `when` mit (a) **einer** Datei (Zeile/Detail), (b) der **Auswahl** (Auswahlleiste, ≥ 1 Datei), (c) **allen Dateien eines Ordners** (`where:'folder'`). Eine Aktion, die nur für eine Datei gedacht ist, prüft `files.length === 1` und erscheint dann nicht in der Leiste. `primary: true` bleibt: Klick auf den Dateinamen (nur für genau eine Datei). Die Bibliothek stellt in der Leiste Aktionen mit `when(auswahl)===true` als Knöpfe dar.
+
+## Brauche von anderen
+- **PB** (Einstellungsseite): Abschnitt `convert` (Name „Konvertierung & Presets“, `order` 30?) wird nach Freigabe von mir angemeldet; bis dahin `convert-basic`. Mein `collect()` liefert `{general:{conv_parallel, conv_segments}, convert:{presets, default_for}}`. Preset anlegen/löschen/als Standard setzen geht **sofort** über die API (nicht über Speichern); ich löse dann `change` aus. Status: abgestimmt.
+- **PC**: Danke für `cluster.peer_call(name, path, body, timeout=…)` und `peers[i].legacy/capabilities`. `convert_presets.api_start` nutzt beides (Fallback auf `cluster._http_json`). Die **Übergabe** (`cluster.api_handover`, `hand_to_peer_after_upload`) sendet `c["cfg"]` an `/api/library/convert` des Zielrechners: bitte vor dem Senden `convert_caps.peer_ok(cfg, peer)` aufrufen (bei `False` mit Grund ablehnen; ältere Rechner erhalten dann nur v1-verträgliche Aufträge) und für `legacy`-Rechner `convert_schema.to_v1(cfg)` statt `cfg` senden. Dasselbe in `handover.js` (Rechner ausgrauen, Grund aus `/api/convert/estimate` → `nodes[].reason`). Status: offen.
+- **PE**: Für Gruppierung/Poster in der Bibliothek brauche ich eine **Sammelabfrage** `POST /api/media/infos {paths:[…]}` (statt hunderter `GET /api/media/info?path=`), Antwort `{path: {title, year, kind, poster, season, episode}}`; wo nichts bekannt ist, einfach weglassen. Ich zeige Poster/Gruppen nur, wenn die Antwort etwas liefert. Status: offen.
+- **PD**: Detailbereich der neuen Bibliothek hat im Mockup einen Platz für `mountPlayer(el, path, {compact:true})` (unter den Spuren, über den Knöpfen); der Knopf „Abspielen“ im Detail schaltet ihn ein/aus, Klick auf den Dateinamen öffnet die Überlagerung (primäre Aktion). Status: abgestimmt (Mockup zeigt es).
+- **PA**: `mountConvertEditor` (Signatur oben) für „Nach dem Rippen konvertieren“ in `titles.js`; bis zur Freigabe bleibt das alte Formular (`cvform.js` bleibt, bis `convert-editor.js` es ersetzt). Status: offen.
+- **PZ**: Dockerfile-Wünsche oben; `tests/` ist neu (`python3 -m unittest discover -s tests -t .`; braucht ffmpeg und die Beispieldateien aus scripts/dev.sh).
+
+## Fremde Dateien angefasst
+Keine.
+
+## Fragen an den Nutzer
+1. Der mitgelieferte Preset „Blu-ray optimal“ nimmt **RF 20** (bisheriger Standard war 21): leicht bessere Qualität, etwa 8 % größere Dateien. Einverstanden, oder RF 21 behalten?
+2. Die Presets „DVD optimal“ und „Klein & schnell“ schalten Deinterlace **automatisch** ein (Erkennung per `idet`). Bei Telecine-Material (3:2-Pulldown) wird dann Inverse-Telecine genutzt (andere Bildrate, Segment-Modus dann aus). Recht so?
+3. HDR: Dolby Vision lässt sich mit x265 nicht erhalten (die HDR10-Basis bleibt). Reicht das, oder soll bei Dolby-Vision-Dateien gewarnt/übersprungen werden? (Vorschlag: Hinweis in der Oberfläche.)
+4. Hardware-Encoding (VAAPI/QSV) ist im Mockup als „Hardware“ vorgesehen, erscheint aber nur, wenn der Rechner es meldet (vierstein braucht dafür erst den Treiber im Image, siehe PZ-Wunsch; Kaby Lake kann nur 8 Bit). Soll das überhaupt angeboten werden, oder reicht Software?
+5. Die „Probe“ (2 × 25 s kodieren, hochrechnen, Vorher/Nachher-Schieber) ist im Mockup zu sehen, im Backend aber noch nicht gebaut (Aufwand mittel). Gewünscht für die erste Fassung, oder später?
+6. Bibliothek: Liste **und** Raster behalten (Variante A mit Filterspalte vs. B mit Chips)? Vorschlag: A als Standard, Raster nur zuschaltbar.
