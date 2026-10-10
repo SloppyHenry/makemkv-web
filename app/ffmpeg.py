@@ -9,6 +9,7 @@ from pathlib import Path
 import signal
 from collections import deque
 from app.config import CONV_WORK
+from app.ffmpeg_args import changes_framecount, ffmpeg_args, mux_args, segment_args, two_pass
 from app.state import broadcast, conv_procs, conv_state, conversions
 
 
@@ -75,45 +76,53 @@ async def detect_crop(src: Path, dur: float, w: int, h: int):
     return f"crop={cw}:{ch}:{x1}:{y1}"
 
 
-def x265_args(cfg: dict, pools: int = 0) -> list[str]:
-    a = ["-c:v", "libx265", "-preset", cfg["preset"], "-crf", str(cfg["rf"]), "-pix_fmt", "yuv420p10le"]
-    if cfg["tune"] in ("grain", "animation"):          # film/stillimage: x265 kennt dazu keinen Tune -> keiner gesetzt
-        a += ["-tune", cfg["tune"]]
-    params = ["log-level=error"] + ([f"pools={pools}"] if pools else []) + ([cfg["extra"]] if cfg["extra"] else [])
-    return a + ["-x265-params", ":".join(params)]
+async def detect_scan(src: Path, dur: float) -> str:
+    """Zeilensprung erkennen (idet an drei Stellen): 'progressive', 'interlaced' oder 'telecine' (3:2-Pulldown, braucht IVTC)."""
+    tff = bff = prog = top = bot = neither = 0
+    for f in (0.25, 0.5, 0.75):
+        p = await asyncio.create_subprocess_exec("nice", "-n", "10", "ffmpeg", "-hide_banner", "-nostdin", "-ss", str(int(dur * f)), "-i", str(src), "-t", "12",
+                                                 "-vf", "idet", "-an", "-sn", "-f", "null", "-", stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.PIPE)
+        _, err = await p.communicate()
+        t = err.decode(errors="replace")
+        m = re.search(r"Multi frame detection: TFF:\s*(\d+)\s*BFF:\s*(\d+)\s*Progressive:\s*(\d+)", t)
+        r = re.search(r"Repeated Fields: Neither:\s*(\d+)\s*Top:\s*(\d+)\s*Bottom:\s*(\d+)", t)
+        if m:
+            tff, bff, prog = tff + int(m[1]), bff + int(m[2]), prog + int(m[3])
+        if r:
+            neither, top, bot = neither + int(r[1]), top + int(r[2]), bot + int(r[3])
+    n = tff + bff + prog
+    if n < 20 or (tff + bff) / n < 0.25:
+        return "progressive"
+    rep = (top + bot) / max(1, top + bot + neither)
+    return "telecine" if rep > 0.1 else "interlaced"
 
 
-def audio_args(cfg: dict, info: dict) -> list[str]:
-    auds = [x for x in info["streams"] if x["codec_type"] == "audio"]
-    if cfg["audio"] == "copy" or not auds:
-        return ["-c:a", "copy"]
-    a: list[str] = []
-    for i, st in enumerate(auds):
-        ch = int(st.get("channels") or 2)
-        if cfg["audio"] == "aac":
-            if ch > 6:
-                a += [f"-ac:a:{i}", "6"]
-            a += [f"-c:a:{i}", "aac", f"-b:a:{i}", "160k" if ch <= 2 else "256k"]
-            layout = {1: "mono", 2: "stereo", 6: "5.1"}.get(min(ch, 6))
-            if layout:
-                a += [f"-filter:a:{i}", f"aformat=channel_layouts={layout}"]
-        elif cfg["audio"] == "opus":
-            layout = {1: "mono", 2: "stereo", 6: "5.1", 8: "7.1"}.get(ch)
-            a += [f"-c:a:{i}", "libopus", f"-b:a:{i}", "128k" if ch <= 2 else "320k" if ch <= 6 else "448k"]
-            if layout:
-                a += [f"-filter:a:{i}", f"aformat=channel_layouts={layout}"]
-        else:
-            if ch > 6:
-                a += [f"-ac:a:{i}", "6"]
-            a += [f"-c:a:{i}", cfg["audio"], f"-b:a:{i}", "192k" if ch <= 2 else "640k"]
-    return a
+def _frac(v: str, scale: int) -> int:
+    """ffprobe liefert Brüche wie „34000/50000“; x265 will ganze Zahlen in festen Einheiten."""
+    n, _, d = str(v).partition("/")
+    return round(float(n) / float(d or 1) * scale)
 
 
-def ffmpeg_args(src: Path, out: Path, cfg: dict, info: dict, crop) -> list[str]:
-    a = ["ffmpeg", "-hide_banner", "-nostdin", "-y", "-i", str(src), "-map", "0:v:0", "-map", "0:a?", "-map", "0:s?", "-map_chapters", "0"]
-    if crop:
-        a += ["-vf", crop]
-    return a + x265_args(cfg) + ["-fps_mode", "cfr"] + audio_args(cfg, info) + ["-c:s", "copy", "-progress", "pipe:1", "-nostats", str(out)]
+async def probe_hdr(src: Path) -> dict:
+    """HDR10-Angaben (Mastering-Display, MaxCLL/MaxFALL) aus dem ersten Bild der Quelle; Dolby Vision wird nur erkannt (nicht erhalten)."""
+    p = await asyncio.create_subprocess_exec("ffprobe", "-v", "error", "-select_streams", "v:0", "-read_intervals", "%+#1", "-show_frames", "-print_format", "json",
+                                             str(src), stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL)
+    out, _ = await p.communicate()
+    res = {"master": "", "cll": "", "dovi": False}
+    try:
+        for sd in (json.loads(out).get("frames") or [{}])[0].get("side_data_list", []):
+            t = sd.get("side_data_type", "")
+            if t.startswith("Mastering display"):
+                g = lambda k, sc: _frac(sd[k], sc)       # noqa: E731
+                res["master"] = (f"G({g('green_x', 50000)},{g('green_y', 50000)})B({g('blue_x', 50000)},{g('blue_y', 50000)})R({g('red_x', 50000)},{g('red_y', 50000)})"
+                                 f"WP({g('white_point_x', 50000)},{g('white_point_y', 50000)})L({g('max_luminance', 10000)},{g('min_luminance', 10000)})")
+            elif t.startswith("Content light level"):
+                res["cll"] = f"{sd.get('max_content', 0)},{sd.get('max_average', 0)}"
+            elif "DOVI" in t or "Dolby Vision" in t:
+                res["dovi"] = True
+    except (ValueError, KeyError, IndexError, ZeroDivisionError):
+        pass
+    return res
 
 
 async def pump(proc, state: dict, key, tail: deque) -> int:
@@ -141,19 +150,21 @@ async def pump(proc, state: dict, key, tail: deque) -> int:
         await et
 
 
-async def aggregate(item: dict, state: dict, dur: float):
-    """Fortschritt aller (Teil-)Prozesse zu einer Anzeige zusammenfassen."""
+async def aggregate(item: dict, state: dict, dur: float, npass: int = 1, cur: list | None = None):
+    """Fortschritt aller (Teil-)Prozesse zu einer Anzeige zusammenfassen. Bei zwei Durchgängen zählt `cur[0]` den laufenden (0 oder 1)."""
     t0 = time.monotonic()
     while True:
         if conv_state["paused"]:                      # Pausenzeit zählt nicht zur Laufzeit (Tempo/Restzeit)
             t0 += 0.8
             await asyncio.sleep(0.8)
             continue
-        done = sum(s["t"] for s in state.values())
+        base = (cur[0] if cur else 0) * dur
+        done = base + sum(s["t"] for s in state.values())
         el = max(1.0, time.monotonic() - t0)
         speed = done / el
-        item.update(pct=max(0.0, min(0.97, done / dur)), fps=sum(s["fps"] for s in state.values()), speed=speed,
-                    eta=max(0, (dur - done) / speed) if speed > 0.001 else 0, size_out=sum(s["size"] for s in state.values()))
+        total = dur * npass
+        item.update(pct=max(0.0, min(0.97, done / total)), fps=sum(s["fps"] for s in state.values()), speed=speed / npass if npass > 1 else speed,
+                    eta=max(0, (total - done) / speed) if speed > 0.001 else 0, size_out=sum(s["size"] for s in state.values()) if npass == 1 or (cur and cur[0] == 1) else 0)
         broadcast()
         await asyncio.sleep(0.8)
 
@@ -163,17 +174,32 @@ async def spawn(args: list[str]):
                                                 stderr=asyncio.subprocess.PIPE, limit=2**20)
 
 
-async def convert_single(item, src, cfg, info, dur, crop, out):
-    proc = await spawn(ffmpeg_args(src, out, cfg, info, crop))
+async def _run_one(item, args: list[str], state: dict, tail: deque) -> int:
+    proc = await spawn(args)
     conv_procs[item["id"]] = [proc]
     apply_pause([proc])
+    return await pump(proc, state, 0, tail)
+
+
+async def convert_single(item, src, cfg, ctx, dur, out):
+    """Ein Prozess für den ganzen Film; bei „Zielgröße“/„Bitrate“ mit x265/x264 in zwei Durchgängen."""
+    passes = [1, 2] if two_pass(cfg) else [0]
+    cur, rc = [0], 0
     state, tail = {0: {"t": 0.0, "fps": 0.0, "size": 0}}, deque(maxlen=12)
-    agg = asyncio.create_task(aggregate(item, state, dur))
+    ctx = {**ctx, "passlog": str(CONV_WORK / f"{item['id']}-pass")}
+    agg = asyncio.create_task(aggregate(item, state, dur, len(passes), cur))
     try:
-        rc = await pump(proc, state, 0, tail)
+        for n, p in enumerate(passes):
+            cur[0] = n
+            state[0].update(t=0.0, fps=0.0, size=0)
+            rc = await _run_one(item, ffmpeg_args(src, out, cfg, ctx, p), state, tail)
+            if rc != 0 or item["status"] == "skipped":
+                break
     finally:
         agg.cancel()
         conv_procs.pop(item["id"], None)
+        for f in CONV_WORK.glob(f"{item['id']}-pass*"):
+            f.unlink(missing_ok=True)
     if item["status"] == "skipped":
         out.unlink(missing_ok=True)
         raise SkipConversion()
@@ -182,8 +208,9 @@ async def convert_single(item, src, cfg, info, dur, crop, out):
         raise OSError("ffmpeg fehlgeschlagen: " + " | ".join(list(tail)[-4:]))
 
 
-async def convert_segments(item, src, cfg, info, dur, crop, nseg, out):
+async def convert_segments(item, src, cfg, ctx, dur, nseg, out):
     """Film in Zeitabschnitte teilen, parallel kodieren, danach mit Original-Audio/Untertiteln/Kapiteln zusammensetzen."""
+    info = ctx["info"]
     v = next(x for x in info["streams"] if x["codec_type"] == "video")
     num, den = (int(x) for x in v["r_frame_rate"].split("/"))
     fps = num / den
@@ -192,19 +219,16 @@ async def convert_segments(item, src, cfg, info, dur, crop, nseg, out):
     work = CONV_WORK / f"{item['id']}-seg"
     shutil.rmtree(work, ignore_errors=True)
     work.mkdir(parents=True)
-    pools = max(2, (os.cpu_count() or 4) // nseg)
-    vf = (crop + "," if crop else "") + "setpts=PTS-STARTPTS"
+    sctx = {**ctx, "pools": max(2, (os.cpu_count() or 4) // nseg)}
     procs, tails, state = [], [], {}
     try:
         for i in range(nseg):
-            a = ["ffmpeg", "-hide_banner", "-nostdin", "-y"]
+            seek = []
             if i > 0:
-                a += ["-ss", f"{(bounds[i] - 0.5) / fps:.6f}"]       # Schnitt auf halber Bildgrenze: eindeutig, ohne doppeltes/fehlendes Bild
+                seek += ["-ss", f"{(bounds[i] - 0.5) / fps:.6f}"]       # Schnitt auf halber Bildgrenze: eindeutig, ohne doppeltes/fehlendes Bild
             if i < nseg - 1:
-                a += ["-to", f"{(bounds[i + 1] - 0.5) / fps:.6f}"]
-            a += ["-i", str(src), "-map", "0:v:0", "-an", "-sn", "-dn", "-vf", vf] + x265_args(cfg, pools) + \
-                 ["-r", f"{num}/{den}", "-fps_mode", "cfr", "-progress", "pipe:1", "-nostats", str(work / f"seg{i:02d}.mkv")]
-            procs.append(await spawn(a))
+                seek += ["-to", f"{(bounds[i + 1] - 0.5) / fps:.6f}"]
+            procs.append(await spawn(segment_args(src, work / f"seg{i:02d}.mkv", cfg, sctx, seek, f"{num}/{den}")))
             tails.append(deque(maxlen=8))
             state[i] = {"t": 0.0, "fps": 0.0, "size": 0}
         conv_procs[item["id"]] = procs
@@ -229,10 +253,7 @@ async def convert_segments(item, src, cfg, info, dur, crop, nseg, out):
         broadcast()
         lst = work / "list.txt"
         lst.write_text("".join(f"file '{work}/seg{i:02d}.mkv'\n" for i in range(nseg)))
-        mux = ["ffmpeg", "-hide_banner", "-nostdin", "-y", "-f", "concat", "-safe", "0", "-i", str(lst), "-i", str(src),
-               "-map", "0:v:0", "-map", "1:a?", "-map", "1:s?", "-map_chapters", "1", "-c:v", "copy"] + audio_args(cfg, info) + \
-              ["-c:s", "copy", str(out)]
-        p = await spawn(mux)
+        p = await spawn(mux_args(lst, src, out, cfg, info))
         conv_procs[item["id"]] = [p]
         apply_pause([p])
         _, err = await p.communicate()
@@ -257,3 +278,7 @@ async def convert_segments(item, src, cfg, info, dur, crop, nseg, out):
         raise
     finally:
         shutil.rmtree(work, ignore_errors=True)
+
+
+__all__ = ["SkipConversion", "convert_segments", "convert_single", "detect_crop", "detect_scan", "probe", "probe_hdr", "set_conv_paused",
+           "signal_all", "changes_framecount"]

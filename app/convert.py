@@ -2,7 +2,6 @@
 import asyncio
 import json
 import os
-import re
 import time
 from pathlib import Path
 import signal
@@ -11,8 +10,12 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from app import upload
 from app import ext
-from app.config import CONVERT, CONVERT_DEFAULT, CONV_WORK, READY, REPLACE_DIR, SEG_MIN_SECONDS, X265_PRESETS
-from app.ffmpeg import SkipConversion, convert_segments, convert_single, detect_crop, probe, set_conv_paused, signal_all
+from app import convert_caps, convert_stats
+from app.config import CONVERT, CONV_WORK, READY, REPLACE_DIR, SEG_MIN_SECONDS
+from app.convert_schema import CODECS, clean_v2, describe
+from app.ffmpeg import (SkipConversion, changes_framecount, convert_segments, convert_single, detect_crop, detect_scan, probe, probe_hdr, set_conv_paused,
+                        signal_all)
+from app.ffmpeg_args import hdr_kept, sub_streams, target_kbps, two_pass
 from app.files import release_lock
 from app.state import CV_ACTIVE, broadcast, convert_queue, conversions, conv_procs, conv_state, drives, settings
 from app.util import fmt_bytes, unique_path
@@ -48,23 +51,13 @@ def choose_segments(dur: float) -> tuple[int, str]:
 
 
 def clean_convert(c: dict) -> dict:
-    """Prüft/ergänzt eine Konvertierungs-Konfiguration (kommt aus dem Browser)."""
-    d = dict(CONVERT_DEFAULT)
-    c = c if isinstance(c, dict) else {}
-    d["convert"] = bool(c.get("convert", d["convert"]))
-    try:
-        d["rf"] = max(14, min(30, int(c.get("rf", d["rf"]))))
-    except (TypeError, ValueError):
-        pass
-    if c.get("preset") in X265_PRESETS:
-        d["preset"] = c["preset"]
-    if c.get("tune") in ("none", "grain", "film", "animation", "stillimage"):
-        d["tune"] = c["tune"]
-    extra = str(c.get("extra", d["extra"])).strip()
-    d["extra"] = extra if re.fullmatch(r"[A-Za-z0-9_=:.,\-]*", extra) else CONVERT_DEFAULT["extra"]
-    if c.get("audio") in ("copy", "ac3", "eac3", "aac", "opus"):
-        d["audio"] = c["audio"]
-    return d
+    """Prüft/ergänzt eine Konvertierungs-Konfiguration (kommt aus dem Browser, einer Sidecar-Datei oder von einem anderen Rechner).
+    Nimmt die alten fünf Felder (v1) und das neue Schema (v2) an und liefert immer ein vollständiges v2-Dict samt Spiegel der alten Felder."""
+    return clean_v2(c)
+
+
+class Unsupported(OSError):
+    """Diese Einstellung lässt sich auf diesem Rechner nicht ausführen (Encoder/Filter fehlt …): kein zweiter Versuch."""
 
 
 _cv_seq = 0
@@ -91,31 +84,56 @@ async def convert_one(item: dict) -> Path:
     info = await probe(src)
     dur = float(info["format"]["duration"])
     v = next(x for x in info["streams"] if x["codec_type"] == "video")
+    if why := convert_caps.unusable(cfg, info):
+        raise Unsupported(why)
     item.update(status="running", pct=0.0, fps=0.0, speed=0.0, eta=0, started=time.time())
     broadcast()
-    crop = await detect_crop(src, dur, int(v["width"]), int(v["height"]))
+    codec, pic = cfg["video"]["codec"], cfg["picture"]
+    ctx = {"info": info, "dur": dur, "crop": None, "scan": "progressive", "hdr": {}, "pools": 0, "kbps": 0}
+    if codec != "copy":
+        if pic["crop"] == "auto":
+            ctx["crop"] = await detect_crop(src, dur, int(v["width"]), int(v["height"]))
+        if pic["deint"] == "auto":
+            ctx["scan"] = await detect_scan(src, dur)
+        if hdr_kept(cfg, info) and codec == "x265":
+            ctx["hdr"] = await probe_hdr(src)
+        ctx["kbps"] = target_kbps(cfg, info, dur)
     if item["status"] == "skipped":
         raise SkipConversion()
     if item.get("origin") == "library" and upload.staging_free() < item["size_in"]:
         raise OSError(f"Zu wenig Platz im Zwischenspeicher für das Ergebnis ({fmt_bytes(upload.staging_free())} frei)")
     nseg, why = choose_segments(dur) if item.get("attempt", 1) == 1 else (1, "zweiter Versuch")
+    if nseg > 1 and not CODECS[codec]["segments"]:
+        nseg, why = 1, "Hardware-Encoder" if codec == "hw" else "ohne Neukodierung"
+    elif nseg > 1 and (two_pass(cfg) or changes_framecount(cfg, ctx)):
+        nseg, why = 1, "zwei Durchgänge" if two_pass(cfg) else "Telecine-Entfernung"
     item["mode"] = (f"{nseg} Segmente parallel" if nseg > 1 else "ein Prozess") + f" ({why})"
+    item["meta"] = {"w": int(v.get("width") or 0), "h": int(v.get("height") or 0), "dur": dur, "nseg": nseg, "src_codec": v.get("codec_name", ""),
+                    "fps": _fps(v), "summary": describe(cfg)}
     CONV_WORK.mkdir(parents=True, exist_ok=True)
     out = CONV_WORK / f"{item['id']}.mkv"
     if nseg > 1:
-        await convert_segments(item, src, cfg, info, dur, crop, nseg, out)
+        await convert_segments(item, src, cfg, ctx, dur, nseg, out)
     else:
-        await convert_single(item, src, cfg, info, dur, crop, out)
+        await convert_single(item, src, cfg, ctx, dur, out)
     oi = await probe(out)
     od = float(oi["format"]["duration"])
     if abs(od - dur) > max(2.0, dur * 0.01):
         out.unlink(missing_ok=True)
         raise OSError(f"Ergebnis hat falsche Länge ({od:.0f}s statt {dur:.0f}s)")
     cnt = lambda pr, t: sum(1 for x in pr["streams"] if x["codec_type"] == t)      # noqa: E731
-    if (cnt(info, "audio"), cnt(info, "subtitle")) != (cnt(oi, "audio"), cnt(oi, "subtitle")):
+    if (cnt(info, "audio"), len(sub_streams(cfg, info))) != (cnt(oi, "audio"), cnt(oi, "subtitle")):
         out.unlink(missing_ok=True)
         raise OSError("Anzahl der Audio-/Untertitelspuren weicht vom Original ab")
     return out
+
+
+def _fps(v: dict) -> float:
+    try:
+        n, d = (int(x) for x in str(v.get("r_frame_rate", "0/1")).split("/"))
+        return n / d if d else 0.0
+    except ValueError:
+        return 0.0
 
 
 def release_original(item: dict):
@@ -140,85 +158,110 @@ conv_running = 0
 
 
 def ensure_conv_workers():
-    """So viele Konvertierungs-Worker laufen lassen, wie in den Einstellungen steht."""
+    """So viele Konvertierungs-Worker laufen lassen, wie in den Einstellungen steht (Gleichzeitige Dateien). Wird nach jedem Speichern aufgerufen."""
     global conv_running
     while conv_running < int(settings["conv_parallel"]):
         conv_running += 1
-        ensure_conv_workers()
+        asyncio.create_task(worker_loop())
 
 
 async def convert_worker():
+    """Erster Worker (wird von main.py beim Start gestartet); weitere folgen über ensure_conv_workers()."""
+    global conv_running
+    conv_running += 1
+    ensure_conv_workers()
+    await worker_loop()
+
+
+async def worker_loop():
     global conv_running
     while True:
         if conv_running > int(settings["conv_parallel"]):      # Einstellung wurde verkleinert
             conv_running -= 1
             return
         item = await convert_queue.get()
-        dr = drives.get(item["dev"])
-        if item["status"] == "cancelled":
-            continue
-        while conv_state["paused"] and item["status"] == "queued":      # pausiert: nichts Neues starten
-            await asyncio.sleep(1)
-        if item["status"] == "cancelled":
-            continue
-        if item["status"] != "skipped":
-            for attempt in (1, 2):
-                try:
-                    item["attempt"] = attempt
-                    out = await convert_one(item)
-                    if item.get("origin") == "library":          # Ergebnis ersetzt später das Original auf dem NAS
-                        REPLACE_DIR.mkdir(parents=True, exist_ok=True)
-                        dest_f = REPLACE_DIR / f"{item['id']}-{Path(item['rel']).name}"
-                        os.replace(out, dest_f)
-                        item.update(status="done", pct=1.0, eta=0, size_out=dest_f.stat().st_size, t=time.time())
-                        upload.enqueue_upload(dest_f, item["rel"], "", replace=True, lock=item["lock"], orig_size=item["size_in"])
-                        break
-                    src = Path(item["src"])
-                    rdir = READY / item["folder"]
-                    rdir.mkdir(parents=True, exist_ok=True)
-                    final = unique_path(rdir / src.name)
-                    os.replace(out, final)
-                    size_in = item["size_in"]
-                    src.unlink(missing_ok=True)
-                    src.with_name(src.name + ".json").unlink(missing_ok=True)
-                    try:
-                        src.parent.rmdir()
-                    except OSError:
-                        pass
-                    item.update(status="done", pct=1.0, eta=0, size_out=final.stat().st_size, t=time.time())
-                    if dr:
-                        dr.add_log(f"Konvertiert: {final.name} ({fmt_bytes(size_in)} → {fmt_bytes(item['size_out'])})", "ok")
-                    upload.enqueue_upload(final, f"{item['folder']}/{final.name}", item["dev"])
-                    break
-                except SkipConversion:
-                    break
-                except Exception as e:  # noqa: BLE001
-                    item["error"] = str(e)[:400]
-                    if dr:
-                        dr.add_log(f"Konvertierung von {item['name']} fehlgeschlagen: {item['error']}", "error")
-                    if attempt == 1:
-                        item.update(status="queued", pct=0.0)
-                        broadcast()
-        if item["status"] != "done" and item.get("cancel"):             # Abbrechen: Auftrag beenden, nichts weiterreichen
-            finalize_cancel(item)
+        try:
+            await process_item(item)
+        except Exception as e:  # noqa: BLE001      ein Fehler im Aufräumen darf den Worker nicht beenden
+            print(f"Konvertierung {item.get('name')}: {e!r}", flush=True)
+            item["status"] = "error" if item["status"] not in ("done", "skipped", "cancelled") else item["status"]
+            item["error"] = item.get("error") or str(e)[:300]
             broadcast()
-            continue
-        if item["status"] != "done":
-            was_skipped = item["status"] == "skipped"
-            if item.get("origin") == "library":              # Original liegt unverändert auf dem NAS
-                release_lock(item["lock"])
-                item["status"] = "skipped" if was_skipped else "error"
-                if not was_skipped:
-                    item["error"] += " – Original bleibt unverändert"
-                broadcast()
-                continue
-            release_original(item)
+
+
+async def process_item(item: dict):
+    dr = drives.get(item["dev"])
+    if item["status"] == "cancelled":
+        return
+    while conv_state["paused"] and item["status"] == "queued":      # pausiert: nichts Neues starten
+        await asyncio.sleep(1)
+    if item["status"] == "cancelled":
+        return
+    if item["status"] != "skipped":
+        for attempt in (1, 2):
+            try:
+                item["attempt"] = attempt
+                out = await convert_one(item)
+                if item.get("origin") == "library":          # Ergebnis ersetzt später das Original auf dem NAS
+                    REPLACE_DIR.mkdir(parents=True, exist_ok=True)
+                    dest_f = REPLACE_DIR / f"{item['id']}-{Path(item['rel']).name}"
+                    os.replace(out, dest_f)
+                    item.update(status="done", pct=1.0, eta=0, size_out=dest_f.stat().st_size, t=time.time())
+                    convert_stats.record(item)
+                    upload.enqueue_upload(dest_f, item["rel"], "", replace=True, lock=item["lock"], orig_size=item["size_in"])
+                    break
+                src = Path(item["src"])
+                rdir = READY / item["folder"]
+                rdir.mkdir(parents=True, exist_ok=True)
+                final = unique_path(rdir / src.name)
+                os.replace(out, final)
+                size_in = item["size_in"]
+                src.unlink(missing_ok=True)
+                src.with_name(src.name + ".json").unlink(missing_ok=True)
+                try:
+                    src.parent.rmdir()
+                except OSError:
+                    pass
+                item.update(status="done", pct=1.0, eta=0, size_out=final.stat().st_size, t=time.time())
+                convert_stats.record(item)
+                if dr:
+                    dr.add_log(f"Konvertiert: {final.name} ({fmt_bytes(size_in)} → {fmt_bytes(item['size_out'])})", "ok")
+                upload.enqueue_upload(final, f"{item['folder']}/{final.name}", item["dev"])
+                break
+            except SkipConversion:
+                break
+            except Unsupported as e:                                  # lässt sich hier nie ausführen: gleich aufgeben, kein zweiter Versuch
+                item["error"] = str(e)[:400]
+                if dr:
+                    dr.add_log(f"Konvertierung von {item['name']} nicht möglich: {item['error']}", "error")
+                break
+            except Exception as e:  # noqa: BLE001
+                item["error"] = str(e)[:400]
+                if dr:
+                    dr.add_log(f"Konvertierung von {item['name']} fehlgeschlagen: {item['error']}", "error")
+                if attempt == 1:
+                    item.update(status="queued", pct=0.0)
+                    broadcast()
+    if item["status"] != "done" and item.get("cancel"):             # Abbrechen: Auftrag beenden, nichts weiterreichen
+        finalize_cancel(item)
+        broadcast()
+        return
+    if item["status"] != "done":
+        was_skipped = item["status"] == "skipped"
+        if item.get("origin") == "library":              # Original liegt unverändert auf dem NAS
+            release_lock(item["lock"])
             item["status"] = "skipped" if was_skipped else "error"
             if not was_skipped:
-                item["error"] += " – Original wird unverändert übertragen"
-            if dr:
-                dr.add_log(f"{item['name']}: Original wird unverändert übertragen", "info")
-        broadcast()
+                item["error"] += " – Original bleibt unverändert"
+            broadcast()
+            return
+        release_original(item)
+        item["status"] = "skipped" if was_skipped else "error"
+        if not was_skipped:
+            item["error"] += " – Original wird unverändert übertragen"
+        if dr:
+            dr.add_log(f"{item['name']}: Original wird unverändert übertragen", "info")
+    broadcast()
 
 
 def discard_staged(item: dict):
