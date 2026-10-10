@@ -1,0 +1,4 @@
+/* Titelliste (Besitzer: PA): Plakette „Längster“/„Kurz“ steht unter dem Dateinamen, damit sie ihn nicht abschneidet */
+.table-wrap .namecell{display:grid;grid-template-columns:minmax(0,1fr);gap:3px 0;align-items:start;min-width:220px}
+.table-wrap .namecell .nameedit{width:100%;min-width:0;flex:none}
+.table-wrap .namecell .tag{justify-self:start;margin:0 0 0 7px}
