@@ -12,6 +12,11 @@ passiert im Browser.
 - Zwischenspeicher: Jeder Titel wird zuerst lokal gerippt und nach seiner Fertigstellung im Hintergrund ins Ziel (z. B. NAS) übertragen, während schon der nächste Titel läuft – langsames Netz bremst das Rippen nicht
 - Konvertierung nach dem Rippen (x265 10-bit, ffmpeg): Preset je Disc-Art (Blu-ray vorausgewählt), im Browser änderbar; große Filme werden automatisch nach freien Kernen/RAM in Segmente geteilt und parallel kodiert
 - Tab „Bibliothek“: vorhandene Dateien im Ziel nachträglich konvertieren – das Original wird nach bestandener Prüfung ersetzt; Sperrdateien verhindern, dass zwei Instanzen dieselbe Datei bearbeiten
+- Konvertierung frei einstellbar: Presets (DVD/Blu-ray optimal, Animation, Filmkorn, UHD/HDR, klein & schnell), Codecs x265/x264/SVT-AV1 und Hardware-Encoder, Vorhersage von Größe und Dauer je Rechner, Probe-Kodierung mit Vorher/Nachher-Vergleich, Warnung bei Dolby Vision
+- Neue Bibliothek mit Filtern, Liste/Raster, Detailbereich und Auswahlleiste; Konvertieren auf einem wählbaren Rechner im Verbund
+- Interner Player im Browser (direkt, Remux oder Transcode, Untertitel, Spulen)
+- Einsortieren in Jellyfin-Ordner (Filme/Serien) mit TMDB-Suche, Plan, Rückgängig und optionaler Automatik
+- Mehrere Rechner im Verbund: Erkennung im Netz, Kopplung per Token, Übergabe von Konvertierungen
 - Übertragungs-Kachel mit Geschwindigkeit und Restzeit
 - Ausgabe in ein eingehängtes Netzlaufwerk (NFS/SMB), sonst lokaler Fallback
 - Übersteht USB-Resets des Laufwerks (wartet und wiederholt den Schritt automatisch)
@@ -39,6 +44,7 @@ Aktualisieren (neue MakeMKV-Version, z. B. weil die Beta nach 60 Tagen abläuft)
 | `PORT` | Web-Port (8780) |
 | `PUID`/`PGID` | Besitzer der gerippten Dateien |
 | `CDROM_GID` | Gruppe `cdrom` des Hosts |
+| `RENDER_GID` | Gruppe `render` des Hosts (nur für Hardware-Encoding über `/dev/dri`) |
 | `NAS_MOUNT` | Pfad des eingehängten Ziels auf dem Host |
 | `OUTPUT_DIR` | Ausgabeordner (unter `NAS_MOUNT`); ist `NAS_MOUNT` nicht gemountet, wird lokal in `data/output` gespeichert |
 | `AUTH_USER`/`AUTH_PASS` | Optionaler Passwortschutz (HTTP Basic). Ohne `AUTH_PASS` ist die Oberfläche offen |
@@ -64,14 +70,14 @@ NFS-Beispiel (`/etc/fstab`, ohne Automount, damit Docker den Pfad einbinden kann
 
 ## Aufbau
 
-- `app/` – Python-Paket (FastAPI): `main.py` (App, Router, Start), `drives.py`, `rip.py`, `upload.py`, `convert.py`/`ffmpeg.py`, `library.py`, `cluster.py`, `files.py`, `settings.py`, `state.py`, `ext.py` (Erweiterungspunkte) u. a.
+- `app/` – Python-Paket (FastAPI): `main.py` (App, Router, Start), `drives.py`, `rip.py`, `upload.py`, `convert.py`/`ffmpeg.py`, `library*.py`, `cluster.py`, `nodes*.py` (Rechner), `player*.py`, `media/` (Jellyfin-Ablage), `convert*.py` (Konvertierung), `files.py`, `settings.py`, `state.py`, `ext.py` (Erweiterungspunkte) u. a.
 - `app/static/` – Oberfläche ohne Build-Schritt: `index.html`, `css/`, `js/` (native ES-Module; `registry.js` enthält die Erweiterungspunkte)
 - `Dockerfile` · `docker-compose.yml` · `install.sh`
 - Details, Schnittstellen und Konventionen: [docs/agenten/schnittstellen.md](docs/agenten/schnittstellen.md)
 
 ## Entwicklung
 
-Lokal ohne Docker, ohne Laufwerk und ohne NAS: `scripts/dev.sh` startet die App auf http://127.0.0.1:8790 mit Beispieldateien und einem Attrappen-Laufwerk (`scripts/dev.sh pair` startet zwei Instanzen im Verbund, `scripts/dev.sh --help` zeigt alle Optionen). Benötigt Python 3 und ffmpeg; fehlende Python-Pakete installiert das Skript in eine eigene virtuelle Umgebung.
+Lokal ohne Docker, ohne Laufwerk und ohne NAS: `scripts/dev.sh` startet die App auf http://127.0.0.1:8790 mit Beispieldateien und einem Attrappen-Laufwerk (`scripts/dev.sh pair` startet zwei Instanzen im Verbund, `scripts/dev.sh --help` zeigt alle Optionen). Benötigt Python ab 3.10 und ffmpeg; fehlende Python-Pakete installiert das Skript in eine eigene virtuelle Umgebung.
 
 ## Lizenz
 
