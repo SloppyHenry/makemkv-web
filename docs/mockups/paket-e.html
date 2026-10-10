@@ -1,0 +1,517 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Mockup PE – Medien / Jellyfin</title>
+<link rel="stylesheet" href="../../app/static/css/base.css">
+<link rel="stylesheet" href="../../app/static/css/layout.css">
+<link rel="stylesheet" href="../../app/static/css/components.css">
+<style>
+/* ===== Nur für die Mockup-Seite (Rahmen, Umschalter) ===== */
+body{padding-bottom:60px}
+.mk-bar{position:sticky;top:0;z-index:20;background:#0d121a;border-bottom:1px solid var(--line);padding:10px 20px;display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+.mk-bar strong{font-size:15px}
+.mk-bar nav{display:flex;gap:6px;flex-wrap:wrap}
+.mk-bar nav a{font-size:12px;text-decoration:none;color:#c4d0e1;border:1px solid var(--line);border-radius:99px;padding:4px 10px;background:#121a25}
+.mk-bar nav a:hover{border-color:#3a4a62}
+.mk-key{margin-left:auto;display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)}
+.mk-wrap{max-width:1500px;margin:0 auto;padding:0 20px}
+.mk-intro{max-width:900px;color:var(--muted);font-size:13px;margin:22px 0 4px}
+.mk-intro b{color:var(--text)}
+.mk-screen{margin-top:38px;scroll-margin-top:70px}
+.mk-screen>h2{font-size:17px;margin:0 0 4px}
+.mk-screen>p{margin:0 0 14px;color:var(--muted);font-size:12px;max-width:900px}
+.mk-pair{display:grid;grid-template-columns:minmax(0,1fr) 375px;gap:22px;align-items:start}
+.mk-cap{font-size:11px;color:var(--muted);margin:0 0 6px;text-transform:uppercase;letter-spacing:.06em}
+.mk-frame{border:1px solid var(--line);border-radius:14px;background:var(--bg);overflow:hidden}
+.mk-phone .mk-frame{border-radius:26px;border:6px solid #1a2330}
+@media(max-width:1100px){.mk-pair{grid-template-columns:1fr}.mk-phone{max-width:375px}}
+/* Zustand „kein TMDB-Schlüssel“ umschalten */
+body.nokey .m-ifkey{display:none!important}
+body:not(.nokey) .m-ifnokey{display:none!important}
+
+/* ===== Bausteine der Medien-Oberfläche (später 1:1 in app/static/css/media.css) ===== */
+.m-root{container-type:inline-size;container-name:m;padding:16px;color:var(--text)}
+.m-root .primary{width:auto}
+.m-root .field input,.m-root .field select{width:100%}
+.m-h{display:flex;align-items:center;gap:10px;margin:0 0 4px}
+.m-h h3{margin:0;font-size:15px}
+.m-sub{color:var(--muted);font-size:12px;margin:0 0 14px}
+.m-card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);margin-bottom:14px;overflow:hidden}
+.m-card>header{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--line)}
+.m-card>header h4{margin:0;font-size:13px}
+.m-card>header .sp{flex:1}
+.m-body{padding:14px 16px;display:grid;gap:14px}
+.m-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.m-row{display:flex;gap:8px;align-items:flex-end}
+.m-row>.field{flex:1;min-width:0}
+.m-row .secondary,.m-key .secondary{height:34px;display:inline-flex;align-items:center;white-space:nowrap}
+.m-seg{display:inline-flex;border:1px solid #2b3748;border-radius:8px;overflow:hidden;background:#0c121a}
+.m-seg button{border:0;background:transparent;color:#aebbd0;padding:7px 12px;font-size:12px;border-right:1px solid #2b3748;white-space:nowrap}
+.m-seg button:last-child{border-right:0}
+.m-seg button.on{background:#2a1a20;color:#ff8791;font-weight:650;box-shadow:inset 0 -2px 0 var(--red)}
+.m-seg.full{display:flex}.m-seg.full button{flex:1}
+.m-note{border-radius:9px;padding:10px 12px;font-size:12px;line-height:1.5;border:1px solid #4a3e1c;background:#2a2412;color:#f0c36a;display:flex;gap:10px}
+.m-note b{color:#ffd88a}
+.m-note.info{border-color:#2b3f5e;background:#111d30;color:#a9c4ee}
+.m-note.ok{border-color:#315444;background:#11251e;color:#a6f2ce}
+.m-note.err{border-color:#5a2a33;background:#2c151c;color:#ffb0b8}
+.m-ico{flex:none;width:18px;height:18px;border-radius:50%;display:grid;place-items:center;font-size:11px;font-weight:800;background:#ffffff1c}
+.m-lib td{white-space:normal}
+.m-ex{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;color:#c8d4e6;background:#0c121a;border:1px solid #2b3748;border-radius:8px;padding:9px 11px;overflow-wrap:anywhere;line-height:1.7}
+.m-ex span{color:var(--muted)}.m-ex em{font-style:normal;color:#75e6b3}
+.m-stat{font-size:11px;color:var(--muted);margin-top:5px}.m-stat.ok{color:#75e6b3}.m-stat.bad{color:#ff8791}
+.m-key{display:flex;gap:8px;align-items:center}
+.m-key .input{flex:1}
+.m-save{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;padding:12px 16px;border:1px solid var(--line);border-radius:var(--radius);background:var(--panel2)}
+.m-save .dirty{font-size:12px;color:#f0c36a}
+/* Ordnerauswahl */
+.m-browse{border:1px solid #2b3748;border-radius:9px;background:#0c121a;overflow:hidden}
+.m-crumb{display:flex;gap:4px;align-items:center;flex-wrap:wrap;padding:8px 11px;border-bottom:1px solid #222d3b;font-size:12px;color:var(--muted)}
+.m-crumb b{color:var(--text);font-weight:600}
+.m-dirs{max-height:176px;overflow:auto}
+.m-dir{display:flex;align-items:center;gap:10px;padding:8px 12px;font-size:12px;border-bottom:1px solid #1a2330;width:100%;background:transparent;border-left:0;border-right:0;border-top:0;color:var(--text);text-align:left}
+.m-dir:hover{background:#151e2a}.m-dir.sel{background:#1a1e2a;box-shadow:inset 3px 0 0 var(--red)}
+.m-dir small{margin-left:auto;color:var(--muted)}
+.m-fold{width:15px;height:11px;border-radius:2px 3px 3px 3px;background:#6c86b3;position:relative;flex:none}
+.m-fold:before{content:"";position:absolute;left:0;top:-3px;width:7px;height:4px;border-radius:2px 2px 0 0;background:#6c86b3}
+.m-browse footer{display:flex;gap:8px;justify-content:space-between;align-items:center;padding:8px 11px;border-top:1px solid #222d3b;flex-wrap:wrap}
+/* Einstieg Bibliothek */
+.m-selbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:12px 16px;border:1px solid #3a4a62;border-radius:var(--radius);background:#131b27;margin-top:12px}
+.m-selbar .sp{flex:1}
+.m-selbar .actions{display:flex;gap:8px;flex-wrap:wrap}
+/* Assistent */
+.m-dlg{border:1px solid var(--line);border-radius:14px;background:var(--panel);overflow:hidden;margin:0 auto;max-width:920px;display:flex;flex-direction:column;box-shadow:0 20px 60px #0008}
+.m-dlg>header{display:flex;align-items:center;gap:12px;padding:14px 18px;border-bottom:1px solid var(--line)}
+.m-dlg>header h3{margin:0;font-size:16px}
+.m-dlg>header .sp{flex:1}
+.m-dlg>.m-dbody{padding:16px 18px;display:grid;gap:14px}
+.m-dlg>footer{display:flex;gap:8px;align-items:center;justify-content:flex-end;padding:12px 18px;border-top:1px solid var(--line);background:var(--panel2);flex-wrap:wrap}
+.m-dlg>footer .sp{flex:1}
+.m-steps{display:flex;gap:0;padding:12px 18px 0;list-style:none;margin:0}
+.m-steps li{flex:1;font-size:11px;color:var(--muted);padding:0 0 10px;border-bottom:2px solid #253041;display:flex;gap:7px;align-items:center;min-width:0}
+.m-steps li i{font-style:normal;width:19px;height:19px;border-radius:50%;background:#202938;display:grid;place-items:center;font-size:10px;font-weight:700;flex:none}
+.m-steps li.done{border-color:#2f7a5a;color:#75e6b3}.m-steps li.done i{background:#153328;color:#75e6b3}
+.m-steps li.cur{border-color:var(--red);color:var(--text);font-weight:650}.m-steps li.cur i{background:var(--red);color:#fff}
+.m-steps li.skip{opacity:.45}
+.m-stepline{display:none;padding:12px 18px 0;font-size:12px;color:var(--muted)}
+.m-stepline b{color:var(--text)}
+.m-stepline .bar{height:4px;background:#253041;border-radius:9px;margin-top:8px;overflow:hidden}.m-stepline .bar i{display:block;height:100%;background:var(--red)}
+/* Erkannt */
+.m-detect{display:grid;grid-template-columns:120px minmax(0,1fr);gap:16px}
+.m-poster{aspect-ratio:2/3;border-radius:8px;display:grid;place-items:center;text-align:center;font-weight:750;font-size:13px;line-height:1.2;padding:8px;color:#fff;background:linear-gradient(160deg,#3a4a6e,#1b2236 60%,#2a1a20);border:1px solid #2b3748;overflow:hidden;position:relative}
+.m-poster.b{background:linear-gradient(160deg,#6e4a3a,#2a1d16 60%,#1a2336)}
+.m-poster.c{background:linear-gradient(160deg,#3a6e5a,#16281f 60%,#1a1a36)}
+.m-poster.none{background:repeating-linear-gradient(45deg,#121a25,#121a25 8px,#151e2a 8px,#151e2a 16px);color:var(--muted);font-weight:500;font-size:11px}
+.m-detect h4{margin:0 0 2px;font-size:18px;letter-spacing:-.3px}
+.m-meta{color:var(--muted);font-size:12px;margin:0 0 10px}
+.m-conf{display:flex;align-items:center;gap:10px;margin:10px 0}
+.m-conf .bar{flex:1;max-width:220px;height:7px;background:#253041;border-radius:9px;overflow:hidden}.m-conf .bar i{display:block;height:100%;background:var(--green)}
+.m-conf.mid .bar i{background:var(--amber)}.m-conf strong{font-size:13px}
+.m-why{display:flex;gap:6px;flex-wrap:wrap}
+.m-why .tag{margin:0;font-size:11px;padding:4px 9px}
+.m-files{border:1px solid var(--line);border-radius:9px;background:var(--panel2);overflow:hidden}
+.m-files summary{padding:9px 12px;font-size:12px;color:var(--muted);cursor:pointer}
+.m-files ul{list-style:none;margin:0;padding:0 12px 10px;font-size:11px;color:#b7c4d8;display:grid;gap:3px;font-family:ui-monospace,Menlo,monospace}
+.m-files li span{color:var(--muted)}
+/* Suchen */
+.m-search{display:grid;grid-template-columns:auto minmax(0,1fr) 90px auto;gap:8px;align-items:end}
+.m-or{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:11px}.m-or:before,.m-or:after{content:"";flex:1;height:1px;background:var(--line)}
+.m-hits{display:grid;gap:8px}
+.m-hit{display:grid;grid-template-columns:54px minmax(0,1fr) auto;gap:12px;padding:10px;border:1px solid var(--line);border-radius:10px;background:#0e141d;align-items:start;text-align:left;color:var(--text);width:100%}
+.m-hit.sel{border-color:var(--red);background:#1a1519}
+.m-hit .m-poster{font-size:8px;padding:3px;border-radius:5px}
+.m-hit h5{margin:0;font-size:14px}.m-hit h5 small{font-weight:400;color:var(--muted);margin-left:6px}
+.m-hit p{margin:3px 0 0;font-size:12px;color:var(--muted);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.m-hit .ids{display:flex;gap:5px;flex-wrap:wrap;margin-top:6px}
+/* Episoden */
+.m-eps th,.m-eps td{padding:8px 10px;white-space:nowrap}
+.m-eps th:first-child,.m-eps td:first-child{width:auto;padding-left:12px}
+.m-eps .num-in{width:54px;height:30px;text-align:center;padding:0 4px}
+.m-eps tr.playall td{background:#201a10;color:#d9c08a}
+.m-eps tr.playall td .nm{text-decoration:line-through;text-decoration-color:#7a6840}
+.m-eps .dur-ok{color:#75e6b3}.m-eps .dur-off{color:#f0c36a}
+.m-eps .nm{display:block;max-width:230px;overflow:hidden;text-overflow:ellipsis}
+.m-eps small{color:var(--muted);display:block}
+.m-cards{display:none;gap:8px}
+.m-ecard{border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:#0e141d;display:grid;gap:7px}
+.m-ecard.playall{background:#201a10;border-color:#4a3e1c}
+.m-ecard .top{display:flex;justify-content:space-between;gap:8px;font-size:12px}
+.m-ecard .ins{display:flex;gap:8px;align-items:center;font-size:12px;color:var(--muted)}
+.m-ecard .num-in{width:58px;height:32px;text-align:center;padding:0 4px;background:#0c121a;color:var(--text);border:1px solid #2b3748;border-radius:7px}
+.m-follow{display:flex;align-items:center;gap:10px;font-size:12px;color:var(--muted);flex-wrap:wrap}
+/* Vorschau */
+.m-sum{display:flex;gap:8px;flex-wrap:wrap}
+.m-sum .st{font-size:12px;padding:5px 10px}
+.m-tree{border:1px solid var(--line);border-radius:10px;overflow:hidden;background:#0c121a;font-size:12px}
+.m-tr{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:4px 16px;padding:7px 12px;border-bottom:1px solid #1a2330;align-items:start}
+.m-tr:last-child{border-bottom:0}
+.m-tr.head{background:#101620;color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.06em;font-weight:650}
+.m-tr .n{font-family:ui-monospace,Menlo,monospace;overflow-wrap:anywhere}
+.m-tr .n.d1{padding-left:16px}.m-tr .n.d2{padding-left:32px}
+.m-tr .n .dir{color:#9cb8e8}
+.m-tr .o{color:var(--muted);font-family:ui-monospace,Menlo,monospace;font-size:11px;overflow-wrap:anywhere}
+.m-tr.bad{background:#2c151c;box-shadow:inset 3px 0 0 var(--red)}
+.m-tr.bad .why{grid-column:1/-1;color:#ffb0b8;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.m-tr.lock{background:#1c1a12;box-shadow:inset 3px 0 0 var(--amber)}
+.m-tr.lock .why{grid-column:1/-1;color:#f0c36a}
+.m-tr.skip{opacity:.6}.m-tr.skip .why{grid-column:1/-1;color:var(--muted)}
+.m-tr .why select,.m-tr .why .m-seg{height:28px}
+.m-tr .why .m-seg button{padding:4px 9px;font-size:11px}
+/* Ergebnis */
+.m-done{display:flex;gap:14px;align-items:center}
+.m-done .big{width:44px;height:44px;border-radius:50%;background:#153328;color:#75e6b3;display:grid;place-items:center;font-size:22px;flex:none}
+.m-done h4{margin:0;font-size:16px}.m-done p{margin:2px 0 0;color:var(--muted);font-size:12px}
+.m-log{border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.m-log .it{display:flex;gap:10px;align-items:center;padding:9px 12px;border-bottom:1px solid #1a2330;font-size:12px;flex-wrap:wrap}
+.m-log .it:last-child{border-bottom:0}.m-log .it .sp{flex:1}.m-log .it small{color:var(--muted)}
+/* schmal (Handy): Container-Abfragen, damit auch die 375-px-Rahmen hier echt umbrechen */
+@container m (max-width:620px){
+  .m-grid{grid-template-columns:1fr}
+  .m-detect{grid-template-columns:84px minmax(0,1fr);gap:12px}.m-detect h4{font-size:16px}
+  .m-search{grid-template-columns:1fr 90px}.m-search .m-seg{grid-column:1/-1}.m-search>.secondary,.m-search>.primary{grid-column:1/-1}
+  .m-steps{display:none}.m-stepline{display:block}
+  .m-tr{grid-template-columns:1fr}.m-tr.head{display:none}.m-tr .o:before{content:"von: "}.m-tr .n.d1{padding-left:10px}.m-tr .n.d2{padding-left:20px}
+  .m-eps-table{display:none}.m-cards{display:grid}
+  .m-hit{grid-template-columns:44px minmax(0,1fr)}.m-hit .tag.go{display:none}
+  .m-dlg{border-radius:0;border-left:0;border-right:0;margin:-16px;max-width:none}
+  .m-dlg>footer{display:grid;grid-template-columns:1fr 1fr}.m-dlg>footer .sp{display:none}.m-dlg>footer .primary{grid-column:1/-1;order:-1;padding:12px}.m-dlg>footer .secondary{text-align:center;padding:10px}
+  .m-selbar .actions{width:100%}.m-selbar .actions>*{flex:1;text-align:center}
+  .m-key{flex-wrap:wrap}.m-key .input{flex:1 1 100%}
+  .m-sidenav{display:none!important}
+}
+/* Rahmen der Einstellungsseite (gehört PB; hier nur als Kontext) */
+.m-setpage{display:grid;grid-template-columns:190px minmax(0,1fr);gap:0}
+.m-sidenav{border-right:1px solid var(--line);padding:14px 10px;display:grid;gap:2px;align-content:start}
+.m-sidenav a{display:block;padding:8px 11px;border-radius:7px;font-size:12px;color:#aebbd0;text-decoration:none}
+.m-sidenav a.on{background:#1a2330;color:var(--text);font-weight:650;box-shadow:inset 3px 0 0 var(--red)}
+.m-setmain{padding:16px;min-width:0}
+.m-crumbm{display:none;font-size:12px;color:var(--muted);margin-bottom:10px}
+@container m (max-width:620px){.m-setpage{display:block}.m-crumbm{display:block}.m-setmain{padding:0}}
+</style>
+</head>
+<body>
+<div class="mk-bar">
+  <strong>Mockup PE · Medien / Jellyfin</strong>
+  <nav>
+    <a href="#s-lib">0 Einstieg</a><a href="#s-set">Einstellungen</a><a href="#s-w1">1a Erkannt (Serie)</a><a href="#s-w1b">1b Erkannt (Film)</a>
+    <a href="#s-w2">2 Titel suchen</a><a href="#s-w3">3 Episoden</a><a href="#s-w4">4 Vorschau</a><a href="#s-w5">5 Ergebnis</a>
+  </nav>
+  <label class="mk-key"><input type="checkbox" class="check" id="mk-nokey"> Zustand „kein TMDB-Schlüssel“ zeigen</label>
+</div>
+
+<div class="mk-wrap">
+<p class="mk-intro"><b>Statisches Mockup</b> (Beispieldaten, keine Funktion). Jede Ansicht steht links in Desktop-Breite und rechts in 375 px. Oben rechts lässt sich der Zustand
+<b>„kein TMDB-Schlüssel“</b> einschalten: dann gibt es keine Vorschläge und keine Poster, Titel und Jahr werden von Hand eingetragen. Farben und Bausteine stammen aus der App (<code>base.css</code>, <code>components.css</code>).
+Die Rahmen der Einstellungsseite und der Bibliothek gehören PB bzw. PF und sind nur als Kontext angedeutet.</p>
+
+<section class="mk-screen" id="s-lib"><h2>0 · Einstieg aus der Bibliothek</h2>
+<p>Die Aktion „In Filme/Serien einsortieren …“ erscheint, sobald Dateien gewählt sind (Mehrfachauswahl oder ein ganzer Ordner). Sie wird über <code>registerLibraryAction</code> angemeldet; die Auswahlleiste selbst gehört PF.</p>
+<div class="mk-pair"><div><p class="mk-cap">Desktop</p><div class="mk-frame"><div class="m-root" data-src="t-lib"></div></div></div>
+<div class="mk-phone"><p class="mk-cap">Handy · 375 px</p><div class="mk-frame"><div class="m-root" data-src="t-lib"></div></div></div></div></section>
+
+<section class="mk-screen" id="s-set"><h2>Einstellungen · Abschnitt „Medien / Jellyfin“</h2>
+<p>Ein Abschnitt der Einstellungsseite (Rahmen von PB). Ordnerauswahl innerhalb des eingehängten NAS mit Schreibprüfung, Benennung und Aktion als Umschalter mit Live-Beispiel, TMDB-Schlüssel mit „Testen“, optional Jellyfin, Automatik. Der Ordnerbrowser ist hier beim Serien-Ordner aufgeklappt.</p>
+<div class="mk-pair"><div><p class="mk-cap">Desktop</p><div class="mk-frame"><div class="m-root" data-src="t-set"></div></div></div>
+<div class="mk-phone"><p class="mk-cap">Handy · 375 px</p><div class="mk-frame"><div class="m-root" data-src="t-set"></div></div></div></div></section>
+
+<section class="mk-screen" id="s-w1"><h2>Assistent · Schritt 1a: Erkannt (Serie)</h2>
+<p>Das Tool schlägt selbst vor, mit Trefferwahrscheinlichkeit und den Gründen. „Passt“ führt weiter, „Anderen Titel suchen“ geht zu Schritt 2. Ohne TMDB-Schlüssel gibt es keine Poster und keine Gegenprobe der Laufzeiten, der erkannte Name aus dem Disc-Namen wird trotzdem angeboten.</p>
+<div class="mk-pair"><div><p class="mk-cap">Desktop</p><div class="mk-frame"><div class="m-root" data-src="t-w1"></div></div></div>
+<div class="mk-phone"><p class="mk-cap">Handy · 375 px</p><div class="mk-frame"><div class="m-root" data-src="t-w1"></div></div></div></div></section>
+
+<section class="mk-screen" id="s-w1b"><h2>Assistent · Schritt 1b: Erkannt (Film, unsicher)</h2>
+<p>Unter etwa 80 % bleibt „Passt“ zwar möglich, der Hinweis ist aber deutlich und die Alternativen stehen darunter. Bei Filmen entfällt Schritt 3 (Episoden).</p>
+<div class="mk-pair"><div><p class="mk-cap">Desktop</p><div class="mk-frame"><div class="m-root" data-src="t-w1b"></div></div></div>
+<div class="mk-phone"><p class="mk-cap">Handy · 375 px</p><div class="mk-frame"><div class="m-root" data-src="t-w1b"></div></div></div></div></section>
+
+<section class="mk-screen" id="s-w2"><h2>Assistent · Schritt 2: Titel suchen oder IMDb-ID</h2>
+<p>Mit Schlüssel: Suche mit Vorschlägen (Poster, Jahr, Kurzbeschreibung), alternativ IMDb-ID. Ohne Schlüssel: Titel und Jahr von Hand, optional die ID für das Namens-Tag; klarer Hinweis, was fehlt.</p>
+<div class="mk-pair"><div><p class="mk-cap">Desktop</p><div class="mk-frame"><div class="m-root" data-src="t-w2"></div></div></div>
+<div class="mk-phone"><p class="mk-cap">Handy · 375 px</p><div class="mk-frame"><div class="m-root" data-src="t-w2"></div></div></div></div></section>
+
+<section class="mk-screen" id="s-w3"><h2>Assistent · Schritt 3: Episoden zuordnen (nur Serien)</h2>
+<p>Vorschlag aus Disc-Nummer und Reihenfolge (Disc 1 mit 5 Episoden ergibt E01–E05, Disc 2 macht weiter), mit Laufzeit-Abgleich gegen TMDB. Der Play-All-Titel ist markiert und wird nicht als Episode einsortiert. Staffel und Episode sind je Datei änderbar. Auf dem Handy wird die Tabelle zu Karten.</p>
+<div class="mk-pair"><div><p class="mk-cap">Desktop</p><div class="mk-frame"><div class="m-root" data-src="t-w3"></div></div></div>
+<div class="mk-phone"><p class="mk-cap">Handy · 375 px</p><div class="mk-frame"><div class="m-root" data-src="t-w3"></div></div></div></div></section>
+
+<section class="mk-screen" id="s-w4"><h2>Assistent · Schritt 4: Vorschau des Zielbaums</h2>
+<p>Alt → neu, nichts passiert vor dem Klick auf „Ausführen“. Konflikte sind rot (Ziel existiert schon, nie überschrieben), gesperrte Dateien gelb (werden gerade konvertiert, nicht angefasst). Bei Konflikten wählt man Überspringen oder einen anderen Namen.</p>
+<div class="mk-pair"><div><p class="mk-cap">Desktop</p><div class="mk-frame"><div class="m-root" data-src="t-w4"></div></div></div>
+<div class="mk-phone"><p class="mk-cap">Handy · 375 px</p><div class="mk-frame"><div class="m-root" data-src="t-w4"></div></div></div></div></section>
+
+<section class="mk-screen" id="s-w5"><h2>Assistent · Schritt 5: Ergebnis und Rückgängig</h2>
+<p>Zusammenfassung, optionaler Jellyfin-Scan, und die Rückgängig-Liste der letzten Aktionen (nur die jeweils letzte Aktion lässt sich zurücknehmen, solange die Dateien noch am Zielort liegen).</p>
+<div class="mk-pair"><div><p class="mk-cap">Desktop</p><div class="mk-frame"><div class="m-root" data-src="t-w5"></div></div></div>
+<div class="mk-phone"><p class="mk-cap">Handy · 375 px</p><div class="mk-frame"><div class="m-root" data-src="t-w5"></div></div></div></div></section>
+</div>
+
+<!-- ============ Vorlagen ============ -->
+<template id="t-lib">
+  <div class="panel"><div class="panel-head"><h2>Bibliothek</h2><span class="sub">/mnt/nas/rips · 12 Dateien</span></div>
+    <div class="table-wrap m-lib"><table><tbody>
+      <tr><td><input type="checkbox" class="check" checked></td><td>The Walking Dead - Disc 1 - Titel 01.mkv</td><td class="muted">7,1 GB</td></tr>
+      <tr><td><input type="checkbox" class="check" checked></td><td>The Walking Dead - Disc 1 - Titel 02.mkv</td><td class="muted">7,0 GB</td></tr>
+      <tr><td><input type="checkbox" class="check" checked></td><td>The Walking Dead - Disc 1 - Titel 06.mkv</td><td class="muted">2,8 GB</td></tr>
+    </tbody></table></div></div>
+  <div class="m-selbar"><strong>3 Dateien gewählt</strong><span class="muted">16,9 GB</span><span class="sp"></span>
+    <div class="actions"><button class="secondary">Konvertieren …</button><button class="primary">In Filme/Serien einsortieren …</button></div></div>
+</template>
+
+<template id="t-set">
+  <div class="m-setpage">
+    <nav class="m-sidenav" aria-label="Einstellungen"><a href="#">Allgemein</a><a href="#">MakeMKV-Key</a><a href="#">Konvertierung &amp; Presets</a><a href="#">Rechner</a><a href="#" class="on">Medien / Jellyfin</a></nav>
+    <div class="m-setmain">
+      <div class="m-crumbm">‹ Einstellungen</div>
+      <div class="m-h"><h3>Medien / Jellyfin</h3></div>
+      <p class="m-sub">Wohin fertige Filme und Serien sortiert werden und wie sie heißen sollen.</p>
+
+      <div class="m-card"><header><h4>Ablage</h4><span class="sp"></span><span class="st ok">beide beschreibbar</span></header>
+        <div class="m-body">
+          <div class="m-grid">
+            <div class="field"><label>Filme-Ordner</label><div class="m-row"><input class="input" value="/mnt/nas/Filme"><button class="secondary">Wählen …</button></div><div class="m-stat ok">beschreibbar · 3,2 TB frei</div></div>
+            <div class="field"><label>Serien-Ordner</label><div class="m-row"><input class="input" value="/mnt/nas/Serien"><button class="secondary">Wählen …</button></div><div class="m-stat ok">beschreibbar · 3,2 TB frei</div></div>
+          </div>
+          <div class="m-browse" aria-label="Ordnerauswahl für den Serien-Ordner">
+            <div class="m-crumb"><span>/mnt/nas</span>›<b>Serien</b></div>
+            <div class="m-dirs">
+              <button class="m-dir"><span class="m-fold"></span>..<small>eine Ebene hoch</small></button>
+              <button class="m-dir"><span class="m-fold"></span>Anime<small>3 Ordner</small></button>
+              <button class="m-dir sel"><span class="m-fold"></span>Serien<small>41 Ordner</small></button>
+              <button class="m-dir"><span class="m-fold"></span>Doku<small>8 Ordner</small></button>
+            </div>
+            <footer><button class="secondary">Neuen Ordner anlegen …</button><button class="primary">Diesen Ordner wählen</button></footer>
+          </div>
+          <p class="help" style="margin:0">Auswahl nur innerhalb des eingehängten NAS (<code>/mnt/nas</code>). Beim Wählen wird geprüft, ob dort geschrieben werden darf.</p>
+        </div></div>
+
+      <div class="m-card"><header><h4>Benennung &amp; Aktion</h4></header>
+        <div class="m-body">
+          <div class="m-grid">
+            <div class="field"><label>Benennung</label><div class="m-seg full"><button class="on">Nach Jellyfin</button><button>Unverändert</button></div></div>
+            <div class="field"><label>Aktion</label><div class="m-seg full"><button class="on">Verschieben</button><button>Kopieren</button></div></div>
+          </div>
+          <label class="chk"><input class="check" type="checkbox" checked> ID im Namen ergänzen <span class="muted">(<code>[tmdbid-…]</code> bzw. <code>[imdbid-tt…]</code>, hilft Jellyfin bei der Zuordnung)</span></label>
+          <label class="chk"><input class="check" type="checkbox"> Episodennamen anhängen <span class="muted">(<code>S01E01 - Days Gone Bye</code>)</span></label>
+          <div class="field"><label>So heißen die Dateien dann (Beispiel)</label>
+            <div class="m-ex"><span>Film:</span> Filme/<em>Blade Runner 2049 (2017) [imdbid-tt1856101]</em>/<em>Blade Runner 2049 (2017) [imdbid-tt1856101].mkv</em><br>
+              <span>Serie:</span> Serien/<em>The Walking Dead (2010) [tmdbid-1402]</em>/Season 01/<em>The Walking Dead S01E01.mkv</em></div></div>
+          <p class="help" style="margin:0">„Unverändert“: Dateien und Ordner behalten ihre Namen und werden nur in den Filme- bzw. Serien-Ordner gelegt.</p>
+        </div></div>
+
+      <div class="m-card"><header><h4>Metadaten (TMDB)</h4><span class="sp"></span>
+          <span class="st warn m-ifnokey">kein Schlüssel</span><span class="st ok m-ifkey">Schlüssel gespeichert</span></header>
+        <div class="m-body">
+          <div class="m-note m-ifnokey"><span class="m-ico">!</span><div><b>Ohne TMDB-Schlüssel</b> gibt es keine Titelvorschläge, keine Poster und keinen Laufzeit-Abgleich. Titel und Jahr trägst du dann von Hand ein, alles andere funktioniert wie sonst. Den Schlüssel (kostenlos) bekommst du in deinem Konto bei themoviedb.org unter Einstellungen → API.</div></div>
+          <div class="field"><label>TMDB-API-Schlüssel</label>
+            <div class="m-key"><input class="input m-ifnokey" type="password" placeholder="Schlüssel (v3) hier einfügen"><input class="input m-ifkey" type="password" value="••••••••••••••••" aria-label="Gespeicherter Schlüssel, nicht lesbar"><button class="secondary">Testen</button><button class="secondary m-ifkey">Löschen</button></div>
+            <div class="m-stat ok m-ifkey">Verbindung ok · zuletzt geprüft heute 14:02</div></div>
+          <div class="m-grid">
+            <div class="field"><label>Sprache für Titel und Beschreibung</label><select><option>Deutsch (de-DE)</option><option>Englisch (en-US)</option><option>Französisch (fr-FR)</option></select></div>
+            <div class="field"><label>Zwischenspeicher</label><div class="m-row"><div class="muted" style="font-size:12px;align-self:center;flex:1">214 Einträge</div><button class="secondary">Leeren</button></div></div>
+          </div>
+        </div></div>
+
+      <div class="m-card"><header><h4>Jellyfin (optional)</h4><span class="sp"></span><span class="st">aus</span></header>
+        <div class="m-body">
+          <div class="m-grid">
+            <div class="field"><label>Server-Adresse</label><input class="input" placeholder="http://jellyfin.lan:8096"></div>
+            <div class="field"><label>API-Schlüssel</label><div class="m-key"><input class="input" type="password" placeholder="Jellyfin → Dashboard → API-Schlüssel"><button class="secondary">Testen</button></div></div>
+          </div>
+          <label class="chk"><input class="check" type="checkbox"> Nach dem Einsortieren die Jellyfin-Bibliothek aktualisieren lassen</label>
+        </div></div>
+
+      <div class="m-card"><header><h4>Automatik</h4></header>
+        <div class="m-body">
+          <label class="chk"><input class="check" type="checkbox"> Automatisch einsortieren, wenn eindeutig erkannt <span class="pill">Standard: aus</span></label>
+          <p class="help" style="margin:0">Nur bei Treffern ab 95 % mit eindeutigen Episoden, nie bei Konflikten oder gesperrten Dateien. Alles Automatische steht in der Rückgängig-Liste. Ohne TMDB-Schlüssel nur für Filme und Serien, deren Name eindeutig aus dem Disc-Namen kommt.</p>
+        </div></div>
+
+      <div class="m-save"><span class="dirty">Ungespeicherte Änderungen</span><div class="actions2" style="margin:0"><button class="secondary">Verwerfen</button><button class="primary">Speichern</button></div></div>
+    </div>
+  </div>
+</template>
+
+<template id="t-w1">
+  <div class="m-dlg">
+    <header><h3>Einsortieren</h3><span class="pill">5 Dateien</span><span class="sp"></span><button class="icon-btn" aria-label="Schließen">✕</button></header>
+    <ol class="m-steps"><li class="cur"><i>1</i>Erkannt</li><li><i>2</i>Titel</li><li><i>3</i>Episoden</li><li><i>4</i>Vorschau</li><li><i>5</i>Fertig</li></ol>
+    <div class="m-stepline"><b>Schritt 1 von 5 · Erkannt</b><div class="bar"><i style="width:20%"></i></div></div>
+    <div class="m-dbody">
+      <div class="m-detect">
+        <div class="m-poster m-ifkey">The Walking Dead</div><div class="m-poster none m-ifnokey">kein Poster<br>(kein Schlüssel)</div>
+        <div>
+          <p class="m-meta" style="margin:0 0 2px">Das sieht nach einer <b style="color:var(--text)">Serie</b> aus</p>
+          <h4>The Walking Dead <span class="muted" style="font-weight:450">(2010)</span></h4>
+          <p class="m-meta">Staffel 1 · Disc 1 · 5 Episoden + Play-All<span class="m-ifkey"> · TMDB 1402 · IMDb tt1520211</span></p>
+          <div class="m-conf"><strong>92 %</strong><div class="bar"><i style="width:92%"></i></div><span class="muted">sicher</span></div>
+          <div class="m-why"><span class="tag">Ordnername „The Walking Dead - Disc 1“</span><span class="tag">5 Titel à 43–45 min</span><span class="tag">Play-All erkannt (Titel 06)</span><span class="tag">Disc-Label THE_WALKING_DEAD_S1_D1</span></div>
+        </div>
+      </div>
+      <div class="m-note info m-ifnokey"><span class="m-ico">i</span><div>Ohne TMDB-Schlüssel kann der Name nicht bei TMDB geprüft werden. Bitte Titel und Jahr bestätigen oder im nächsten Schritt von Hand ändern.</div></div>
+      <details class="m-files"><summary>5 Dateien (+ 1 Play-All) ansehen</summary><ul>
+        <li>The Walking Dead - Disc 1 - Titel 01.mkv <span>44:12 · 7,1 GB</span></li><li>The Walking Dead - Disc 1 - Titel 02.mkv <span>43:40 · 7,0 GB</span></li>
+        <li>The Walking Dead - Disc 1 - Titel 03.mkv <span>44:55 · 7,2 GB</span></li><li>The Walking Dead - Disc 1 - Titel 04.mkv <span>43:21 · 6,9 GB</span></li>
+        <li>The Walking Dead - Disc 1 - Titel 05.mkv <span>44:08 · 7,1 GB</span></li><li>The Walking Dead - Disc 1 - Titel 06.mkv <span>2:56:08 · 2,8 GB · Play-All</span></li></ul></details>
+      <div class="m-or">oder es ist etwas anderes</div>
+      <div class="m-seg full"><button class="on">Serie</button><button>Film</button><button>Extras zu einem Film</button></div>
+    </div>
+    <footer><button class="secondary">Abbrechen</button><span class="sp"></span><button class="secondary">Anderen Titel suchen</button><button class="primary">Passt, weiter</button></footer>
+  </div>
+</template>
+
+<template id="t-w1b">
+  <div class="m-dlg">
+    <header><h3>Einsortieren</h3><span class="pill">1 Datei</span><span class="sp"></span><button class="icon-btn" aria-label="Schließen">✕</button></header>
+    <ol class="m-steps"><li class="cur"><i>1</i>Erkannt</li><li><i>2</i>Titel</li><li class="skip"><i>3</i>Episoden</li><li><i>4</i>Vorschau</li><li><i>5</i>Fertig</li></ol>
+    <div class="m-stepline"><b>Schritt 1 von 4 · Erkannt</b><div class="bar"><i style="width:25%"></i></div></div>
+    <div class="m-dbody">
+      <div class="m-detect">
+        <div class="m-poster b m-ifkey">Blade Runner 2049</div><div class="m-poster none m-ifnokey">kein Poster<br>(kein Schlüssel)</div>
+        <div>
+          <p class="m-meta" style="margin:0 0 2px">Das sieht nach einem <b style="color:var(--text)">Film</b> aus</p>
+          <h4>Blade Runner 2049 <span class="muted" style="font-weight:450">(2017)</span></h4>
+          <p class="m-meta">Ein Titel · 2:43:08<span class="m-ifkey"> · TMDB 335984 · IMDb tt1856101</span></p>
+          <div class="m-conf mid"><strong>74 %</strong><div class="bar"><i style="width:74%"></i></div><span class="muted">bitte prüfen</span></div>
+          <div class="m-why"><span class="tag">Volume-Label BLADE_RUNNER_2049</span><span class="tag">ein Haupttitel über 70 min</span><span class="tag red">Jahr aus dem Namen nicht ableitbar</span></div>
+        </div>
+      </div>
+      <div class="m-note"><span class="m-ico">!</span><div><b>Nicht ganz sicher.</b> Das Jahr steht nicht im Dateinamen; der Treffer kommt von der Laufzeit und dem Label. Andere Möglichkeiten:</div></div>
+      <div class="m-hits m-ifkey">
+        <button class="m-hit"><div class="m-poster b">Blade Runner</div><div><h5>Blade Runner<small>1982</small></h5><p>Director’s Cut oder Final Cut? Laufzeit 1:57 passt nicht zu 2:43.</p></div><span class="tag go">wählen</span></button>
+        <button class="m-hit"><div class="m-poster c">Blade Runner Black Out</div><div><h5>Blade Runner Black Out 2022<small>2017</small></h5><p>Kurzfilm, 15 min. Passt nicht zur Laufzeit.</p></div><span class="tag go">wählen</span></button>
+      </div>
+    </div>
+    <footer><button class="secondary">Abbrechen</button><span class="sp"></span><button class="secondary">Anderen Titel suchen</button><button class="primary">Passt, weiter</button></footer>
+  </div>
+</template>
+
+<template id="t-w2">
+  <div class="m-dlg">
+    <header><h3>Einsortieren</h3><span class="pill">5 Dateien</span><span class="sp"></span><button class="icon-btn" aria-label="Schließen">✕</button></header>
+    <ol class="m-steps"><li class="done"><i>✓</i>Erkannt</li><li class="cur"><i>2</i>Titel</li><li><i>3</i>Episoden</li><li><i>4</i>Vorschau</li><li><i>5</i>Fertig</li></ol>
+    <div class="m-stepline"><b>Schritt 2 von 5 · Titel</b><div class="bar"><i style="width:40%"></i></div></div>
+    <div class="m-dbody">
+      <div class="m-ifkey" style="display:grid;gap:14px">
+        <div class="m-search">
+          <div class="m-seg"><button class="on">Serie</button><button>Film</button></div>
+          <div class="field"><label>Titel</label><input class="input" value="walking dead"></div>
+          <div class="field"><label>Jahr</label><input class="input" placeholder="optional"></div>
+          <button class="primary">Suchen</button>
+        </div>
+        <div class="m-hits">
+          <button class="m-hit sel"><div class="m-poster">The Walking Dead</div><div><h5>The Walking Dead<small>2010 · 11 Staffeln</small></h5><p>Sheriff Rick Grimes erwacht aus dem Koma und findet eine Welt vor, die von Untoten überrannt wurde.</p><div class="ids"><span class="tag" style="margin:0">tmdb 1402</span><span class="tag" style="margin:0">tt1520211</span></div></div><span class="tag go">gewählt</span></button>
+          <button class="m-hit"><div class="m-poster b">TWD: World Beyond</div><div><h5>The Walking Dead: World Beyond<small>2020 · 2 Staffeln</small></h5><p>Eine Gruppe Jugendlicher wächst nach der Apokalypse in einer Gemeinschaft auf und verlässt sie erstmals.</p><div class="ids"><span class="tag" style="margin:0">tmdb 94305</span></div></div><span class="tag go">wählen</span></button>
+          <button class="m-hit"><div class="m-poster c">Fear the Walking Dead</div><div><h5>Fear the Walking Dead<small>2015 · 8 Staffeln</small></h5><p>Eine Patchwork-Familie erlebt den Beginn des Zusammenbruchs in Los Angeles.</p><div class="ids"><span class="tag" style="margin:0">tmdb 62286</span></div></div><span class="tag go">wählen</span></button>
+        </div>
+        <div class="m-or">oder mit IMDb-ID</div>
+        <div class="m-row"><div class="field"><label>IMDb-ID</label><input class="input" placeholder="tt1520211"></div><button class="secondary">Nachschlagen</button></div>
+      </div>
+      <div class="m-ifnokey" style="display:grid;gap:14px">
+        <div class="m-note"><span class="m-ico">!</span><div><b>Kein TMDB-Schlüssel hinterlegt.</b> Deshalb gibt es keine Vorschläge, Poster oder Episodennamen. Trage Titel und Jahr selbst ein. Den Schlüssel kannst du unter Einstellungen → Medien / Jellyfin nachtragen.</div></div>
+        <div class="m-seg"><button class="on">Serie</button><button>Film</button></div>
+        <div class="m-grid">
+          <div class="field"><label>Titel</label><input class="input" value="The Walking Dead"></div>
+          <div class="field"><label>Jahr (Beginn)</label><input class="input" value="2010"></div>
+        </div>
+        <div class="m-grid">
+          <div class="field"><label>IMDb-ID <span class="muted">(optional, für das Namens-Tag)</span></label><input class="input" placeholder="tt1520211"></div>
+          <div class="field"><label>TMDB-ID <span class="muted">(optional)</span></label><input class="input" placeholder="1402"></div>
+        </div>
+        <div class="m-ex"><span>Wird so heißen:</span> <em>The Walking Dead (2010)</em>/Season 01/<em>The Walking Dead S01E01.mkv</em></div>
+      </div>
+    </div>
+    <footer><button class="secondary">Zurück</button><span class="sp"></span><button class="primary">Weiter</button></footer>
+  </div>
+</template>
+
+<template id="t-w3">
+  <div class="m-dlg">
+    <header><h3>Einsortieren</h3><span class="pill">The Walking Dead (2010)</span><span class="sp"></span><button class="icon-btn" aria-label="Schließen">✕</button></header>
+    <ol class="m-steps"><li class="done"><i>✓</i>Erkannt</li><li class="done"><i>✓</i>Titel</li><li class="cur"><i>3</i>Episoden</li><li><i>4</i>Vorschau</li><li><i>5</i>Fertig</li></ol>
+    <div class="m-stepline"><b>Schritt 3 von 5 · Episoden</b><div class="bar"><i style="width:60%"></i></div></div>
+    <div class="m-dbody">
+      <div class="m-follow"><span>Vorschlag: <b style="color:var(--text)">Disc 1, Staffel 1</b> ab Episode 1. Disc 2 macht bei E06 weiter (wird für diese Serie gemerkt).</span><span class="sp"></span>
+        <div class="field" style="display:flex;gap:6px;align-items:center"><label style="margin:0">Staffel für alle</label><input class="input" style="width:60px;height:30px;text-align:center" value="1"></div></div>
+      <div class="m-eps-table table-wrap" style="border:1px solid var(--line);border-radius:10px"><table class="m-eps"><thead><tr><th>Datei</th><th>Laufzeit</th><th>Staffel</th><th>Episode</th><th>Name <span class="m-ifnokey">(ohne Schlüssel leer)</span></th><th>Abgleich</th></tr></thead><tbody>
+        <tr><td>Titel 01</td><td>44:12</td><td><input class="input num-in" value="1"></td><td><input class="input num-in" value="1"></td><td><span class="nm m-ifkey">Days Gone Bye</span><span class="nm m-ifnokey muted">—</span></td><td class="dur-ok m-ifkey">✓ 44 min</td><td class="m-ifnokey muted">nicht geprüft</td></tr>
+        <tr><td>Titel 02</td><td>43:40</td><td><input class="input num-in" value="1"></td><td><input class="input num-in" value="2"></td><td><span class="nm m-ifkey">Guts</span><span class="nm m-ifnokey muted">—</span></td><td class="dur-ok m-ifkey">✓ 44 min</td><td class="m-ifnokey muted">nicht geprüft</td></tr>
+        <tr><td>Titel 03</td><td>44:55</td><td><input class="input num-in" value="1"></td><td><input class="input num-in" value="3"></td><td><span class="nm m-ifkey">Tell It to the Frogs</span><span class="nm m-ifnokey muted">—</span></td><td class="dur-ok m-ifkey">✓ 45 min</td><td class="m-ifnokey muted">nicht geprüft</td></tr>
+        <tr><td>Titel 04</td><td>43:21</td><td><input class="input num-in" value="1"></td><td><input class="input num-in" value="4"></td><td><span class="nm m-ifkey">Vatos</span><span class="nm m-ifnokey muted">—</span></td><td class="dur-ok m-ifkey">✓ 43 min</td><td class="m-ifnokey muted">nicht geprüft</td></tr>
+        <tr><td>Titel 05</td><td>44:08</td><td><input class="input num-in" value="1"></td><td><input class="input num-in" value="5"></td><td><span class="nm m-ifkey">Wildfire</span><span class="nm m-ifnokey muted">—</span></td><td class="dur-off m-ifkey">≈ 44 min (Δ 4 min)</td><td class="m-ifnokey muted">nicht geprüft</td></tr>
+        <tr class="playall"><td>Titel 06</td><td>2:56:08</td><td colspan="3"><span class="nm">Summe der Titel 01–04</span><small>Play-All: wird nicht als Episode einsortiert</small></td><td><div class="m-seg"><button class="on">Auslassen</button><button>Als Extra</button></div></td></tr>
+      </tbody></table></div>
+      <div class="m-cards">
+        <div class="m-ecard"><div class="top"><b>Titel 01</b><span class="muted">44:12 <span class="m-ifkey dur-ok">✓</span></span></div><div class="ins">S<input class="num-in" value="1"> E<input class="num-in" value="1"><span class="m-ifkey" style="color:var(--text)">Days Gone Bye</span></div></div>
+        <div class="m-ecard"><div class="top"><b>Titel 02</b><span class="muted">43:40 <span class="m-ifkey dur-ok">✓</span></span></div><div class="ins">S<input class="num-in" value="1"> E<input class="num-in" value="2"><span class="m-ifkey" style="color:var(--text)">Guts</span></div></div>
+        <div class="m-ecard"><div class="top"><b>Titel 03</b><span class="muted">44:55 <span class="m-ifkey dur-ok">✓</span></span></div><div class="ins">S<input class="num-in" value="1"> E<input class="num-in" value="3"><span class="m-ifkey" style="color:var(--text)">Tell It to the Frogs</span></div></div>
+        <div class="m-ecard"><div class="top"><b>Titel 04</b><span class="muted">43:21 <span class="m-ifkey dur-ok">✓</span></span></div><div class="ins">S<input class="num-in" value="1"> E<input class="num-in" value="4"><span class="m-ifkey" style="color:var(--text)">Vatos</span></div></div>
+        <div class="m-ecard"><div class="top"><b>Titel 05</b><span class="muted">44:08 <span class="m-ifkey dur-off">≈</span></span></div><div class="ins">S<input class="num-in" value="1"> E<input class="num-in" value="5"><span class="m-ifkey" style="color:var(--text)">Wildfire</span></div></div>
+        <div class="m-ecard playall"><div class="top"><b>Titel 06 · Play-All</b><span class="muted">2:56:08</span></div><div class="muted" style="font-size:12px">Summe der Titel 01–04, wird nicht als Episode einsortiert.</div><div class="m-seg full"><button class="on">Auslassen</button><button>Als Extra</button></div></div>
+      </div>
+      <div class="m-note info m-ifnokey"><span class="m-ico">i</span><div>Ohne TMDB-Schlüssel stehen keine Episodennamen und Soll-Laufzeiten zur Verfügung. Staffel und Episode kommen aus Disc-Nummer und Reihenfolge und lassen sich ändern.</div></div>
+    </div>
+    <footer><button class="secondary">Zurück</button><span class="sp"></span><button class="primary">Weiter zur Vorschau</button></footer>
+  </div>
+</template>
+
+<template id="t-w4">
+  <div class="m-dlg">
+    <header><h3>Einsortieren</h3><span class="pill">The Walking Dead (2010)</span><span class="sp"></span><button class="icon-btn" aria-label="Schließen">✕</button></header>
+    <ol class="m-steps"><li class="done"><i>✓</i>Erkannt</li><li class="done"><i>✓</i>Titel</li><li class="done"><i>✓</i>Episoden</li><li class="cur"><i>4</i>Vorschau</li><li><i>5</i>Fertig</li></ol>
+    <div class="m-stepline"><b>Schritt 4 von 5 · Vorschau</b><div class="bar"><i style="width:80%"></i></div></div>
+    <div class="m-dbody">
+      <div class="m-sum"><span class="st ok">3 werden verschoben</span><span class="st busy">1 Konflikt</span><span class="st warn">1 gesperrt</span><span class="st">1 ausgelassen (Play-All)</span></div>
+      <div class="m-tree" role="table" aria-label="Zielbaum">
+        <div class="m-tr head"><span>Neu (Zielbaum)</span><span>Bisher</span></div>
+        <div class="m-tr"><span class="n"><span class="dir">Serien/</span></span><span class="o">/mnt/nas/Serien</span></div>
+        <div class="m-tr"><span class="n d1"><span class="dir">The Walking Dead (2010) [tmdbid-1402]/</span></span><span class="o">neuer Ordner</span></div>
+        <div class="m-tr"><span class="n d2"><span class="dir">Season 01/</span></span><span class="o">Ordner existiert schon</span></div>
+        <div class="m-tr"><span class="n d2">The Walking Dead S01E01.mkv</span><span class="o">The Walking Dead - Disc 1/…Titel 01.mkv</span></div>
+        <div class="m-tr"><span class="n d2">The Walking Dead S01E02.mkv</span><span class="o">The Walking Dead - Disc 1/…Titel 02.mkv</span></div>
+        <div class="m-tr bad"><span class="n d2">The Walking Dead S01E03.mkv</span><span class="o">The Walking Dead - Disc 1/…Titel 03.mkv</span>
+          <span class="why"><b>Existiert schon im Ziel</b> (6,8 GB, 12.03.2025) – wird nie überschrieben.
+            <span class="m-seg"><button class="on">Überspringen</button><button>Als „S01E03 - 2“ ablegen</button></span></span></div>
+        <div class="m-tr lock"><span class="n d2">The Walking Dead S01E04.mkv</span><span class="o">The Walking Dead - Disc 1/…Titel 04.mkv</span>
+          <span class="why">Gesperrt: wird gerade konvertiert (maintux). Bleibt liegen, später erneut einsortieren.</span></div>
+        <div class="m-tr"><span class="n d2">The Walking Dead S01E05.mkv</span><span class="o">The Walking Dead - Disc 1/…Titel 05.mkv</span></div>
+        <div class="m-tr skip"><span class="n d2">–</span><span class="o">The Walking Dead - Disc 1/…Titel 06.mkv</span><span class="why">Play-All, ausgelassen. Bleibt in „The Walking Dead - Disc 1“.</span></div>
+      </div>
+      <div class="m-note info"><span class="m-ico">i</span><div>Quelle und Ziel liegen auf demselben NAS-Laufwerk: <b>Verschieben = Umbenennen</b>, sofort und ohne Kopieren. Der leere Ordner „The Walking Dead - Disc 1“ bleibt wegen Titel 04 und 06 bestehen.</div></div>
+    </div>
+    <footer><button class="secondary">Zurück</button><span class="sp"></span><button class="primary">Ausführen (3 Dateien)</button></footer>
+  </div>
+</template>
+
+<template id="t-w5">
+  <div class="m-dlg">
+    <header><h3>Einsortieren</h3><span class="pill">The Walking Dead (2010)</span><span class="sp"></span><button class="icon-btn" aria-label="Schließen">✕</button></header>
+    <ol class="m-steps"><li class="done"><i>✓</i>Erkannt</li><li class="done"><i>✓</i>Titel</li><li class="done"><i>✓</i>Episoden</li><li class="done"><i>✓</i>Vorschau</li><li class="cur"><i>5</i>Fertig</li></ol>
+    <div class="m-stepline"><b>Schritt 5 von 5 · Fertig</b><div class="bar"><i style="width:100%"></i></div></div>
+    <div class="m-dbody">
+      <div class="m-done"><div class="big">✓</div><div><h4>3 Dateien einsortiert</h4><p>Serien/The Walking Dead (2010) [tmdbid-1402]/Season 01 · 21,2 GB · 1 s (Umbenennen)</p></div></div>
+      <div class="m-note ok"><span class="m-ico">✓</span><div>Jellyfin-Bibliothek „Serien“ wird aktualisiert.</div></div>
+      <div class="m-note"><span class="m-ico">!</span><div><b>2 Dateien bleiben liegen:</b> S01E03 (existiert im Ziel) und S01E04 (wird gerade konvertiert). Ein erneutes Einsortieren nimmt sie später mit.</div></div>
+      <h4 style="margin:6px 0 0;font-size:13px">Letzte Aktionen</h4>
+      <div class="m-log">
+        <div class="it"><b>The Walking Dead, S01E01, E02, E05</b><small>gerade eben · 3 Dateien verschoben</small><span class="sp"></span><button class="secondary danger">Rückgängig</button></div>
+        <div class="it"><b>Blade Runner 2049 (2017)</b><small>gestern 21:14 · 1 Datei verschoben</small><span class="sp"></span><span class="muted" style="font-size:11px">nicht mehr rückgängig (neuere Aktion)</span></div>
+        <div class="it"><b>Beispiel DVD (2005)</b><small>vor 3 Tagen · kopiert</small><span class="sp"></span><span class="muted" style="font-size:11px">nicht mehr rückgängig</span></div>
+      </div>
+      <p class="help" style="margin:0">Rückgängig bringt die Dateien an ihren alten Ort zurück und entfernt die dabei leer gewordenen neuen Ordner. Bei „Kopieren“ wird nur die Kopie gelöscht.</p>
+    </div>
+    <footer><button class="secondary">Weitere Dateien einsortieren</button><span class="sp"></span><button class="primary">Fertig</button></footer>
+  </div>
+</template>
+
+<script>
+// Nur für die Mockup-Seite: Vorlagen in die Rahmen kopieren (Desktop und Handy) und den Zustand „kein Schlüssel“ umschalten.
+document.querySelectorAll('[data-src]').forEach(el => { el.innerHTML = document.getElementById(el.dataset.src).innerHTML; });
+const cb = document.getElementById('mk-nokey');
+const apply = () => document.body.classList.toggle('nokey', cb.checked);
+cb.addEventListener('change', apply); apply();
+if(location.hash === '#nokey'){ cb.checked = true; apply(); }
+</script>
+</body>
+</html>
