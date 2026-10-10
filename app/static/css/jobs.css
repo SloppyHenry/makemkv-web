@@ -1,27 +1,63 @@
 /* Aufträge und Protokoll (Besitzer: PA) */
-.job{display:flex;align-items:center;gap:11px;padding:13px 2px;border-bottom:1px solid var(--line)}
+
+/* ---- Auftragsliste: ein Element pro Auftrag (js/jobs-list.js).
+   Das Layout richtet sich nach der Breite der Liste (Container Query), nicht nach dem Fenster:
+   breit = eine Zeile · mittel = Knöpfe unter dem Text · schmal = Symbol-Knöpfe rechts. */
+.joblist{container:jobs/inline-size}
+.job{display:grid;grid-template-columns:24px minmax(0,1fr) auto;grid-template-areas:"ic main side";column-gap:12px;align-items:center;padding:13px 2px;border-bottom:1px solid var(--line)}
 .job:last-child{border-bottom:0}
-.status-check{width:23px;height:23px;border-radius:50%;background:#153b31;color:var(--green);display:grid;place-items:center;font-weight:800;flex:none}
-.status-check.run{background:transparent;border:3px solid #3a2a31;border-top-color:var(--red);animation:spin 1s linear infinite;font-size:0}
+.job>.status-check{grid-area:ic;align-self:start;margin-top:0}
+.job-main{grid-area:main;min-width:0}
+.job-act{display:contents}
+.job-btns{grid-area:side;display:flex;gap:6px;align-items:center;justify-content:flex-end}
+.job-info{grid-area:side;width:32px;height:32px;padding:0;font-size:18px;line-height:1}
+.job-head{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;min-width:0}
+.job-name{display:block;flex:0 1 auto;min-width:0;max-width:100%;font-size:12px;font-weight:650;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.job-host{flex:none;max-width:100%;overflow:hidden;text-overflow:ellipsis}
+.job-head .status{flex:none}
+.job-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;white-space:nowrap}
+.job-btn .bi{display:none;font-size:14px;line-height:1}
+@container jobs (max-width:519px){
+  .job{grid-template-areas:"ic main side" ". under under"}
+  .job-btns{grid-area:under;justify-content:flex-start;margin-top:9px}
+}
+@container jobs (max-width:359px){
+  .job{grid-template-areas:"ic main side"}
+  .job-btns{grid-area:side;margin-top:0}
+  .job-btn{width:34px;height:34px;padding:0}
+  .job-btn .bi{display:block}
+  .job-btn .bl{display:none}
+  .job-name{white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow-wrap:anywhere}
+}
+
+/* ---- Statussymbol: immer kreisrund, gerade Größe (kein Eiern bei Teilpixeln) */
+.status-check{width:24px;height:24px;aspect-ratio:1/1;border-radius:50%;background:#153b31;color:var(--green);display:grid;place-items:center;font-weight:800;flex:none;box-sizing:border-box}
+.status-check.run{background:transparent;border:3px solid #3a2a31;border-top-color:var(--red);animation:spin 1s linear infinite;font-size:0;will-change:transform}
 .status-check.wait{background:#202938;color:#9aa9c1}
 .status-check.err{background:#351b24;color:#ff7480}
 .status-check.skip{background:#202938;color:#9aa9c1}
 @keyframes spin{to{transform:rotate(360deg)}}
-.job-main{flex:1;min-width:0}
-.job-main strong{display:block;font-size:12px;font-weight:650;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .job-main small{display:block;font-size:11px;color:var(--muted);margin-top:3px;overflow-wrap:anywhere}
 .job-main small.err{color:#ff8791}
 .mini-bar{height:4px;background:#252e3d;border-radius:9px;overflow:hidden;margin-top:6px}
-.mini-bar>div{height:100%;background:var(--red);border-radius:9px;transition:width .3s}
+.mini-bar[hidden]{display:none}
+.mini-bar>div{height:100%;background:var(--red);border-radius:9px;transition:width .4s linear}
 .status{font-size:11px;color:#72e2b0;background:#153328;border-radius:99px;padding:4px 9px;white-space:nowrap}
 .status.run{color:#ff8791;background:#351b24}
 .status.wait{color:#9aa9c1;background:#202938}
 .status.err{color:#ff7480;background:#351b24}
+/* Fortschrittsfeld: unbestimmter Balken über transform (kein Layout je Bild) */
+.progress-track.indet .progress-fill{width:35%!important;margin:0;animation:ind 1.2s infinite ease-in-out;transition:none}
+@keyframes ind{0%{transform:translateX(-100%)}100%{transform:translateX(286%)}}
+@media(prefers-reduced-motion:reduce){.status-check.run{animation-duration:2.4s}}
+
+/* ---- Werkzeugleiste über der Liste */
+.jobtools{display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:10px 16px;border-bottom:1px solid var(--line)}
+.jobtools:not(:has(> :not([hidden]))){display:none}
+
+/* ---- Protokoll */
 .log-body{padding:12px 16px;background:#0c1118;font:11px/1.65 ui-monospace,SFMono-Regular,Menlo,monospace;overflow:auto;max-height:205px;color:#b4c4dc}
 .log-line{display:grid;grid-template-columns:62px 1fr;gap:8px;white-space:pre-wrap;overflow-wrap:anywhere}
 .log-time{color:#7d91b0}
 .log-good{color:#4ad49a}.log-error{color:#ff6675}
-.btns{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
-.jobtools{display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:10px 16px;border-bottom:1px solid var(--line)}
-.jobtools:not(:has(> :not([hidden]))){display:none}
 @media(max-width:700px){.log-body{font-size:10px}}

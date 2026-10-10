@@ -1,5 +1,6 @@
 // Aufträge aller Rechner (Rippen, Konvertieren, Übertragen) als Liste mit Pause/Überspringen/Abbrechen.
 import { $, S, api, baseName, dec, delegate, esc, fmtB, fmtD, hostName, setHtml, toast, ui } from './core.js';
+import { jobBtn, reconcileJobs } from './jobs-list.js';
 import { onState, registerPanel } from './registry.js';
 
 function clusterItems(){
@@ -24,53 +25,57 @@ function jobSpeed(x){        // geglättete Geschwindigkeit eines Rips/Backups (
   else if(now - r.t >= 3){ const inst = Math.max(0,(done-r.b)/(now-r.t)); r.v = r.v ? r.v*0.6+inst*0.4 : inst; r.t = now; r.b = done; }
   return r.v;
 }
-function jobRow(x, multi){
-  const o = x.o; let cls = '', txt = 'Fertig', icon = '<span class="status-check">✓</span>', small = '', err = false, bar = '', btn = '';
+// Anzeigemodell eines Auftrags (reine Daten, kein HTML); jobs-list.js trägt es ins stabile Zeilen-Element ein
+function jobModel(x, multi){
+  const o = x.o, m = {iconCls:'', iconTxt:'✓', name:'', title:'', host: multi ? x.host : '', cls:'', txt:'Fertig', small:'', err:false, pct:null, acts:''};
+  const run = () => { m.cls = 'run'; m.txt = 'Läuft'; m.iconCls = 'run'; m.iconTxt = ''; };
+  const wait = (txt, sym = '…') => { m.cls = 'wait'; m.txt = txt; m.iconCls = 'wait'; m.iconTxt = sym; };
+  const fail = (txt, msg) => { m.cls = 'err'; m.txt = txt; m.iconCls = 'err'; m.iconTxt = '!'; m.small = msg; m.err = true; };
   if(x.k === 'd'){
     const ov = o.kind==='scan' ? (o.total||0) : (o.overall||0), p = Math.round(ov*100), v = o.kind==='scan' ? 0 : jobSpeed(x), el = Math.max(1, S.now - o.started);
     const eta = ov > 0.01 ? ((v > 0 && o.bytes) ? o.bytes*(1-ov)/v : el/ov - el) : 0;
-    cls = 'run'; txt = 'Läuft'; icon = '<span class="status-check run"></span>';
+    run(); m.pct = p;
     const art = {rip:'Rippen', backup:'Disc-Backup', scan:'Analyse'}[o.kind] || o.kind;
-    small = `${art} ${p} %${v>0 ? ` · ${fmtB(v)}/s` : ''} · Laufzeit ${fmtD(el)}${eta ? ` · Restzeit ${fmtD(eta)}` : ''}${o.kind==='rip' && o.count ? ` · Titel ${o.index||0}/${o.count}` : ''}`;
-    bar = `<div class="mini-bar"><div style="width:${p}%"></div></div>`;
-    const nm = (o.disc || o.title || 'Disc') + ' – ' + (o.kind==='backup' ? 'Backup' : o.kind==='scan' ? 'Analyse' : 'Rip');
-    return `<div class="job">${icon}<div class="job-main"><strong title="${esc(nm)}">${esc(nm)}${multi ? ` <span class="st">${esc(x.host)}</span>` : ''}</strong><small>${esc(small)}</small>${bar}</div><span class="status ${cls}">${txt}</span></div>`;
+    m.small = `${art} ${p} %${v>0 ? ` · ${fmtB(v)}/s` : ''} · Laufzeit ${fmtD(el)}${eta ? ` · Restzeit ${fmtD(eta)}` : ''}${o.kind==='rip' && o.count ? ` · Titel ${o.index||0}/${o.count}` : ''}`;
+    m.name = m.title = (o.disc || o.title || 'Disc') + ' – ' + (o.kind==='backup' ? 'Backup' : o.kind==='scan' ? 'Analyse' : 'Rip');
+    return m;
   }
   if(x.k === 'c'){
-    if(o.cancel && o.status !== 'cancelled'){ cls = 'wait'; txt = 'Bricht ab'; icon = '<span class="status-check wait">…</span>'; small = 'Wird abgebrochen …'; }
-    else if(o.status === 'running' && o.paused){ const p = Math.round(o.pct*100); cls = 'wait'; txt = 'Pausiert'; icon = '<span class="status-check wait">⏸</span>';
-      small = `Konvertierung pausiert bei ${p} % – mit „Fortsetzen“ geht es weiter`; bar = `<div class="mini-bar"><div style="width:${p}%"></div></div>`; }
-    else if(o.status === 'running'){ const p = Math.round(o.pct*100); cls = 'run'; txt = 'Läuft'; icon = '<span class="status-check run"></span>';
-      small = `Konvertierung ${p} %${o.fps ? ` · ${dec(o.fps.toFixed(1))} fps` : ''}${o.speed ? ` · ${dec(o.speed.toFixed(2))}× Echtzeit` : ''}${o.eta ? ` · Restzeit ${fmtD(o.eta)}` : ''}${o.mode ? ` · ${o.mode}` : ''}`;
-      bar = `<div class="mini-bar"><div style="width:${p}%"></div></div>`; }
-    else if(o.status === 'queued'){ cls = 'wait'; txt = 'Wartet'; icon = '<span class="status-check wait">…</span>'; small = `Konvertierung eingereiht${(x.local ? S.conv_paused : (S.peers||[]).some(p => p.name===x.host && p.conv_paused)) ? ' (pausiert)' : ''} · ${fmtB(o.size_in)}`; }
-    else if(o.status === 'cancelled'){ cls = 'wait'; txt = 'Abgebrochen'; icon = '<span class="status-check skip">✕</span>'; small = o.origin === 'library' ? 'Abgebrochen · Original bleibt unverändert' : 'Abgebrochen · gerippte Datei verworfen'; }
-    else if(o.status === 'done') small = `Konvertiert · ${fmtB(o.size_in)} → ${fmtB(o.size_out)} (−${Math.round((1-o.size_out/o.size_in)*100)} %)`;
-    else if(o.status === 'skipped'){ icon = '<span class="status-check skip">✓</span>'; small = o.handed ? `An ${o.handed} übergeben` : 'Konvertierung übersprungen · Original'; if(o.handed) txt = 'Übergeben'; }
-    else { cls = 'err'; txt = 'Fehler'; icon = '<span class="status-check err">!</span>'; small = o.error || 'Konvertierung fehlgeschlagen'; err = true; }
-    if(o.origin === 'library') small += ' · Bibliothek';
-    const h = x.local ? '' : esc(x.host);
-    btn = ((o.status==='queued' || o.status==='running') && !o.cancel)
-      ? `<span class="btns"><button class="secondary" data-skip="${o.id}" data-host="${h}" title="Ohne Konvertierung weiter: das Original bleibt liegen bzw. wird unverändert übertragen">Überspringen</button><button class="secondary danger" data-cancel="${o.id}" data-host="${h}" data-origin="${esc(o.origin||'')}" title="Auftrag ganz beenden">Abbrechen</button></span>`
-      : `<button class="icon-btn" data-info="c:${o.id}:${esc(x.host)}" aria-label="Details">›</button>`;
+    const h = x.local ? '' : esc(x.host), pct = Math.round((o.pct||0)*100);
+    if(o.cancel && o.status !== 'cancelled'){ wait('Bricht ab'); m.small = 'Wird abgebrochen …'; }
+    else if(o.status === 'running' && o.paused){ wait('Pausiert', '⏸'); m.pct = pct; m.small = `Konvertierung pausiert bei ${pct} % – mit „Fortsetzen“ geht es weiter`; }
+    else if(o.status === 'running'){
+      run(); m.pct = pct;
+      m.small = `Konvertierung ${pct} %${o.fps ? ` · ${dec(o.fps.toFixed(1))} fps` : ''}${o.speed ? ` · ${dec(o.speed.toFixed(2))}× Echtzeit` : ''}${o.eta ? ` · Restzeit ${fmtD(o.eta)}` : ''}${o.mode ? ` · ${o.mode}` : ''}`; }
+    else if(o.status === 'queued'){ wait('Wartet'); m.small = `Konvertierung eingereiht${(x.local ? S.conv_paused : (S.peers||[]).some(p => p.name===x.host && p.conv_paused)) ? ' (pausiert)' : ''} · ${fmtB(o.size_in)}`; }
+    else if(o.status === 'cancelled'){ wait('Abgebrochen', '✕'); m.iconCls = 'skip'; m.small = o.origin === 'library' ? 'Abgebrochen · Original bleibt unverändert' : 'Abgebrochen · gerippte Datei verworfen'; }
+    else if(o.status === 'done') m.small = `Konvertiert · ${fmtB(o.size_in)} → ${fmtB(o.size_out)} (−${Math.round((1-o.size_out/o.size_in)*100)} %)`;
+    else if(o.status === 'skipped'){ m.iconCls = 'skip'; m.small = o.handed ? `An ${o.handed} übergeben` : 'Konvertierung übersprungen · Original'; if(o.handed) m.txt = 'Übergeben'; }
+    else fail('Fehler', o.error || 'Konvertierung fehlgeschlagen');
+    if(o.origin === 'library') m.small += ' · Bibliothek';
+    m.acts = ((o.status==='queued' || o.status==='running') && !o.cancel)
+      ? '<span class="job-btns">' + jobBtn(`data-skip="${o.id}" data-host="${h}"`, '⏭︎', 'Überspringen', 'Ohne Konvertierung weiter: das Original bleibt liegen bzw. wird unverändert übertragen')
+        + jobBtn(`data-cancel="${o.id}" data-host="${h}" data-origin="${esc(o.origin||'')}"`, '✕', 'Abbrechen', 'Auftrag ganz beenden', 'danger') + '</span>'
+      : `<button class="icon-btn job-info" data-info="c:${o.id}:${esc(x.host)}" aria-label="Details">›</button>`;
   } else {
     const p = o.size ? Math.round(o.copied/o.size*100) : 0;
-    if(o.status === 'copying'){ cls = 'run'; txt = 'Läuft'; icon = '<span class="status-check run"></span>';
-      small = `Übertragung ${p} % · ${fmtB(o.copied)} / ${fmtB(o.size)}${o.speed>0 ? ` · ${fmtB(o.speed)}/s` : ''}${o.eta>1 ? ` · noch ${fmtD(o.eta)}` : ''}`; bar = `<div class="mini-bar"><div style="width:${p}%"></div></div>`; }
-    else if(o.status === 'queued'){ cls = 'wait'; txt = 'Wartet'; icon = '<span class="status-check wait">…</span>'; small = `Übertragung eingereiht · ${fmtB(o.size)}`; }
-    else if(o.status === 'retry'){ cls = 'err'; txt = 'Neuer Versuch'; icon = '<span class="status-check err">!</span>'; small = o.error || 'Übertragung fehlgeschlagen'; err = true; }
-    else if(o.status === 'error'){ cls = 'err'; txt = 'Fehler'; icon = '<span class="status-check err">!</span>'; small = o.error || 'Übertragung fehlgeschlagen'; err = true; }
-    else small = `${fmtB(o.size)} · Zielverzeichnis${o.replace ? ' · ersetzt Original' : ''}`;
-    btn = `<button class="icon-btn" data-info="u:${o.id}:${esc(x.host)}" aria-label="Details">›</button>`;
+    if(o.status === 'copying'){ run(); m.pct = p;
+      m.small = `Übertragung ${p} % · ${fmtB(o.copied)} / ${fmtB(o.size)}${o.speed>0 ? ` · ${fmtB(o.speed)}/s` : ''}${o.eta>1 ? ` · noch ${fmtD(o.eta)}` : ''}`; }
+    else if(o.status === 'queued'){ wait('Wartet'); m.small = `Übertragung eingereiht · ${fmtB(o.size)}`; }
+    else if(o.status === 'retry') fail('Neuer Versuch', o.error || 'Übertragung fehlgeschlagen');
+    else if(o.status === 'error') fail('Fehler', o.error || 'Übertragung fehlgeschlagen');
+    else m.small = `${fmtB(o.size)} · Zielverzeichnis${o.replace ? ' · ersetzt Original' : ''}`;
+    m.acts = `<button class="icon-btn job-info" data-info="u:${o.id}:${esc(x.host)}" aria-label="Details">›</button>`;
   }
-  const name = baseName(o.name) + (x.k==='u' ? ' übertragen' : '');
-  return `<div class="job">${icon}<div class="job-main"><strong title="${esc(o.name)}">${esc(name)}${multi ? ` <span class="st">${esc(x.host)}</span>` : ''}</strong><small class="${err?'err':''}">${esc(small)}</small>${bar}</div><span class="status ${cls}">${txt}</span>${btn}</div>`;
+  m.name = baseName(o.name) + (x.k==='u' ? ' übertragen' : ''); m.title = o.name;
+  return m;
 }
+const itemKey = x => x.k === 'd' ? `d|${x.host}|${x.o.dev}` : `${x.k}|${x.host}|${x.o.id}`;
 function renderJobs(){
   const multi = (S.peers||[]).length > 0, items = clusterItems();
   items.sort((a,b) => (itemActive(b)-itemActive(a)) || (itemActive(a) ? (a.host===b.host ? (a.o.id||0)-(b.o.id||0) : a.host.localeCompare(b.host)) : (b.o.t||0)-(a.o.t||0)));
-  const h = items.slice(0,14).map(x => jobRow(x, multi)).join('') || '<div class="empty">Keine Aufträge.</div>';
-  document.querySelectorAll('[data-joblist]').forEach(e => { if(!e.closest('[hidden]')) setHtml(e, h); });
+  const rows = items.slice(0,14).map(x => ({key: itemKey(x), model: jobModel(x, multi)}));
+  document.querySelectorAll('[data-joblist]').forEach(e => { if(!e.closest('[hidden]')) reconcileJobs(e, rows, 'Keine Aufträge.'); });
   const dest = $('#jobsDest');
   if(dest) dest.textContent = multi ? `Ziel: ${S.output.dir} · alle Rechner` : `Ziel: ${S.output.dir}`;
   const aktiv = (S.conversions||[]).some(c => c.status==='queued' || c.status==='running'), p = !!S.conv_paused;
@@ -122,6 +127,6 @@ const BRAND = '<span class="brand-mark" style="width:20px;height:20px;border-wid
 export const jobsPanelHtml = (id, withDest) => `<section class="panel"${withDest ? '' : ' style="margin-top:12px"'}>
           <div class="panel-head">${BRAND}${withDest ? '<div><h2>Aufträge</h2><span class="sub" id="jobsDest"></span></div>' : '<h2>Aufträge</h2>'}</div>
           ${JOBTOOLS}
-          <div class="section-content" id="${id}" data-joblist></div>
+          <div class="section-content joblist" id="${id}" data-joblist></div>
         </section>`;
 registerPanel({view:'laufwerke', slot:'right', order:10, id:'jobs', html: jobsPanelHtml('jobs', true)});
