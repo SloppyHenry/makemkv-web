@@ -1,4 +1,4 @@
-# Schnittstellen und Aufbau (Stand nach P0)
+# Schnittstellen und Aufbau (Stand nach Phase 2, alle Pakete zusammengeführt)
 
 Gilt für alle Pakete. Ergänzt `AUFTRAG.md`; bei Widerspruch gilt `AUFTRAG.md` Abschnitt 4 (Spielregeln).
 
@@ -116,5 +116,22 @@ registerLibraryAction({id:'play', label:'Abspielen', icon:'▶', primary:true,
 - Attrappen-Laufwerk `sr0` (Datei in `<name>/drives/`) mit Attrappe `makemkvcon` (`scripts/dev-bin`): Disc wird „analysiert“, Rippen/Backup laufen in Sekunden und erzeugen winzige Dateien. `scripts/dev.sh disc --name dev-a ready|empty|open` legt Disc ein/entfernt sie/öffnet die Schublade. Eigene Disc: `<name>/drives/sr0.json` (`type`, `name`, `volume`, `titles[{name,secs,bytes,chapters}]`).
 - Im Browser prüfen: Desktop (1440) und Handy (375), Konsole ohne Fehler.
 
-## 7. Bekannte Fehler im übernommenen Code (nicht Teil von P0)
-- `convert.ensure_conv_workers()` startet nie weitere Worker (rekursiert nur und zählt `conv_running` hoch). Es läuft immer genau ein Konvertier-Worker, „Gleichzeitige Dateien“ > 1 wirkt nicht. Gehört zu PF (`convert.py`).
+## 7. Module der Pakete (Phase 2)
+| Paket | Backend | Oberfläche | Schnittstelle nach außen |
+|---|---|---|---|
+| PA UI-Feinschliff | – | `jobs.js`, `jobs-list.js` (stabile Zeilen), `logs.js`, `drives.js`, `titles.js`, `css/jobs.css`, `css/titles.css` | Titelliste bettet `mountConvertEditor(…, {mode:'compact'})` ein |
+| PB Navigation, Einstellungen | – | `nav.js`, `settings.js`, `settings-general.js`, `css/shell.css` | Reiter aus `getViews()`; Einstellungen `#/einstellungen/<abschnitt>` mit Speichern je Abschnitt; Ereignisse `route`, `settings:dirty` |
+| PC Rechner | `nodes*.py`, `cluster.py` | `nodes*.js`, `css/nodes.css` | `DATA/nodes.json`, Token-Kopplung, Suche im /24, `peers[i].legacy/trust/version`; `cluster.cfg_for_peer(cfg, peer)` für Übergaben |
+| PD Player | `player.py`, `player_probe.py`, `player_stream.py` | `player*.js`, `css/player.css` | `/api/player/*`; `openPlayer(path)` (Überlagerung), `mountPlayer(el, path, {compact})` (eingebettet); Entscheidung direkt/Remux/Transcode, ffmpeg-Neustart beim Springen (kein HLS) |
+| PE Jellyfin-Ablage | `app/media/*` | `media*.js`, `css/media.css` | `/api/media/*` (u. a. `POST /api/media/infos`); Bibliotheksaktion „Einsortieren“; Ordner-Vorbelegung aus `OUTPUT_MOUNT` |
+| PF Konvertierung, Bibliothek | `convert_schema.py` (Schema v2, v1 bleibt gültig), `ffmpeg_args.py`, `convert_caps.py`, `convert_stats.py`, `convert_builtin.py`, `convert_presets.py`, `convert_probe.py`, `library_info.py` | `convert-*.js`, `library*.js`, `css/convert.css`, `css/library.css` | `/api/convert/*` (meta, estimate, start, Presets, Probe); `capabilities.convert`; `mountConvertEditor(el, value, {target, onChange, mode:'full'\|'compact'\|'side', discKind, files, readonly})` → `{get, set, setFiles, refresh, destroy}`; Bibliotheksaktionen mit `ctx.where` = `row`/`detail`/`bar`/`folder` |
+
+Verbund und Konvertierung: Eine Übergabe prüft vorher `convert_caps.peer_ok`. Rechner mit altem Stand bekommen nur die fünf alten Felder (`convert_schema.to_v1`), und das nur, wenn sich der Auftrag so ausdrücken lässt; sonst bleibt der Auftrag hier und der Grund wird gemeldet. Konvertierte Dateien tragen im Container `MKW_CONVERTED`; „konvertiert“ in der Bibliothek heißt dieses Kennzeichen oder HEVC/AV1.
+
+Tests: `python3 -m unittest discover -s tests -t .` (die gemeinsame Umgebung setzt `tests/__init__.py`).
+
+## 8. Bekannte Einschränkungen
+- Dauer-Vorhersagen sind ohne Statistik Schätzungen und werden mit jeder fertigen Konvertierung genauer.
+- Hardware-Encoding (VAAPI), HDR→SDR (`zscale`) und echte Dolby-Vision-Dateien sind nur auf Backend-Ebene getestet, nicht mit echter Hardware/Quelle.
+- Container Queries brauchen Safari 16+ bzw. Firefox 110+.
+- (behoben durch PF: `convert.ensure_conv_workers()` startete nie weitere Worker.)
