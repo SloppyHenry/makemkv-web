@@ -16,7 +16,7 @@ Mockup fertig: docs/mockups/paket-f.html (liegt mit `paket-f.css` und `paket-f.j
   - Wichtig: Alte Clients (alte Oberfläche, alte Rechner) funktionieren weiter: `clean_convert` nimmt v1 und v2, liefert v2 **mit Spiegel** `rf/preset/tune/extra/audio`; alte Oberfläche speichert weiter `presets.bluray/dvd` flach.
 
 ## In Arbeit / noch offen (Backend)
-- Zwei-Instanzen-Test (Verbund, v2-Auftrag an neuen Rechner, Sperre gegen „alten Stand“), Prüfung der HTTP-Endpunkte im Browser-Alltag.
+- (erledigt) Zwei-Instanzen-Test: v2-Auftrag an neuen Rechner läuft (cfg bleibt v2); gegen eine **echte alte Instanz (Stand ae4603e)**: v2-Auftrag wird mit 409 und Grund abgelehnt, ein v1-verträglicher Auftrag geht an den alten Rechner (als fünf Felder) und läuft dort. Rip → Konvertieren (v2: x264, ≤480p, AAC Stereo, ohne Untertitel) → Übertragung getestet.
 - Oberfläche (`convert-editor.js`, neue `library.js`, `css/convert.css`, `css/library.css`, Abschnitt `convert`) erst **nach Freigabe des Mockups** (1:1).
 
 ## Mockup: Aufbau und Varianten
@@ -48,9 +48,10 @@ Vorhanden: libx265, libx264, libsvtav1 (+ libaom, librav1e), libopus, aac/ac3/ea
 - `GET /meta` → Codecs (mit `available`), Skalen, Wortmarken, `presets` (mitgelieferte + eigene, je `{id, name, desc, builtin, cfg}`), `defaults` je Disc-Art `{bluray|dvd|uhd: {id, cfg}}`, `caps`, `stats`.
 - `POST /normalize {cfg}` → `{cfg (v2 vollständig), v1_compatible, summary, command}`; `POST /translate {cfg, files:[{to:"x264"}]}` → Codec wechseln mit gleicher Wahrnehmungsstufe.
 - `POST /estimate {cfg, paths?:[…], files?:[{size,dur,w,h,fps,audio}]}` → `{in_bytes, out_bytes, samples, nodes:[{name, local, ok, reason, secs, samples, cores, load}]}` (ohne Dateien: Beispielfilm 24 GB/2 h). `ok:false` + `reason` = ausgrauen.
+- `POST /probe {path, cfg}` → `{id}` (2 × 25 s kodieren, ein Auftrag zur Zeit, mit nice), `GET /probe/{id}` → `{status: running|done|error, pct, text, error, result:{out_bytes, in_bytes, secs_here, before, after}}` (`before`/`after` = Standbilder als `data:image/jpeg`), `POST /probe/{id}/cancel`.
 - `POST /presets {name, desc, cfg}`, `PATCH /presets/{id}`, `DELETE /presets/{id}`, `POST /defaults {kind, preset}`; `GET /stats`.
 - `POST /start {target:"local"|<Rechner>, paths, convert:cfg, takeover_from?}` → wie `/api/library/convert` (`{started, skipped}`); fremde Rechner nur, wenn `peer_ok` (alter Stand/fehlender Encoder → 409 mit Grund). **Die Oberfläche soll künftig diesen Endpunkt statt `/api/peer/<name>/library/convert` verwenden.**
-- `GET /api/library` zusätzlich: je Datei `kind` (`sd|hd|uhd`), `est {preset, bytes, samples, issue}`, `info.{fps,bitrate,alist,slist,chapters,hdr_fmt,interlaced,abytes}`; `summary {count, bytes, orig_count, orig_bytes, save_bytes, free}`.
+- `GET /api/library` zusätzlich: je Datei `kind` (`sd|hd|uhd`), `est {preset, bytes, samples, issue}`, `info.{fps,bitrate,alist,slist,chapters,hdr_fmt,dovi,interlaced,abytes}`; `summary {count, bytes, orig_count, orig_bytes, save_bytes, free}`.
 - Einstellungen: Namensraum `convert` = `{presets:{id:{name,desc,cfg}}, default_for:{bluray|dvd|uhd: id}}`; `conv_parallel`, `conv_segments` bleiben in `general` (mit PB so abgesprochen: mein Abschnitt `convert` liefert in `collect()` beides: `{general:{conv_parallel, conv_segments}, convert:{…}}`). Die alten flachen `presets.bluray/dvd` bleiben die **maßgebliche** Standardvorgabe je Disc-Art (alte Oberflächen schreiben sie weiter); `default_for` benennt nur das gewählte Preset und schreibt es in die flachen Felder.
 - Fähigkeiten in `/api/state` → `capabilities`: `encoders` (Liste ffmpeg-Namen, getestet) und `convert {schema:2, codecs:[x265,x264,svtav1,hw,copy], hw:[…], hw10:[…], filters:[…], audio:[…], cores, speed:{codec: Bilder/s je Kern}}`.
 **Frontend (nach Freigabe):** `import { mountConvertEditor, getDefaultConfig, cvSummary } from './convert-editor.js'`
@@ -77,5 +78,5 @@ Keine.
 2. Die Presets „DVD optimal“ und „Klein & schnell“ schalten Deinterlace **automatisch** ein (Erkennung per `idet`). Bei Telecine-Material (3:2-Pulldown) wird dann Inverse-Telecine genutzt (andere Bildrate, Segment-Modus dann aus). Recht so?
 3. HDR: Dolby Vision lässt sich mit x265 nicht erhalten (die HDR10-Basis bleibt). Reicht das, oder soll bei Dolby-Vision-Dateien gewarnt/übersprungen werden? (Vorschlag: Hinweis in der Oberfläche.)
 4. Hardware-Encoding (VAAPI/QSV) ist im Mockup als „Hardware“ vorgesehen, erscheint aber nur, wenn der Rechner es meldet (vierstein braucht dafür erst den Treiber im Image, siehe PZ-Wunsch; Kaby Lake kann nur 8 Bit). Soll das überhaupt angeboten werden, oder reicht Software?
-5. Die „Probe“ (2 × 25 s kodieren, hochrechnen, Vorher/Nachher-Schieber) ist im Mockup zu sehen, im Backend aber noch nicht gebaut (Aufwand mittel). Gewünscht für die erste Fassung, oder später?
+5. Die „Probe“ (2 × 25 s kodieren, hochrechnen, Vorher/Nachher-Schieber) ist im Backend fertig und im Mockup zu sehen. Soll sie in der ersten Fassung der Oberfläche schon drin sein (Vorschlag: ja, als Knopf im Vorhersage-Feld)?
 6. Bibliothek: Liste **und** Raster behalten (Variante A mit Filterspalte vs. B mit Chips)? Vorschlag: A als Standard, Raster nur zuschaltbar.

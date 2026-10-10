@@ -26,6 +26,7 @@ def lib_info(pr: dict) -> dict:
         return int(a.get("bit_rate") or 0) or AUDIO_BPS.get(next((k for k in AUDIO_BPS if name.startswith(k)), ""), 448_000)
     return {"codec": v.get("codec_name", ""), "w": v.get("width", 0), "h": v.get("height", 0), "pix": v.get("pix_fmt", ""),
             "hdr": tr in ("smpte2084", "arib-std-b67"), "hdr_fmt": {"smpte2084": "HDR10", "arib-std-b67": "HLG"}.get(tr, ""),
+            "dovi": any("DOVI" in str(x.get("side_data_type", "")) or "Dolby Vision" in str(x.get("side_data_type", "")) for x in v.get("side_data_list", [])),
             "dur": dur, "fps": _fps(v), "bitrate": int(pr["format"].get("bit_rate") or 0),
             "interlaced": v.get("field_order", "progressive") not in ("progressive", "unknown", ""), "profile": v.get("profile", ""),
             "audio": [f'{a.get("codec_name", "?")} {a.get("channels", "?")}ch {a.get("tags", {}).get("language", "")}'.strip() for a in auds],

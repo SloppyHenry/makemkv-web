@@ -122,6 +122,19 @@ class RunTest(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(convert_caps.unusable(clean_v2({"v": 2, "video": {"codec": "x264"}}), hdr))            # HDR ginge verloren
         self.assertEqual(convert_caps.unusable(clean_v2({"v": 2, "video": {"codec": "x265"}}), hdr), "")
 
+    async def test_probe(self):
+        from app import convert_probe
+        job = {"id": "t1", "status": "running", "t": 0}
+        await convert_probe.run(job, FILM, clean_v2({"v": 2, "video": {"codec": "x264", "speed": "ultrafast", "bits": 8}, "quality": {"crf": 30}, "picture": {"crop": "off"}}))
+        self.assertEqual(job["status"], "done", job.get("error"))
+        r = job["result"]
+        self.assertTrue(r["before"].startswith("data:image/jpeg;base64,") and r["after"].startswith("data:image/jpeg;base64,"))
+        self.assertTrue(0 < r["out_bytes"] < 10 * r["in_bytes"])
+        self.assertEqual(list(convert.CONV_WORK.glob("probe-*")), [])
+        bad = {"id": "t2", "status": "running", "t": 0}
+        await convert_probe.run(bad, FILM, clean_v2({"v": 2, "video": {"codec": "copy"}}))
+        self.assertEqual(bad["status"], "error")
+
     async def test_falsche_spurzahl_wird_nicht_gemeldet(self):
         # Untertitel „nur erzwungene“ ohne erzwungene Spur: erwartet 0 Untertitel, Ergebnis stimmt überein
         _, _, s = await self.run_cfg(FILM, {"v": 2, "video": {"codec": "copy"}, "subs": {"mode": "forced"}})

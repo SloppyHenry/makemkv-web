@@ -11,7 +11,7 @@ import re
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, field_validator
 
-from app import cluster, convert_caps, convert_stats, ext
+from app import cluster, convert_caps, convert_probe, convert_stats, ext
 from app.config import INSTANCE, PRESET_DEFAULTS
 from app.convert import clean_convert
 from app.convert_builtin import BUILTIN, BUILTIN_IDS, DEFAULT_FOR
@@ -301,5 +301,7 @@ async def startup():
     await convert_caps.probe_capabilities()
 
 
+router.include_router(convert_probe.router)
+ext.register_router(router)
 convert_caps.publish()
 ext.register_startup(startup)
