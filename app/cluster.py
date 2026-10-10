@@ -13,7 +13,7 @@ import urllib.request
 
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
-from app import convert, ext, nodes_store as store
+from app import convert, convert_caps, convert_schema, ext, nodes_store as store
 from app.config import INSTANCE
 from app.files import held_locks
 from app.state import CV_ACTIVE, broadcast, conversions, drives, peers_state
@@ -174,12 +174,27 @@ async def peer_prober():
         await asyncio.sleep(1)
 
 
+def cfg_for_peer(cfg: dict, peer: dict | None) -> tuple[dict | None, str]:
+    """Einstellungen so, wie der andere Rechner sie versteht – oder (None, Grund), wenn er den Auftrag nicht ausführen kann.
+    Rechner mit altem Stand bekommen nur die fünf alten Felder (und nur, wenn sich der Auftrag so ausdrücken lässt)."""
+    if not peer:
+        return None, "unbekannter Rechner"
+    ok_, why = convert_caps.peer_ok(cfg, peer)
+    if not ok_:
+        return None, why
+    legacy = peer.get("legacy") or not ((peer.get("capabilities") or {}).get("convert"))
+    return (convert_schema.to_v1(cfg) if legacy else cfg), ""
+
+
 async def hand_to_peer_after_upload(item: dict, base: Path, dr):
     """Übergabe einer frisch ins NAS übertragenen Datei: der andere Rechner konvertiert sie als Bibliotheks-Auftrag."""
     t = item["then_convert"]
     try:
         rel = str(Path(item["dest"]).relative_to(base.resolve())) if item.get("dest") else item["name"]
-        r = await asyncio.to_thread(_peer_json, t["url"], "library/convert", {"paths": [rel], "convert": t["cfg"]}, 15.0)
+        cfg, why = cfg_for_peer(t["cfg"], peers_state.get(t["name"]))
+        if cfg is None:
+            raise RuntimeError(why)
+        r = await asyncio.to_thread(_peer_json, t["url"], "library/convert", {"paths": [rel], "convert": cfg}, 15.0)
         ok_ = rel in r.get("started", [])
         msg = f"Zur Konvertierung an {t['name']} übergeben: {rel}" if ok_ else f"{t['name']} hat {rel} nicht angenommen: {r.get('skipped')}"
         if dr:
@@ -223,11 +238,15 @@ async def api_handover(req: HandoverReq):
     handed, errors = [], []
     for c in [c for c in conversions if c["status"] in CV_ACTIVE]:
         label = c["name"]
+        cfg, why = cfg_for_peer(c["cfg"], peer)
+        if cfg is None:
+            errors.append(f"{label}: {req.target} {why}")
+            continue
         if c.get("origin") == "library":
             # Der andere Rechner übernimmt die Sperre (gleicher Besitzer), ich gebe sie nur auf, ohne die Datei freizugeben.
             try:
                 r = await asyncio.to_thread(_peer_json, peer["url"], "library/convert",
-                                            {"paths": [c["rel"]], "convert": c["cfg"], "takeover_from": INSTANCE}, 15.0)
+                                            {"paths": [c["rel"]], "convert": cfg, "takeover_from": INSTANCE}, 15.0)
             except Exception as e:  # noqa: BLE001
                 errors.append(f"{label}: {e}")
                 continue

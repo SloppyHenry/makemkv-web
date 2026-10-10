@@ -13,7 +13,7 @@ echo "→ Kernelmodule sg + sr_mod laden und beim Boot aktivieren"
 
 if [ ! -f .env ]; then
   cp .env.example .env
-  sed -i.bak "s/^PUID=.*/PUID=$(id -u)/; s/^PGID=.*/PGID=$(id -g)/; s/^CDROM_GID=.*/CDROM_GID=$(getent group cdrom | cut -d: -f3 || echo 24)/" .env && rm -f .env.bak
+  sed -i.bak "s/^PUID=.*/PUID=$(id -u)/; s/^PGID=.*/PGID=$(id -g)/; s/^CDROM_GID=.*/CDROM_GID=$(getent group cdrom | cut -d: -f3 || echo 24)/; s/^RENDER_GID=.*/RENDER_GID=$(getent group render | cut -d: -f3 || echo 105)/" .env && rm -f .env.bak
   echo "→ .env angelegt – bei Bedarf anpassen (Ausgabeordner, Port)"
 fi
 grep -q "^INSTANCE_NAME=" .env || echo "INSTANCE_NAME=$(hostname)" >> .env    # Name dieser Instanz (für Sperrdateien)

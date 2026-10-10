@@ -23,9 +23,11 @@ export function toast(msg, err=false){
   const el = $('#toast'); el.textContent = msg; el.classList.toggle('err', err); el.style.display = 'block';
   clearTimeout(toast.t); toast.t = setTimeout(() => el.style.display = 'none', err ? 6000 : 2800);
 }
+// FastAPI liefert bei 422 eine Liste von Fehlerobjekten statt Text
+const detailText = d => Array.isArray(d) ? d.map(x => [(x.loc||[]).slice(1).join('.'), x.msg].filter(Boolean).join(': ')).join('; ') : (d && typeof d === 'object') ? (d.message || d.msg || JSON.stringify(d)) : d;
 export async function api(path, method='POST', body){
   const r = await fetch(path, {method, headers: body?{'Content-Type':'application/json'}:{}, body: body?JSON.stringify(body):undefined});
-  if(!r.ok){ let m=r.statusText; try{ m=(await r.json()).detail||m }catch{} toast(m, true); throw new Error(m); }
+  if(!r.ok){ let m=r.statusText; try{ m=detailText((await r.json()).detail) || m }catch{} toast(m, true); throw new Error(m); }
   return r.json();
 }
 

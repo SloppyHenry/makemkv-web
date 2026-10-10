@@ -11,7 +11,7 @@ services:
     ports:
       - "${PORT:-8780}:8780"
     user: "${PUID:-1000}:${PGID:-1000}"
-    group_add: ["${CDROM_GID:-24}"]
+    group_add: ["${CDROM_GID:-24}", "${RENDER_GID:-105}"]   # cdrom; render (Hardware-Encoding über /dev/dri, falls vorhanden)
     environment:
       TZ: ${TZ:-Europe/Berlin}
       INSTANCE_NAME: ${INSTANCE_NAME:-makemkv-web}
@@ -29,3 +29,4 @@ services:
     device_cgroup_rules:
       - "b 11:* rmw"                                # /dev/sr*
       - "c 21:* rmw"                                # /dev/sg*
+      - "c 226:* rmw"                               # /dev/dri (Grafik-Hardware für das Hardware-Encoding, falls vorhanden)
