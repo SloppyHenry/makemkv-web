@@ -1,6 +1,6 @@
 // „Fertige Dateien“ (kompakte Liste der letzten Dateien im Ziel).
 import { $, ago, baseName, delegate, esc, fmtB, setHtml, toast, ui } from './core.js';
-import { emit, navigate, on, onState, registerPanel } from './registry.js';
+import { emit, on, onState, registerPanel } from './registry.js';
 
 export async function loadFiles(){
   try{ ui.files = (await (await fetch('/api/files')).json()).files; }catch{ return; }
@@ -10,7 +10,6 @@ export async function loadFiles(){
   setHtml($('#filesBody'), f.map(x => `<tr><td class="file-name" title="${esc(x.path)}">${esc(baseName(x.path))}</td><td>${fmtB(x.size)}</td><td class="muted">${ago(x.mtime)}</td>
     <td><a class="file-action" title="Download" aria-label="Download" href="/api/download?path=${encodeURIComponent(x.path)}">↓</a></td></tr>`).join(''));
 }
-delegate('#to-lib', 'click', () => navigate('bibliothek'));
 delegate('#files-reload', 'click', () => { loadFiles(); toast('Dateiliste aktualisiert.'); });
 
 // Listen neu laden, wenn ein Rip endet oder eine Übertragung fertig wird; Bibliothek u. a. hören auf „files-changed“
@@ -27,7 +26,7 @@ on('view', id => { if(id === 'laufwerke') loadFiles(); });
 loadFiles(); setInterval(loadFiles, 60000);
 
 registerPanel({view:'laufwerke', slot:'right', order:20, id:'files', html:`<section class="panel">
-          <div class="panel-head"><span class="mini-icon">▱</span><h2>Fertige Dateien</h2><span class="spacer"></span><button class="secondary" id="to-lib" title="Alle Dateien im Ziel anzeigen und nicht konvertierte nachträglich konvertieren">Nachträglich konvertieren</button><button class="secondary" id="files-reload">Aktualisieren</button></div>
+          <div class="panel-head"><span class="mini-icon">▱</span><h2>Fertige Dateien</h2><span class="spacer"></span><button class="secondary" id="files-reload">Aktualisieren</button></div>
           <div class="table-wrap"><table class="file-table"><thead><tr><th>Dateiname</th><th>Größe</th><th>Status</th><th></th></tr></thead><tbody id="filesBody"></tbody></table></div>
           <div class="empty" id="nofiles" hidden>Noch nichts im Ausgabeordner.</div>
         </section>`});
