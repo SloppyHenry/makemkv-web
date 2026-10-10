@@ -2,3 +2,27 @@
 .table-wrap .namecell{display:grid;grid-template-columns:minmax(0,1fr);gap:3px 0;align-items:start;min-width:220px}
 .table-wrap .namecell .nameedit{width:100%;min-width:0;flex:none}
 .table-wrap .namecell .tag{justify-self:start;margin:0 0 0 7px}
+
+/* Handy: statt waagerecht zu scrollen wird jede Zeile zur Karte (Name oben, Dauer · Größe · Spuren darunter) */
+@media(max-width:700px){
+  #titlesPanel .table-wrap{overflow-x:visible}
+  #titlesPanel table,#titlesPanel thead,#titlesPanel tbody{display:block;white-space:normal}
+  #titlesPanel thead tr{display:flex;align-items:center}
+  #titlesPanel thead th{display:none}
+  #titlesPanel thead th:first-child{display:flex;align-items:center;gap:10px;width:auto;font-size:11px;letter-spacing:0;text-transform:none;padding:0 17px;height:34px;border:0}
+  #titlesPanel thead th:first-child::after{content:"Alle auswählen";color:var(--muted)}
+  #titlesPanel thead{border-bottom:1px solid #222d3b}
+  #titlesPanel tr[data-t]{display:grid;grid-template-columns:38px 22px minmax(0,1fr) 62px 104px;column-gap:4px;align-items:center;padding:6px 0 4px;border-bottom:1px solid #222d3b}
+  #titlesPanel tr[data-t].hidden{display:none!important}
+  #titlesPanel tr[data-t] td{border:0;padding:2px 0;min-width:0}
+  #titlesPanel tr[data-t] td:first-child{padding-left:17px;width:auto}
+  #titlesPanel tr[data-t] td:nth-child(3){grid-column:3/-1}
+  #titlesPanel tr[data-t] td:nth-child(4){grid-column:3;grid-row:2;padding-left:7px}
+  #titlesPanel tr[data-t] td:nth-child(5){grid-column:4;grid-row:2}
+  #titlesPanel tr[data-t] td:nth-child(6){display:none}
+  #titlesPanel tr[data-t] td:nth-child(7){grid-column:5;grid-row:2;text-align:right;padding-right:6px}
+  #titlesPanel tbody tr:last-child{border-bottom:0}
+  #titlesPanel tr.trk{display:block;border-bottom:1px solid #222d3b}
+  #titlesPanel tr.trk td{display:block;width:auto;padding:4px 12px 10px 17px;border:0}
+  #titlesPanel .trkgrid{grid-template-columns:62px minmax(0,1fr) 54px;padding:6px 0}
+}
