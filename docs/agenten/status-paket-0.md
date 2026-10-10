@@ -16,8 +16,9 @@
 - Ablauf: Fake-Rip → Übertragung → Auswerfen; Rip mit Konvertierung; Bibliotheks-Konvertierung (Original ersetzen); Segment-Modus (3 Segmente).
 - Erweiterungspunkte mit temporären Testmodulen (Backend und Frontend) ausprobiert und wieder entfernt.
 
-## Nicht geprüft
-- `docker build`: auf dem Entwicklungs-Mac ist kein Docker installiert. Layout wurde mit `uvicorn app.main:app` aus einem Ordner nach dem Schema des Images geprüft; das echte Image muss noch gebaut werden (siehe Meldung an den Nutzer).
+## Docker
+- Auf dem Entwicklungs-Mac ist kein Docker installiert. Mit Freigabe des Nutzers wurde auf vierstein in einem Wegwerf-Ordner (`~/mkw-build-test-p0`, danach samt Image gelöscht; laufender Container und `~/makemkv-web` unberührt) die geänderte Python-Stufe des Images gebaut (gleiches `COPY app /srv/app`, `WORKDIR /srv`, `CMD uvicorn app.main:app`) und kurz gestartet: `/api/state`, `/`, `/static/...` antworten, Module werden eingetragen.
+- **Nicht gebaut:** die MakeMKV-Stufe des echten Dockerfiles (lädt MakeMKV und setzt `ACCEPT_EULA=yes` voraus; unverändert). Der vollständige Build passiert in PZ beim Ausrollen.
 
 ## Angebotene Schnittstellen
 Siehe `docs/agenten/schnittstellen.md`.
