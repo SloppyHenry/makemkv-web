@@ -181,6 +181,16 @@ class ChooseTest(unittest.TestCase):
         d = choose.decide({"type": "Blu-ray disc", "name": "FILM", "titles": titles}, content_bytes=40e9)
         self.assertEqual((d["mode"], d["picks"], d["dropped"]), ("movie", [0], [1]))
 
+    def test_bluray_playall_by_segments(self):
+        """Vikings S1 D3: Titel 2 ist zufällig so lang wie 5+6, Play-All ist nur 7 (Segmente 800,801,802)."""
+        titles = [T(0, 1248, 2.7, segments="303"), T(1, 2630, 10.3, segments="800"), T(2, 2806, 11, segments="801"), T(3, 2700, 10.8, segments="802"),
+                  T(4, 693, 1.5, segments="1421,1469,1429"), T(5, 1913, 4.2, segments="1435,1436,1437"), T(6, 8137, 32.2, segments="800,801,802"),
+                  T(7, 1029, 2.3, segments="300"), T(8, 731, 1.6, segments="302"), T(9, 206, 0.5, segments="1464")]
+        d = choose.decide({"type": "Blu-ray disc", "name": "Vikings – Season 1 – Disc 3", "titles": titles}, content_bytes=40e9)
+        self.assertEqual((d["mode"], d["picks"], d["playall"]), ("series", [1, 2, 3], [6]))
+        sk = dict(plan.skips({"type": "Blu-ray disc", "titles": titles}, {"picks": d["picks"], "mode": "series", "source": "Struktur der Disc"}))
+        self.assertEqual((sk[7], sk[1]), ("Play-All, 136 min", "Extra, 21 min"))
+
     def test_tmdb_hint_vetoes_movie(self):
         d = choose.decide({"type": "Blu-ray disc", "name": "FILM", "titles": [T(0, 7200, 30), T(1, 600, 1)]}, content_bytes=40e9, hint="series")
         self.assertEqual(d["mode"], "unsure")

@@ -137,3 +137,34 @@ async def plan(drive) -> dict:
     d = choose.decide(disc, ids.get("content_bytes") or 0, info["kind"] if info else "", prep)
     return {**out, "mode": d["mode"], "source": "Struktur der Disc", "picks": d["picks"], "names": names_from_disc(disc, d["picks"]),
             "folder": disc.get("name") or disc.get("volume") or "", "reasons": d["reasons"] + reasons}
+
+
+def skips(disc: dict, p: dict) -> list[list]:
+    """Nicht übernommene Titel mit kurzem Grund: [[Titelnummer, Grund], …] (für die Anzeige)."""
+    pr = choose.prepare(disc)
+    picks, mode, src = set(p.get("picks") or []), p.get("mode"), p.get("source") or ""
+    out = []
+    for t in disc.get("titles") or []:
+        if t["id"] in picks:
+            continue
+        mins = f"{round(t['duration'] / 60)} min"
+        if t["id"] in pr["dropped"]:
+            why = "Duplikat"
+        elif t["id"] in pr["playall"]:
+            why = "Play-All"
+        elif mode == "manual":
+            why = "nicht gerippt"
+        elif src.startswith("TheDiscDB"):
+            why = "laut TheDiscDB " + ("keine Folge" if mode == "series" else "kein Hauptfilm")
+        elif src.startswith("Gedächtnis"):
+            why = "nicht von Hand gewählt"
+        elif src.startswith("TMDB"):
+            why = "passt nicht zur Folgenlänge" if mode == "series" else "passt nicht zur Filmlaufzeit"
+        elif mode == "series":
+            why = "zu kurz für eine Folge" if t["duration"] < choose.EP_MIN else "Extra"
+        elif mode == "movie":
+            why = "kürzer als der Hauptfilm"
+        else:
+            why = "nicht gewählt"
+        out.append([t["id"] + 1, f"{why}, {mins}"])
+    return out

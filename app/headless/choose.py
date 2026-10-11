@@ -38,6 +38,24 @@ def _consistent(durs: list[float], ratio: float = 1.35) -> bool:
     return len(durs) >= 2 and min(durs) > 0 and max(durs) / min(durs) <= ratio
 
 
+def _segs(t: dict) -> list[str]:
+    return [x.strip() for x in (t.get("segments") or "").split(",") if x.strip()]
+
+
+def segment_playall(titles: list[dict]) -> dict[int, list[int]]:
+    """Blu-ray: Play-All = Titel, dessen Segmente die Segmente von mindestens zwei anderen Titeln enthalten und dessen Länge deren Summe
+    ist (Vikings: 00803.mpls = 800,801,802). Zufällig passende Längen zählen damit nicht mehr."""
+    out = {}
+    for t in titles:
+        st = set(_segs(t))
+        if len(st) < 2:
+            continue
+        mem = [o for o in titles if o["id"] != t["id"] and _segs(o) and set(_segs(o)) <= st and len(set(_segs(o))) < len(st)]
+        if len(mem) >= 2 and abs(sum(o["duration"] for o in mem) - t["duration"]) <= max(60, 0.03 * t["duration"]):
+            out[t["id"]] = sorted(o["id"] for o in mem)
+    return out
+
+
 def prepare(disc: dict) -> dict:
     """Duplikate und Play-All aussortieren, Rollen nach detect. {titles, kept, dropped, playall, rest, det, role, reasons}."""
     titles = [t for t in disc.get("titles") or [] if t.get("duration")]
@@ -50,11 +68,21 @@ def prepare(disc: dict) -> dict:
               "disc": {"name": disc.get("name", ""), "volume": disc.get("volume", ""), "titles": kept}} for t in kept]
     det = detect.detect(files) if files else {"kind": "unknown", "items": [], "season": None, "disc": None}
     role = {it["title_id"]: it for it in det["items"]}
-    playall = [i for i, it in role.items() if it["role"] == "playall"]
+    members: list[int] = []
+    if disc_kind(disc) != "dvd" and kept and all(_segs(t) for t in kept):     # Blu-ray: Segmente sind eindeutig, Laufzeit allein nicht
+        pa = segment_playall(kept)
+        playall = sorted(pa)
+        members = sorted({m for ms in pa.values() for m in ms if m not in pa})
+        for i, it in role.items():
+            if it["role"] == "playall" and i not in pa:
+                it["role"] = "episode" if EP_MIN <= it["dur"] <= EP_MAX else "extra"
+    else:
+        playall = [i for i, it in role.items() if it["role"] == "playall"]
     if playall:
         reasons.append(f"Play-All erkannt (Titel {', '.join(str(i + 1) for i in playall)})")
     rest = [t for t in kept if t["id"] not in playall]
-    return {"titles": titles, "kept": kept, "dropped": dropped, "playall": playall, "rest": rest, "det": det, "role": role, "reasons": reasons}
+    return {"titles": titles, "kept": kept, "dropped": dropped, "playall": playall, "members": members, "rest": rest, "det": det, "role": role,
+            "reasons": reasons}
 
 
 def decide(disc: dict, content_bytes: int = 0, hint: str = "", prep: dict | None = None) -> dict:
@@ -69,7 +97,11 @@ def decide(disc: dict, content_bytes: int = 0, hint: str = "", prep: dict | None
     marker = bool(det.get("season") and det["kind"] == "series") or any(
         detect.analyze_name(n or "")[k] for n in (disc.get("name"), disc.get("volume")) for k in ("season", "disc"))
     mode, picks = "unsure", []
-    if (det["kind"] == "series" and len(eps) >= 2 and (_consistent([t["duration"] for t in eps]) or len(eps) >= 3)
+    mem = [t for t in rest if t["id"] in pr.get("members", [])]
+    if len(mem) >= 2 and hint != "movie" and all(t["duration"] < MOVIE_MIN for t in mem):
+        mode, picks = "series", [t["id"] for t in mem]
+        reasons.insert(0, f"Serie: {len(mem)} Folgen aus dem Play-All")
+    elif (det["kind"] == "series" and len(eps) >= 2 and (_consistent([t["duration"] for t in eps]) or len(eps) >= 3)
             and not longs and hint != "movie"):
         mode, picks = "series", [t["id"] for t in eps]
         reasons.insert(0, f"Serie: {len(eps)} Folgen à {int(min(t['duration'] for t in eps) // 60)}–{int(max(t['duration'] for t in eps) // 60)} min")

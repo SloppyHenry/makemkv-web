@@ -134,7 +134,8 @@ async def on_scan(info: dict):
         p = {"mode": "manual", "source": "", "picks": [], "names": {}, "folder": "", "reasons": [f"Erkennung fehlgeschlagen: {ex}"]}
     finally:
         drive.job = None
-    _update(e, source=p["source"], mode=p["mode"], folder=p["folder"], titles=_titles(p), reasons=p["reasons"])
+    _update(e, source=p["source"], mode=p["mode"], folder=p["folder"], titles=_titles(p), reasons=p["reasons"],
+            picked=[i + 1 for i in sorted(p["picks"])], skipped=planner.skips(drive.disc, p))
     for r in p["reasons"]:
         drive.add_log(f"Headless: {r}", "info")
     if p["mode"] == "manual" or not p["picks"]:
@@ -174,5 +175,6 @@ async def probe(drive) -> dict:
     """Nur erkennen, nicht rippen (Knopf „Erkennung testen“)."""
     p = await planner.plan(drive)
     e = _entry(drive, "test", planner.ids_key(p.get("ids")))
-    _update(e, source=p["source"], mode=p["mode"], folder=p["folder"], titles=_titles(p), reasons=p["reasons"])
+    _update(e, source=p["source"], mode=p["mode"], folder=p["folder"], titles=_titles(p), reasons=p["reasons"],
+            picked=[i + 1 for i in sorted(p["picks"])], skipped=planner.skips(drive.disc, p))
     return {**p, "ids": {k: v for k, v in p.get("ids", {}).items() if k != "files"}}

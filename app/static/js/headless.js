@@ -28,13 +28,15 @@ registerSettingsSection({
 });
 
 function item(e){
-  const titles = e.titles.length ? `${e.titles.length} Titel: ${e.titles.slice(0, 4).join(', ')}${e.titles.length > 4 ? ' …' : ''}` : '';
-  const what = [e.source, MODE[e.mode], titles].filter(Boolean).join(' · ');
-  return `<div class="hl-item">
+  const picked = e.picked ? (e.picked.length ? e.picked.join(', ') : '–') : (e.titles.length ? `${e.titles.length} Titel` : '–');
+  const skipped = (e.skipped || []).map(([n, why]) => `${n}: ${why}`).join(' · ');
+  const head = [e.source, MODE[e.mode]].filter(Boolean).join(' · ');
+  return `<div class="hl-item" title="${esc(e.reasons.join(' · '))}">
     <div class="hl-top"><strong title="${esc(e.folder || e.disc)}">${esc(e.disc || e.folder || 'Disc')}</strong><span class="st ${STATE_CLS[e.state] || ''}">${esc(e.state_text)}</span>
       <span class="spacer"></span><span class="muted">${esc(e.drive)} · ${esc(ago(e.t))}${e.ejected ? ' · ausgeworfen' : ''}</span></div>
-    ${what ? `<div class="hl-sub">${esc(what)}</div>` : ''}
-    ${e.reasons.length ? `<div class="hl-why">${esc(e.reasons.join(' · '))}</div>` : ''}
+    ${head ? `<div class="hl-why">${esc(head)}</div>` : ''}
+    ${e.mode && e.mode !== 'manual' || e.picked ? `<div class="hl-sub"><b>Übernommen:</b> ${esc(picked)}</div>` : ''}
+    ${skipped ? `<div class="hl-why"><b>Nicht übernommen:</b> ${esc(skipped)}</div>` : ''}
     ${e.message ? `<div class="hl-why ${e.state === 'error' ? 'err' : ''}">${esc(e.message)}</div>` : ''}
   </div>`;
 }
