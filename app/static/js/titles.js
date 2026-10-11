@@ -144,4 +144,4 @@ onState(() => {
 });
 
 registerPanel({view:'laufwerke', slot:'left', order:20, id:'titlesPanel', html:'<section class="panel" id="titlesPanel" hidden></section>'});
-registerPanel({view:'laufwerke', slot:'right', order:40, id:'actionPanel', html:'<section class="panel action-panel" id="actionPanel"></section>'});
+registerPanel({view:'laufwerke', slot:'right', order:1, id:'actionPanel', html:'<section class="panel action-panel" id="actionPanel"></section>'});
