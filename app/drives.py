@@ -177,7 +177,7 @@ async def do_scan(drive: Drive, auto: bool = False):
 async def poller():
     while True:
         try:
-            devs = sorted(glob.glob(f"{DEV_ROOT}/sr[0-9]*"))
+            devs = sorted(d for d in glob.glob(f"{DEV_ROOT}/sr[0-9]*") if not Path(d).suffix)    # Attrappe: sr0.json/sr0.iso sind keine Laufwerke
             changed = False
             hidden_drives.intersection_update(devs)
             for d in devs:

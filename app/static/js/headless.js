@@ -20,7 +20,7 @@ registerSettingsSection({
         <li><b>Struktur</b>: ein langer Titel = Film, mehrere gleich lange Titel = Serie (ohne Play-All). Nicht eindeutig: alle Titel ohne Duplikate und Play-All;
         wären das mehr als doppelt so viele Daten wie auf der Disc, wird nichts gerippt („von Hand“).</li></ol>
         Danach wird die Disc immer ausgeworfen, auch bei Fehlern – nur wenn du selbst abbrichst, bleibt sie drin. Legst du eine „von Hand“-Disc wieder ein,
-        bleibt sie im Laufwerk: Titel wählen und rippen, die Auswahl merkt sich das Gedächtnis. Das Protokoll steht unter Laufwerke.</div>`;
+        bleibt sie im Laufwerk: Titel wählen und rippen, die Auswahl merkt sich das Gedächtnis. Schalter und Protokoll stehen auch direkt unter Laufwerke.</div>`;
   },
   collect(){
     return {headless: {enabled: $('#s-hl-enabled').checked, use_db: $('#s-hl-db').checked, convert: $('#s-hl-conv').checked}};
@@ -39,14 +39,30 @@ function item(e){
   </div>`;
 }
 
+// kleiner Schalter oben in der Laufwerksleiste (auf jedem Bildschirm sofort sichtbar)
+function barSwitch(){
+  const bar = $('#drivebar');
+  if(!bar || !S || !S.headless) return;
+  let el = $('#hlBar');
+  if(!el){
+    bar.insertAdjacentHTML('beforeend', `<label class="hl-switch hl-bar" id="hlBar" title="Headless-Modus: eingelegte Discs automatisch rippen und auswerfen">
+      <span class="hl-bar-lbl">Headless</span><input type="checkbox" class="hl-toggle" role="switch" aria-label="Headless-Modus"><span class="hl-knob" aria-hidden="true"></span></label>`);
+    el = $('#hlBar');
+  }
+  const cb = el.querySelector('input');
+  if(!cb.dataset.busy) cb.checked = S.headless.enabled;
+}
+
 function render(){
+  barSwitch();
   const pn = $('#hlPanel');
   if(!pn || !S) return;
   const h = S.headless;
   pn.hidden = !h;
   if(!h) return;
   const st = $('#hlState');
-  st.className = 'st' + (h.enabled ? ' ok' : ''); st.textContent = h.enabled ? 'aktiv' : 'aus';
+  st.className = 'st' + (h.enabled ? ' ok' : ''); st.textContent = h.enabled ? 'an' : 'aus';
+  document.querySelectorAll('.hl-toggle').forEach(cb => { if(!cb.dataset.busy) cb.checked = h.enabled; });
   const d = curDrive(), ok = !!(d && !d.host && d.disc && !d.job), test = $('#hlTest'), con = $('#hlContrib');
   test.disabled = con.disabled = !ok;
   test.title = d && d.host ? 'Nur für Laufwerke dieses Rechners' : 'Titelwahl für die Disc im gewählten Laufwerk prüfen, ohne zu rippen';
@@ -54,7 +70,7 @@ function render(){
   $('#hlClear').hidden = !h.history.length;
   const mem = h.memory ? ` Gedächtnis: ${h.memory} Disc${h.memory === 1 ? '' : 's'} von Hand.` : '';
   setHtml($('#hlNote'), esc((h.enabled ? 'Eingelegte Discs werden automatisch erkannt, gerippt und ausgeworfen.'
-    : 'Ausgeschaltet (Einstellungen → Headless-Modus). „Erkennung testen“ zeigt, was gerippt würde.') + mem));
+    : 'Aus. Mit dem Schalter einschalten; „Erkennung testen“ zeigt, was gerippt würde.') + mem));
   setHtml($('#hlList'), h.history.length ? h.history.map(item).join('') : '<div class="empty">Noch keine Disc im Headless-Modus.</div>');
 }
 onState(render);
@@ -68,10 +84,22 @@ delegate('#hlTest', 'click', async (e, b) => {
   }catch{ /* Meldung zeigt api() */ }
   render();
 });
+delegate('.hl-toggle', 'change', async (e, cb) => {
+  const want = cb.checked;
+  cb.dataset.busy = '1'; cb.disabled = true;
+  try{
+    await api('/api/settings', 'POST', {headless: {enabled: want}});
+    toast(want ? 'Headless-Modus an: ab der nächsten eingelegten Disc wird automatisch gerippt und ausgeworfen.' : 'Headless-Modus aus.');
+  }catch{ cb.checked = !want; }
+  delete cb.dataset.busy; cb.disabled = false;
+  render();
+});
 delegate('#hlClear', 'click', async () => { try{ await api('/api/headless/clear'); }catch{} });
 
-registerPanel({view: 'laufwerke', slot: 'right', order: 30, id: 'hlPanel', html: `<section class="panel" id="hlPanel" hidden>
-  <div class="panel-head"><span class="mini-icon">⏏</span><h2>Headless-Modus</h2><span class="st" id="hlState"></span><span class="spacer"></span>
+registerPanel({view: 'laufwerke', slot: 'right', order: 5, id: 'hlPanel', html: `<section class="panel" id="hlPanel" hidden>
+  <div class="panel-head"><span class="mini-icon">⏏</span><h2>Headless-Modus</h2>
+    <label class="hl-switch" title="Headless-Modus an- oder ausschalten"><input type="checkbox" class="hl-toggle" role="switch" aria-label="Headless-Modus"><span class="hl-knob" aria-hidden="true"></span><span class="st" id="hlState"></span></label>
+    <span class="spacer"></span>
     <button type="button" class="secondary" id="hlTest">Erkennung testen</button><button type="button" class="secondary" id="hlContrib">An TheDiscDB melden</button>
     <button type="button" class="secondary" id="hlClear" hidden>Leeren</button></div>
   <div class="hl-note muted" id="hlNote"></div>
