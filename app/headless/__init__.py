@@ -54,6 +54,18 @@ async def api_test(n: str):
         _release(dr)
 
 
+class EnableReq(BaseModel):
+    enabled: bool
+
+
+@router.post("/enable")
+async def api_enable(req: EnableReq):
+    """Schalter auf der Oberfläche (auch von anderen Rechnern für ihr Laufwerk hier)."""
+    from app import settings as st
+    await st.api_settings({"headless": {"enabled": req.enabled}})
+    return {"ok": True, "enabled": req.enabled}
+
+
 @router.post("/clear")
 async def api_clear():
     run.clear_history()
@@ -111,5 +123,5 @@ ext.register_capability("headless", True)
 ext.register_capability("headless_memory", True)
 ext.register_router(router)
 ext.register_startup(_startup)
-for _p in (r"headless/test/[A-Za-z0-9]+", r"headless/clear", r"headless/memory/forget", r"headless/contribute/[A-Za-z0-9]+(/prefill)?"):
+for _p in (r"headless/enable", r"headless/test/[A-Za-z0-9]+", r"headless/clear", r"headless/memory/forget", r"headless/contribute/[A-Za-z0-9]+(/prefill)?"):
     ext.allow_proxy(_p)

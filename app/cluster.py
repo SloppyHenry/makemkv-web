@@ -89,6 +89,7 @@ def _entry(n: dict, d: dict, old: dict | None, lost: bool) -> dict:
             "conversions": d.get("conversions", []), "uploads": d.get("uploads", []), "jobs": jobs,
             "drives": d.get("drives", []), "output": d.get("output"),          # Laufwerke samt Disc/Titeln/Protokoll: für die Fernsteuerung
             "capabilities": caps,
+            "headless": d.get("headless"),                                    # Headless-Modus des Rechners (Schalter, Protokoll)
             # Paket C: Identität, Vertrauen, Version
             "nid": n["nid"], "id": node.get("id") or n.get("id", ""), "trust": _trust(n, lost),
             "legacy": not caps.get("nodes"), "version": caps.get("version", ""), "mem": node.get("mem", 0), "started": node.get("started", 0),
