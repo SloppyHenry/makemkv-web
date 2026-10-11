@@ -134,7 +134,7 @@ class Parser:
             titles.append({
                 "id": tid, "name": t.get(2, f"Titel {tid}"), "duration": secs, "duration_text": t.get(9, ""),
                 "bytes": int(t.get(11, "0") or 0), "size_text": t.get(10, ""),
-                "chapters": int(t.get(8, "0") or 0), "source": t.get(16, ""), "outname": t.get(27, ""),
+                "chapters": int(t.get(8, "0") or 0), "source": t.get(16, ""), "segments": t.get(26, ""), "outname": t.get(27, ""),
                 "tracks": tracks,
             })
         return {

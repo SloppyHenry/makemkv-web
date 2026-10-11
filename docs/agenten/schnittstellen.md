@@ -42,7 +42,7 @@ Abhängigkeiten laufen von unten nach oben (`ext`/`config`/`util` → `state` �
 - Ausgeliefert wird mit `Cache-Control: no-cache` (ETag): Browser holen nach einem Update neu, nichts wird gemischt.
 
 ## 2. Backend-Erweiterungspunkte (`from app import ext`)
-Dein Modul wird **automatisch geladen**, wenn es einen der Namen in `OPTIONAL_MODULES` (`main.py`) trägt: `app.nodes`, `app.player`, `app.media` (Paket mit `__init__.py`), `app.convert_presets`. Beim Import registrierst du alles. Fehlt das Modul, wird es übersprungen; ein Fehler darin bricht den Start ab.
+Dein Modul wird **automatisch geladen**, wenn es einen der Namen in `OPTIONAL_MODULES` (`main.py`) trägt: `app.nodes`, `app.player`, `app.media` (Paket mit `__init__.py`), `app.convert_presets`, `app.headless` (Paket). Beim Import registrierst du alles. Fehlt das Modul, wird es übersprungen; ein Fehler darin bricht den Start ab.
 
 | Aufruf | Zweck |
 |---|---|
@@ -52,6 +52,7 @@ Dein Modul wird **automatisch geladen**, wenn es einen der Namen in `OPTIONAL_MO
 | `ext.register_capability(name, value)` | Fähigkeit dieses Rechners, sichtbar im Verbund (`/api/state` → `capabilities`) |
 | `ext.register_startup(async_fn)` | Hintergrundaufgabe, startet nach dem Laden der Einstellungen |
 | `ext.register_rip_hook(fn)` | nach jedem fertig gerippten Titel (sync oder async) |
+| `ext.register_scan_hook(fn, force_auto_scan=None)` | nach jeder Analyse einer Disc (auch fehlgeschlagen): `fn({drive, auto})`, `auto` = beim Einlegen vom Poller gestartet; `force_auto_scan()` → True analysiert eingelegte Discs auch bei abgeschaltetem `auto_scan` |
 | `ext.register_upload_hook(fn)` | nach jeder ins Ziel übertragenen Datei (sync oder async) |
 | `ext.allow_proxy(regex)` | erlaubt `POST /api/peer/{name}/<pfad>` für Pfade (ohne `/api/`), die vollständig passen |
 
@@ -113,7 +114,7 @@ registerLibraryAction({id:'play', label:'Abspielen', icon:'▶', primary:true,
 ## 6. Entwicklung und Test (`scripts/dev.sh`)
 - `scripts/dev.sh` startet eine Instanz auf http://127.0.0.1:8790 (Name `dev-a`), `scripts/dev.sh pair` zwei (8790/8791) im Verbund, `stop`/`status`, `--port`, `--name`, `--peers`, `--bg`, `--reset`. Daten in `$TMPDIR/makemkv-web-dev/` (`MKW_DEV_DIR` ändert das); **nie das echte NAS**.
 - Das „NAS“ (`output/`) wird mit Beispieldateien gefüllt (Film H.264+AC3 mit Untertitel und Kapiteln, Serien-Disc „The Walking Dead – Disc 1“ mit fünf Episoden und Play-All-Titel, HEVC 10-bit, MPEG-2-DVD, Ordner mit Umlauten).
-- Attrappen-Laufwerk `sr0` (Datei in `<name>/drives/`) mit Attrappe `makemkvcon` (`scripts/dev-bin`): Disc wird „analysiert“, Rippen/Backup laufen in Sekunden und erzeugen winzige Dateien. `scripts/dev.sh disc --name dev-a ready|empty|open` legt Disc ein/entfernt sie/öffnet die Schublade. Eigene Disc: `<name>/drives/sr0.json` (`type`, `name`, `volume`, `titles[{name,secs,bytes,chapters}]`).
+- Attrappen-Laufwerk `sr0` (Datei in `<name>/drives/`) mit Attrappe `makemkvcon` (`scripts/dev-bin`): Disc wird „analysiert“, Rippen/Backup laufen in Sekunden und erzeugen winzige Dateien. `scripts/dev.sh disc --name dev-a ready|empty|open` legt Disc ein/entfernt sie/öffnet die Schublade. Eigene Disc: `<name>/drives/sr0.json` (`type`, `name`, `volume`, `titles[{name,secs,bytes,chapters,source?,segments?,fail?}]`; `fail: true` lässt den Titel beim Rippen scheitern). Für den Headless-Modus liest die App die Disc-Kennungen aus `<name>/drives/sr0.iso` (UDF-Abbild, z. B. aus `tests/udf_build.py`); ohne Abbild entscheidet die Struktur.
 - Im Browser prüfen: Desktop (1440) und Handy (375), Konsole ohne Fehler.
 
 ## 7. Module der Pakete (Phase 2)
@@ -128,6 +129,8 @@ registerLibraryAction({id:'play', label:'Abspielen', icon:'▶', primary:true,
 
 Verbund und Konvertierung: Eine Übergabe prüft vorher `convert_caps.peer_ok`. Rechner mit altem Stand bekommen nur die fünf alten Felder (`convert_schema.to_v1`), und das nur, wenn sich der Auftrag so ausdrücken lässt; sonst bleibt der Auftrag hier und der Grund wird gemeldet. Konvertierte Dateien tragen im Container `MKW_CONVERTED`; „konvertiert“ in der Bibliothek heißt dieses Kennzeichen oder HEVC/AV1.
 
+Headless-Modus (PG): `app/headless/` – `udf.py` (UDF-Leser direkt vom Gerät, ohne Einhängen; UDF 1.02–2.60 mit Metadaten-Partition), `discid.py` (Disc-ID und Inhalts-Hash wie TheDiscDB), `discdb.py` (Abfrage `GET https://thediscdb.com/api/discid/<id>` bzw. `/api/dischash/<hash>`, Zuordnung über Laufzeit + Playlist bzw. Größe), `choose.py` (Titelwahl aus der Struktur), `run.py` (Ablauf, Protokoll `DATA/headless.json`). Namensraum `headless` (`enabled`, `use_db`, `convert`), Status `headless` in `/api/state`, `POST /api/headless/test/{laufwerk}` (nur erkennen), `POST /api/headless/clear`. Oberfläche: `js/headless.js`, `css/headless.css` (Einstellungsabschnitt, Feld in „Laufwerke“). Kern: `rip.prepare_rip()` (Prüfungen von `/api/drives/{n}/rip`), `makemkv` liefert je Titel `segments` (Attribut 26).
+
 Auftragsliste: `app/joblist.py` entfernt beendete Einträge ohne Rückfrage (`POST /api/conversions/{id}/dismiss`, `/api/uploads/{id}/dismiss`, `/api/jobs/dismiss-finished`, auch über `/api/peer/…`); Fähigkeit `jobs_dismiss` zeigt, ob ein Rechner das kann (alte Rechner: kein Knopf).
 
 Tests: `python3 -m unittest discover -s tests -t .` (die gemeinsame Umgebung setzt `tests/__init__.py`).
@@ -136,4 +139,5 @@ Tests: `python3 -m unittest discover -s tests -t .` (die gemeinsame Umgebung set
 - Dauer-Vorhersagen sind ohne Statistik Schätzungen und werden mit jeder fertigen Konvertierung genauer.
 - Hardware-Encoding (VAAPI), HDR→SDR (`zscale`) und echte Dolby-Vision-Dateien sind nur auf Backend-Ebene getestet, nicht mit echter Hardware/Quelle.
 - Container Queries brauchen Safari 16+ bzw. Firefox 110+.
+- Headless-Modus: Der UDF-Leser ist an Abbildern getestet (macOS-hdiutil UDF 1.02/1.50, eigenes UDF-2.50-Abbild) und der Inhalts-Hash an echten TheDiscDB-Einträgen; mit einer echten Disc im Laufwerk (DVD, Blu-ray, UHD) steht der Test noch aus. TheDiscDB kennt vor allem US-Ausgaben; deutsche Discs fallen oft auf die Strukturerkennung zurück.
 - (behoben durch PF: `convert.ensure_conv_workers()` startete nie weitere Worker.)

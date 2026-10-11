@@ -20,6 +20,7 @@ passiert im Browser.
 - Übertragungs-Kachel mit Geschwindigkeit und Restzeit
 - Ausgabe in ein eingehängtes Netzlaufwerk (NFS/SMB), sonst lokaler Fallback
 - Übersteht USB-Resets des Laufwerks (wartet und wiederholt den Schritt automatisch)
+- Headless-Modus: Disc einlegen, fertig – die richtigen Titel (Hauptfilm bzw. Folgen) werden über [TheDiscDB](https://thediscdb.com) oder die Struktur der Disc bestimmt, gerippt, und die Disc wird ausgeworfen
 
 ![MakeMKV-Web](docs/screenshot.png)
 
@@ -70,7 +71,7 @@ NFS-Beispiel (`/etc/fstab`, ohne Automount, damit Docker den Pfad einbinden kann
 
 ## Aufbau
 
-- `app/` – Python-Paket (FastAPI): `main.py` (App, Router, Start), `drives.py`, `rip.py`, `upload.py`, `convert.py`/`ffmpeg.py`, `library*.py`, `cluster.py`, `nodes*.py` (Rechner), `player*.py`, `media/` (Jellyfin-Ablage), `convert*.py` (Konvertierung), `files.py`, `settings.py`, `state.py`, `ext.py` (Erweiterungspunkte) u. a.
+- `app/` – Python-Paket (FastAPI): `main.py` (App, Router, Start), `drives.py`, `rip.py`, `upload.py`, `convert.py`/`ffmpeg.py`, `library*.py`, `cluster.py`, `nodes*.py` (Rechner), `player*.py`, `media/` (Jellyfin-Ablage), `headless/` (Headless-Modus), `convert*.py` (Konvertierung), `files.py`, `settings.py`, `state.py`, `ext.py` (Erweiterungspunkte) u. a.
 - `app/static/` – Oberfläche ohne Build-Schritt: `index.html`, `css/`, `js/` (native ES-Module; `registry.js` enthält die Erweiterungspunkte)
 - `Dockerfile` · `docker-compose.yml` · `install.sh`
 - Details, Schnittstellen und Konventionen: [docs/agenten/schnittstellen.md](docs/agenten/schnittstellen.md)

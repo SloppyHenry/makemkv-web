@@ -15,6 +15,8 @@ snapshot_fns: dict[str, Callable[[], Any]] = {}  # Schlüssel -> Funktion, deren
 capabilities: dict[str, Any] = {}               # Fähigkeiten dieses Rechners (/api/state -> capabilities)
 startup_fns: list[Callable] = []                # async-Funktionen, die beim Start als Hintergrundaufgabe laufen
 rip_hooks: list[Callable] = []                  # nach jedem fertig gerippten Titel
+scan_hooks: list[Callable] = []                 # nach jeder Analyse einer Disc
+auto_scan_checks: list[Callable[[], bool]] = []  # True = Disc beim Einlegen analysieren, auch wenn „automatisch analysieren“ aus ist
 upload_hooks: list[Callable] = []               # nach jeder fertig übertragenen Datei
 proxy_allowed: list[re.Pattern] = []            # Pfade, die /api/peer/{name}/… weiterleiten darf
 
@@ -51,6 +53,24 @@ def register_rip_hook(fn: Callable) -> None:
     info: dev, disc (Name, Typ, Volume, alle Titel), title (id, name, duration, bytes, chapters …), rel (Zielpfad im Ausgabeordner),
     folder, mode, converting (bool). Fehler im Hook werden protokolliert und stören den Rip nicht."""
     rip_hooks.append(fn)
+
+
+def register_scan_hook(fn: Callable, force_auto_scan: Callable[[], bool] | None = None) -> None:
+    """`fn(info: dict)` (sync oder async) nach jeder Analyse einer Disc (auch fehlgeschlagen): info: drive (Laufwerk-Objekt), auto (bool,
+    vom Poller beim Einlegen gestartet). `force_auto_scan()` -> True: eingelegte Discs werden auch bei abgeschaltetem `auto_scan` analysiert."""
+    scan_hooks.append(fn)
+    if force_auto_scan:
+        auto_scan_checks.append(force_auto_scan)
+
+
+def auto_scan_forced() -> bool:
+    for fn in auto_scan_checks:
+        try:
+            if fn():
+                return True
+        except Exception:  # noqa: BLE001
+            print(f"auto_scan-Prüfung {getattr(fn, '__name__', fn)} fehlgeschlagen:\n{traceback.format_exc()}", flush=True)
+    return False
 
 
 def register_upload_hook(fn: Callable) -> None:

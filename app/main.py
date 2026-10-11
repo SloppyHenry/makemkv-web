@@ -19,7 +19,7 @@ from app.config import DATA, FEATURES, VERSION
 
 # Optionale Module der Arbeitspakete. Sie melden sich beim Import selbst über app.ext an (Router, Einstellungen, Hooks …).
 # Fehlt ein Modul, wird es übersprungen; ein Fehler darin bricht den Start ab (damit er nicht untergeht).
-OPTIONAL_MODULES = ["app.nodes", "app.player", "app.media", "app.convert_presets"]
+OPTIONAL_MODULES = ["app.nodes", "app.player", "app.media", "app.convert_presets", "app.headless"]
 
 app = FastAPI(title="MakeMKV-Web")
 app.middleware("http")(auth.basic_auth)

@@ -198,9 +198,8 @@ async def track_overall(job, get):
         await asyncio.sleep(0.5)
 
 
-@router.post("/api/drives/{n}/rip")
-async def api_rip(n: str, req: RipReq):
-    dr = get_drive(n)
+def prepare_rip(dr: Drive, req: RipReq) -> Path:
+    """Prüft Auftrag, Platz im Ziel und im Zwischenspeicher (HTTPException bei Fehler) und liefert den Zielordner."""
     if dr.busy:
         raise HTTPException(409, "Laufwerk ist beschäftigt")
     if not dr.disc:
@@ -220,5 +219,12 @@ async def api_rip(n: str, req: RipReq):
     factor = 1.7 if (req.convert and req.convert.get('convert') and req.mode == 'mkv') else 1.05
     if staging_free() + uploading < biggest * factor:
         raise HTTPException(507, f"Zu wenig Platz im Zwischenspeicher {STAGING}")
+    return dest
+
+
+@router.post("/api/drives/{n}/rip")
+async def api_rip(n: str, req: RipReq):
+    dr = get_drive(n)
+    dest = prepare_rip(dr, req)
     asyncio.create_task(do_rip(dr, req, dest))
     return {"ok": True, "dest": str(dest)}

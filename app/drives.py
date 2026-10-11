@@ -123,7 +123,8 @@ async def wait_ready(drive: Drive, timeout=60) -> bool:
     return False
 
 
-async def do_scan(drive: Drive):
+async def do_scan(drive: Drive, auto: bool = False):
+    """Disc analysieren; `auto`: vom Poller beim Einlegen gestartet. Danach laufen die Scan-Hooks (ext.register_scan_hook)."""
     drive.attempted = True
     drive.scan_id += 1
     drive.disc, drive.error = None, ""
@@ -167,6 +168,8 @@ async def do_scan(drive: Drive):
         drive.cancel = False
         drive.job = None
         broadcast()
+    if ext.scan_hooks:
+        await ext.run_hooks(ext.scan_hooks, {"drive": drive, "auto": auto})
 
 
 async def poller():
@@ -200,8 +203,8 @@ async def poller():
                         dr.disc, dr.error, dr.label, dr.attempted, dr.ready_polls = None, "", "", False, 0
                         dr.log.clear()
                 dr.ready_polls = dr.ready_polls + 1 if st == "ready" else 0
-                if st == "ready" and dr.ready_polls >= 2 and not dr.attempted and settings["auto_scan"]:
-                    asyncio.create_task(do_scan(dr))
+                if st == "ready" and dr.ready_polls >= 2 and not dr.attempted and (settings["auto_scan"] or ext.auto_scan_forced()):
+                    asyncio.create_task(do_scan(dr, auto=True))
                     changed = True
             if changed:
                 broadcast()

@@ -4,6 +4,7 @@
 Versteht die Aufrufe der App: `info dev:<Pfad>`, `info disc:9999` (Laufwerksliste), `mkv dev:<Pfad> <Titel> <Ordner>` und
 `backup --decrypt disc:<N> <Ordner>`. Die Disc stammt aus <DEV_DRIVE_DIR>/<Laufwerk>.json oder ist die Serien-Disc unten.
 Gerippt wird eine winzige Videodatei; der Fortschritt läuft in einigen Sekunden durch (DEV_RIP_SECONDS, Standard 8).
+Titel mit "fail": true scheitern beim Rippen; "source"/"segments" setzen die Attribute 16 und 26 (Playlist, Segmente).
 """
 import json
 import os
@@ -71,7 +72,9 @@ def info(dev):
         out(f'TINFO:{t},9,0,"{hms(ti["secs"])}"')
         out(f'TINFO:{t},10,0,"{ti["bytes"] / 1e9:.1f} GB"')
         out(f'TINFO:{t},11,0,"{ti["bytes"]}"')
-        out(f'TINFO:{t},16,0,"{t:05d}.mpls"')
+        out(f'TINFO:{t},16,0,"{ti.get("source") or f"{t:05d}.mpls"}"')
+        if ti.get("segments"):
+            out(f'TINFO:{t},26,0,"{ti["segments"]}"')
         out(f'TINFO:{t},27,0,"{ti["name"]}_t{t:02d}.mkv"')
         for s, (typ, codec, lang, code, extra) in enumerate([("Video", "MPEG-4 AVC", "", "", "1920x1080"), ("Audio", "DTS-HD MA", "Englisch", "eng", "5.1"),
                                                              ("Audio", "AC3", "Deutsch", "deu", "5.1"), ("Subtitles", "PGS", "Deutsch", "deu", "")]):
@@ -100,6 +103,9 @@ def mkv(dev, tid, folder):
     t = disc["titles"][tid]
     out(f'MSG:3007,0,0,"Titel {tid} wird gespeichert","%1","x"')
     progress("Titel wird gespeichert", SECONDS)
+    if t.get("fail"):                     # Lesefehler nachstellen (Titel mit "fail": true in <Laufwerk>.json)
+        out('MSG:2003,0,3,"Fehler beim Lesen der Disc (Attrappe)","%1","x"')
+        sys.exit(1)
     target = Path(folder) / f'{t["name"]}_t{tid:02d}.mkv'
     subprocess.run(["ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-f", "lavfi", "-i", "testsrc2=size=320x180:rate=10",
                     "-f", "lavfi", "-i", "sine=frequency=440", "-t", "3", "-c:v", "libx264", "-preset", "ultrafast", "-c:a", "aac",
