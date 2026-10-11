@@ -13,7 +13,7 @@ from pydantic import BaseModel, field_validator
 from app import cluster, convert_caps, convert_probe, convert_stats, ext
 from app.config import INSTANCE, PRESET_DEFAULTS
 from app.convert import clean_convert
-from app.convert_builtin import BUILTIN, BUILTIN_IDS, DEFAULT_FOR
+from app.convert_builtin import BUILTIN, BUILTIN_IDS, DEFAULT_FOR, NVIDIA_DEFAULT_FOR
 from app.convert_schema import CODECS, SCHEMA, clean_v2, crf_to_level, describe, is_v1_compatible, level_to_crf
 from app.ffmpeg_args import command_preview
 from app.state import broadcast, peers_state, settings
@@ -54,11 +54,18 @@ def find_preset(pid: str) -> dict | None:
     return next((p for p in all_presets() if p["id"] == pid), None)
 
 
+def builtin_default(kind: str) -> str:
+    """Mitgeliefertes Standard-Preset für eine Disc-Art; mit NVIDIA-Karte (hevc_nvenc 10 Bit erkannt) die NVIDIA-Presets."""
+    if "hevc_nvenc" in convert_caps.caps["hw10"] and kind in NVIDIA_DEFAULT_FOR:
+        return NVIDIA_DEFAULT_FOR[kind]
+    return DEFAULT_FOR.get(kind, "bluray")
+
+
 def default_for(kind: str) -> dict:
     """Vorgabe für eine Disc-Art: {id, cfg}. Die alten flachen Standard-Presets (general.presets) gelten weiter: nur wenn sie der Wahl entsprechen, steht
     eine Kennung dabei, sonst ist es eine „eigene Vorgabe“ (id leer)."""
-    pid = conf()["default_for"].get(kind) or DEFAULT_FOR.get(kind, "bluray")
-    p = find_preset(pid) or find_preset(DEFAULT_FOR.get(kind, "bluray"))
+    pid = conf()["default_for"].get(kind) or builtin_default(kind)
+    p = find_preset(pid) or find_preset(builtin_default(kind))
     flat = (settings.get("presets") or {}).get(kind) if kind in PRESET_DEFAULTS else None
     if flat is None or kind not in PRESET_DEFAULTS:
         return {"id": p["id"], "cfg": p["cfg"]}

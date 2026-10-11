@@ -2,6 +2,7 @@
 from app.convert_schema import clean_v2
 
 STD = "aq-mode=3:no-sao=1"        # bisheriger Standard: aq-mode 3 schont dunkle Szenen (weniger Blockbildung), SAO aus erhält feine Details
+NVENC_HQ = "preset=p7:tune=hq:profile=main10:multipass=fullres:rc-lookahead=32:spatial-aq=1:temporal-aq=1:bf=4:b_ref_mode=middle"
 
 
 def _p(pid, name, desc, why, video=None, quality=None, picture=None, sound=None, kind=""):
@@ -31,6 +32,17 @@ BUILTIN = [
     _p("small", "Klein & schnell", "Für unterwegs: höchstens 720p, schnell, Stereo-Ton (AAC).",
        "720p, RF 26, faster: deutlich kleiner und etwa 4× schneller als slow; Stereo-AAC 160 kb/s ist überall abspielbar.",
        video={"speed": "faster", "extra": ""}, quality={"crf": 26}, picture={"scale": "720", "deint": "auto"}, sound={"mode": "aac", "channels": "stereo"}),
+    _p("bluray-nvenc", "Blu-ray NVIDIA (NVENC)", "Für Rechner mit NVIDIA-Karte: HEVC 10 Bit auf der Grafikkarte, viel schneller, Ton und Untertitel bleiben.",
+       "hevc_nvenc main10 (weniger Banding, auch bei 8-Bit-Quelle), p7 + tune hq kostet auf der GPU kaum Zeit. VBR mit CQ 22 (20 = sehr gut, 24 = kleiner) "
+       "für gleichbleibende Qualität statt fester Bitrate; multipass fullres, Lookahead 32, AQ räumlich + zeitlich gegen Blöcke in dunklen und flachen Szenen; "
+       "4 B-Frames mit b_ref_mode middle (ab Turing/Ampere). Ton und Untertitel werden kopiert.",
+       video={"codec": "hw", "hw": "hevc_nvenc", "extra": NVENC_HQ}, quality={"crf": 22}, kind="bluray"),
+    _p("dvd-x265", "DVD schonend (x265)", "Für DVD-Rips: RF 19, Originalauflösung, schwarze Balken weg, Ton und Untertitel bleiben.",
+       "DVDs sind schon stark komprimiert, deshalb nicht zu aggressiv: x265 10 Bit slow mit RF 19 (Bereich 18–20). Auflösung bleibt (kein Hochskalieren), "
+       "anamorphes Seitenverhältnis wird mitgenommen, schwarze Ränder werden automatisch weggeschnitten. AC3 und VobSub passen unverändert in MKV. "
+       "Zeilensprung wird automatisch erkannt (viele DVDs sind interlaced).",
+       quality={"crf": 19}, picture={"crop": "auto", "deint": "auto"}, kind="dvd"),
 ]
 BUILTIN_IDS = {p["id"] for p in BUILTIN}
 DEFAULT_FOR = {"bluray": "bluray", "dvd": "dvd", "uhd": "uhd"}
+NVIDIA_DEFAULT_FOR = {"bluray": "bluray-nvenc", "dvd": "dvd-x265"}      # vorausgewählt, wenn dieser Rechner hevc_nvenc mit 10 Bit kann

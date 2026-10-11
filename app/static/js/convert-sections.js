@@ -72,8 +72,8 @@ function subsBlock(x){
 }
 
 function expertBlock(x){
-  const v = x.cfg.video, enc = {x265: 'x265-params', x264: 'x264-params', svtav1: 'svtav1-params'}[v.codec];
-  return `${enc ? `<div class="cv-row"><label for="cv-extra">Freie Encoder-Parameter (${enc}) ${reset(x, 'video.extra')}</label><input class="input" id="cv-extra" data-text="video.extra" value="${esc(v.extra)}" placeholder="z. B. aq-mode=3:no-sao=1" spellcheck="false">
+  const v = x.cfg.video, nv = v.codec === 'hw' && (v.hw || '').endsWith('_nvenc'), enc = nv ? 'NVENC-Optionen' : {x265: 'x265-params', x264: 'x264-params', svtav1: 'svtav1-params'}[v.codec];
+  return `${enc ? `<div class="cv-row"><label for="cv-extra">Freie Encoder-Parameter (${enc}) ${reset(x, 'video.extra')}</label><input class="input" id="cv-extra" data-text="video.extra" value="${esc(v.extra)}" placeholder="${nv ? 'z. B. preset=p7:tune=hq:bf=4' : 'z. B. aq-mode=3:no-sao=1'}" spellcheck="false">
     <span class="hint">Nur Buchstaben, Ziffern und = : . , - _. Falsche Parameter lassen die Konvertierung fehlschlagen (das Original bleibt dann unverändert).</span></div>` : '<p class="hint">Für diesen Codec gibt es keine freien Parameter.</p>'}
   <div class="cv-row"><label>Erzeugter ffmpeg-Befehl (nur zum Lesen; Zuschnitt und Zeilensprung werden erst beim Konvertieren erkannt)</label><pre class="cv-cmp-cmd cv-cmd" data-b="cmd">…</pre></div>`;
 }

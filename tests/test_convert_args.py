@@ -95,11 +95,26 @@ class ArgsTest(unittest.TestCase):
         self.assertEqual(fa.filter_chain(va, ctx())[-2:], ["format=p010le", "hwupload"])
         self.assertEqual(fa.video_args(va, ctx())[:2], ["-c:v", "hevc_vaapi"])
         self.assertIn("-qp", fa.video_args(va, ctx()))
+        self.assertNotIn("-q:v", fa.video_args(va, ctx()))
         h264 = clean_v2({"v": 2, "video": {"codec": "hw", "hw": "h264_qsv"}})
         self.assertEqual(fa.filter_chain(h264, ctx()), ["format=nv12"])
         self.assertEqual(fa.global_args(h264), [])
         nv = clean_v2({"v": 2, "video": {"codec": "hw", "hw": "hevc_nvenc"}, "quality": {"crf": 24}})
         self.assertIn("-cq", fa.video_args(nv, ctx()))
+        self.assertEqual(fa.video_args(nv, ctx())[-2:], ["-preset", "p5"])
+
+    def test_nvenc_preset(self):
+        from app.convert_builtin import BUILTIN
+        cfg = next(p["cfg"] for p in BUILTIN if p["id"] == "bluray-nvenc")
+        a = fa.video_args(cfg, ctx())
+        self.assertEqual(a[:2], ["-c:v", "hevc_nvenc"])
+        self.assertEqual(a[a.index("-cq") + 1], "22")
+        self.assertEqual(a.count("-preset"), 1)                                            # ersetzt den Grundwert p5
+        for k, v in (("-preset", "p7"), ("-tune", "hq"), ("-profile", "main10"), ("-multipass", "fullres"), ("-rc-lookahead", "32"), ("-spatial-aq", "1"),
+                     ("-temporal-aq", "1"), ("-bf", "4"), ("-b_ref_mode", "middle")):
+            self.assertEqual(a[a.index(k) + 1], v)
+        self.assertEqual(fa.filter_chain(cfg, ctx())[-1], "format=p010le")
+        self.assertEqual(fa.nvenc_extra("preset=p7:f=null:y"), ["-preset", "p7"])          # unbekannte Schlüssel fallen weg
 
     def test_remux(self):
         cfg = clean_v2({"v": 2, "video": {"codec": "copy"}, "sound": {"mode": "aac"}})

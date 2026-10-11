@@ -152,6 +152,19 @@ def svtav1_args(cfg: dict, ctx: dict) -> list[str]:
     return a + ["-svtav1-params", ":".join(params)]
 
 
+NVENC_OPTS = {"preset", "tune", "profile", "tier", "multipass", "rc-lookahead", "spatial-aq", "temporal-aq", "aq-strength", "bf", "b_ref_mode", "refs"}
+
+
+def nvenc_extra(extra: str) -> list[str]:
+    """Freie NVENC-Parameter „preset=p7:tune=hq:bf=4“ als ffmpeg-Optionen; nur bekannte Schlüssel, ein eigenes preset ersetzt den Grundwert p5."""
+    a = []
+    for kv in extra.split(":") if extra else []:
+        k, _, val = kv.partition("=")
+        if k in NVENC_OPTS and val:
+            a += ["-" + k, val]
+    return a
+
+
 def hw_args(cfg: dict, ctx: dict) -> list[str]:
     enc, q = cfg["video"]["hw"], cfg["quality"]["crf"]
     fam = hw_family(cfg)
@@ -163,9 +176,12 @@ def hw_args(cfg: dict, ctx: dict) -> list[str]:
     elif fam == "qsv":
         a += ["-global_quality", str(q), "-preset", "slow"]
     elif fam == "nvenc":
-        a += ["-rc", "vbr", "-cq", str(q), "-b:v", "0", "-preset", "p5"]
+        a += ["-rc", "vbr", "-cq", str(q), "-b:v", "0"]
     else:                                         # videotoolbox: 0..100, höher = besser
         a += ["-q:v", str(max(1, min(100, round(85 - (q - 16) * 2.5))))]
+    if fam == "nvenc":
+        more = nvenc_extra(cfg["video"]["extra"])
+        a += (["-preset", "p5"] if "-preset" not in more else []) + more
     if enc.startswith("hevc_") and fam == "videotoolbox":
         a += ["-tag:v", "hvc1"]
     if hdr_kept(cfg, ctx["info"]):

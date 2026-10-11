@@ -158,6 +158,14 @@ class PresetTest(unittest.TestCase):
         self.assertEqual((d["id"], d["cfg"]["quality"]["crf"]), ("bluray", 20))
         self.assertEqual(convert_presets.default_for("uhd")["id"], "uhd")
 
+    def test_nvidia_karte_waehlt_nvidia_presets_vor(self):
+        with mock.patch.dict(convert_caps.caps, {"hw10": ["hevc_nvenc"]}):
+            self.assertEqual(convert_presets.default_for("bluray")["id"], "bluray-nvenc")
+            self.assertEqual(convert_presets.default_for("dvd")["id"], "dvd-x265")
+            self.assertEqual(convert_presets.default_for("uhd")["id"], "uhd")
+        with mock.patch.dict(convert_caps.caps, {"hw10": ["hevc_vaapi"]}):
+            self.assertEqual(convert_presets.default_for("bluray")["id"], "bluray")
+
     def test_eigene_vorgabe_aus_alter_oberflaeche_bleibt(self):
         settings["presets"]["bluray"] = clean_v2({"rf": 23, "preset": "medium", "tune": "none", "extra": "", "audio": "aac"})
         d = convert_presets.default_for("bluray")
