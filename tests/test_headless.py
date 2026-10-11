@@ -10,7 +10,7 @@ from unittest import mock
 from tests import env  # noqa: F401
 from tests.udf_build import build
 
-from app.headless import choose, discdb, discid, run, udf
+from app.headless import choose, discdb, discid, plan, udf
 
 # echte Einträge aus TheDiscDB (Dateigrößen aus dem Scan-Protokoll, Hash aus disc01.json)
 CLOVERFIELD = [(f"{n:05d}.m2ts", s) for n, s in [
@@ -110,7 +110,7 @@ class DiscDbTest(unittest.TestCase):
         m = discdb.match(SERIES_ENTRY, disc)
         self.assertTrue(m["ok"], m["reason"])
         self.assertEqual(sorted((p["id"], p["episode"]) for p in m["picks"]), [(0, "1"), (1, "2"), (2, "3")])
-        folder, names = run.names_from_db(m)
+        folder, names = plan.names_from_db(m)
         self.assertEqual(folder, "Mission - Impossible (1966) - Season 1 Disc 1")
         self.assertEqual(names[0], "Mission - Impossible S01E01 - Pilot")
 
@@ -143,7 +143,7 @@ class DiscDbTest(unittest.TestCase):
         self.assertEqual((via, len(calls)), ("Inhalts-Hash", 2))
         m = discdb.match(e, {"type": "Blu-ray disc", "titles": [T(0, 6214, 28.5, source="00800.mpls"), T(1, 6214, 28.5, source="00801.mpls")]})
         self.assertEqual([p["id"] for p in m["picks"]], [0])
-        self.assertEqual(run.names_from_db(m), ("10 Cloverfield Lane (2016)", {0: "10 Cloverfield Lane (2016)"}))
+        self.assertEqual(plan.names_from_db(m), ("10 Cloverfield Lane (2016)", {0: "10 Cloverfield Lane (2016)"}))
 
 
 class ChooseTest(unittest.TestCase):

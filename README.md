@@ -20,7 +20,7 @@ passiert im Browser.
 - Übertragungs-Kachel mit Geschwindigkeit und Restzeit
 - Ausgabe in ein eingehängtes Netzlaufwerk (NFS/SMB), sonst lokaler Fallback
 - Übersteht USB-Resets des Laufwerks (wartet und wiederholt den Schritt automatisch)
-- Headless-Modus: Disc einlegen, fertig – die richtigen Titel (Hauptfilm bzw. Folgen) werden über [TheDiscDB](https://thediscdb.com) oder die Struktur der Disc bestimmt, gerippt, und die Disc wird ausgeworfen
+- Headless-Modus: Disc einlegen, fertig – die richtigen Titel (Hauptfilm bzw. Folgen) werden über das eigene Gedächtnis (früher von Hand gewählt), [TheDiscDB](https://thediscdb.com), TMDB-Laufzeiten oder die Struktur der Disc bestimmt, gerippt, und die Disc wird ausgeworfen; unbekannte Discs lassen sich an TheDiscDB melden
 
 ![MakeMKV-Web](docs/screenshot.png)
 

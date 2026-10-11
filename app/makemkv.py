@@ -69,9 +69,12 @@ class Parser:
         self.saved = None
         self.disc_index = None
         self.errors = []
+        self.raw = []          # Titel-/Spurangaben im Robot-Format (ohne Laufwerks- und Systemzeilen), z. B. für TheDiscDB
 
     def line(self, line: str):
         d, job = self.d, self.job
+        if line.startswith(("CINFO:", "TINFO:", "SINFO:", "TCOUNT:")) and len(self.raw) < 50000:
+            self.raw.append(line)
         if line.startswith("MSG:"):
             m = MSG_RE.match(line)
             if m:

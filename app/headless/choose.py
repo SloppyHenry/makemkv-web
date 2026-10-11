@@ -38,9 +38,8 @@ def _consistent(durs: list[float], ratio: float = 1.35) -> bool:
     return len(durs) >= 2 and min(durs) > 0 and max(durs) / min(durs) <= ratio
 
 
-def decide(disc: dict, content_bytes: int = 0, hint: str = "") -> dict:
-    """disc: wie /api/state (titles mit id, duration, bytes, segments). hint: „movie“/„series“ aus TMDB (oder leer).
-    Ergebnis: {mode: movie|series|unsure|manual, picks: [ids], reasons: [..], playall: [ids], dropped: [ids], total, limit}."""
+def prepare(disc: dict) -> dict:
+    """Duplikate und Play-All aussortieren, Rollen nach detect. {titles, kept, dropped, playall, rest, det, role, reasons}."""
     titles = [t for t in disc.get("titles") or [] if t.get("duration")]
     kept, dropped = dedupe(titles)
     reasons = []
@@ -55,6 +54,15 @@ def decide(disc: dict, content_bytes: int = 0, hint: str = "") -> dict:
     if playall:
         reasons.append(f"Play-All erkannt (Titel {', '.join(str(i + 1) for i in playall)})")
     rest = [t for t in kept if t["id"] not in playall]
+    return {"titles": titles, "kept": kept, "dropped": dropped, "playall": playall, "rest": rest, "det": det, "role": role, "reasons": reasons}
+
+
+def decide(disc: dict, content_bytes: int = 0, hint: str = "", prep: dict | None = None) -> dict:
+    """disc: wie /api/state (titles mit id, duration, bytes, segments). hint: „movie“/„series“ aus TMDB (oder leer).
+    Ergebnis: {mode: movie|series|unsure|manual, picks: [ids], reasons: [..], playall: [ids], dropped: [ids], total, limit}."""
+    pr = prep or prepare(disc)
+    titles, rest, det, role, playall, dropped = pr["titles"], pr["rest"], pr["det"], pr["role"], pr["playall"], pr["dropped"]
+    reasons = list(pr["reasons"])
     longs = [t for t in rest if t["duration"] >= MOVIE_MIN]
     eps = [t for t in rest if role.get(t["id"], {}).get("role") == "episode" and t["duration"] < MOVIE_MIN]
     mids = [t for t in rest if EP_MIN <= t["duration"] <= EP_MAX and t not in longs]

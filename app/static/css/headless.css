@@ -9,3 +9,19 @@
 .hl-sub{font-size:11.5px;color:#c4d0e1;overflow-wrap:anywhere}
 .hl-why{font-size:11px;color:var(--muted);line-height:1.45;overflow-wrap:anywhere}
 .hl-why.err{color:var(--red)}
+/* Einstellungen */
+.hl-help{margin:0;line-height:1.5}.hl-help ol{margin:6px 0;padding-left:20px;display:grid;gap:3px}
+/* Dialog „An TheDiscDB melden“ (js/headless-contribute.js) */
+.hlc-dlg{width:min(760px,96vw)}
+.hlc-dlg label{display:block;font-size:11px;color:var(--muted);margin-bottom:4px}
+.hlc-dlg input,.hlc-dlg select{width:100%;min-width:0;height:34px;background:#0c121a;color:var(--text);border:1px solid #2b3748;border-radius:7px;padding:0 9px}
+.hlc-dlg input:disabled{opacity:.45}
+.hlc-table select,.hlc-table input{height:30px}
+.hlc-search{display:grid;grid-template-columns:minmax(0,1fr) 110px auto;gap:12px;align-items:end}
+.hlc-table{max-height:300px;overflow:auto;border:1px solid var(--line);border-radius:9px}
+.hlc-table td{font-size:12px}
+.hlc-table td:first-child{max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hlc-table input{width:64px}
+.hlc-prev{max-height:220px;overflow:auto;font-size:10.5px;background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:10px;margin:0;white-space:pre-wrap;overflow-wrap:anywhere}
+@media(max-width:600px){.hlc-search{grid-template-columns:minmax(0,1fr) 100px}.hlc-search>button{grid-column:1/-1}.hlc-dlg .two{grid-template-columns:minmax(0,1fr)}
+  .hlc-table th:nth-child(3),.hlc-table td:nth-child(3){display:none}.hlc-table th,.hlc-table td{padding:8px 6px}.hlc-table input{width:48px}.hlc-table td:first-child{max-width:90px}}

@@ -83,6 +83,7 @@ class Drive:
         self.proc = None
         self.cancel = False
         self.log = deque(maxlen=300)
+        self.scan_raw: list[str] = []    # Robot-Ausgabe der letzten Analyse (Titel/Spuren), nicht in /api/state
         self.last_msg = ("", 0)
 
     @property
@@ -127,7 +128,7 @@ async def do_scan(drive: Drive, auto: bool = False):
     """Disc analysieren; `auto`: vom Poller beim Einlegen gestartet. Danach laufen die Scan-Hooks (ext.register_scan_hook)."""
     drive.attempted = True
     drive.scan_id += 1
-    drive.disc, drive.error = None, ""
+    drive.disc, drive.error, drive.scan_raw = None, "", []
     drive.log.clear()
     drive.last_msg = ("", 0)
     drive.job = {"kind": "scan", "text": "Disc wird analysiert …", "cur": 0, "total": 0, "started": time.time()}
@@ -146,6 +147,7 @@ async def do_scan(drive: Drive, auto: bool = False):
                 break
             if p.tinfo:
                 drive.disc = p.disc(ml)
+                drive.scan_raw = p.raw
                 if not drive.disc["name"]:
                     drive.disc["name"] = drive.label
                 drive.error = ""

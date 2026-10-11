@@ -74,7 +74,7 @@ def _same_size(a: int, b: int) -> bool:
     return bool(a and b) and abs(a - b) <= max(4096, int(5e-5 * max(a, b)))
 
 
-def _candidates(dt: dict, titles: list[dict], bluray: bool) -> list[int]:
+def candidates(dt: dict, titles: list[dict], bluray: bool) -> list[int]:
     dur = hms_to_sec(dt.get("duration") or "")
     src = (dt.get("source_file") or "").lower()
     out = []
@@ -110,7 +110,7 @@ def match(entry: dict, disc: dict) -> dict:
         return res
     used: set[int] = set()
     for dt in wanted:
-        c = [i for i in _candidates(dt, disc["titles"], bluray) if i not in used]
+        c = [i for i in candidates(dt, disc["titles"], bluray) if i not in used]
         if len(c) != 1:
             res["reason"] = (f"Titel {dt.get('source_file') or dt.get('index')} ({dt.get('duration')}) "
                              + ("nicht gefunden" if not c else "nicht eindeutig") + " – Disc weicht vom Eintrag ab")
