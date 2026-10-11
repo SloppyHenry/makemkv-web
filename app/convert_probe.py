@@ -12,7 +12,7 @@ import uuid
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from app import convert_caps, convert_stats
+from app import convert_caps, convert_stats, ffmpeg_errors
 from app.config import CONV_WORK
 from app.convert_schema import clean_v2
 from app.ffmpeg import detect_crop, detect_scan, probe, probe_hdr, spawn
@@ -69,7 +69,7 @@ async def run(job: dict, src, cfg: dict):
             job["proc"] = proc
             _, err = await proc.communicate()
             if proc.returncode != 0 or not out.exists():
-                raise ValueError("Die Probe-Kodierung ist fehlgeschlagen: " + err.decode(errors="replace")[-200:])
+                raise ValueError(ffmpeg_errors.message("Die Probe-Kodierung ist fehlgeschlagen", err.decode(errors="replace").splitlines(), 2))
             secs += time.monotonic() - t0
             sizes += out.stat().st_size
             if n == 0:

@@ -8,6 +8,7 @@ import time
 from pathlib import Path
 import signal
 from collections import deque
+from app import ffmpeg_errors
 from app.config import CONV_WORK
 from app.ffmpeg_args import changes_framecount, ffmpeg_args, mux_args, segment_args, two_pass
 from app.state import broadcast, conv_procs, conv_state, conversions
@@ -185,7 +186,7 @@ async def convert_single(item, src, cfg, ctx, dur, out):
     """Ein Prozess für den ganzen Film; bei „Zielgröße“/„Bitrate“ mit x265/x264 in zwei Durchgängen."""
     passes = [1, 2] if two_pass(cfg) else [0]
     cur, rc = [0], 0
-    state, tail = {0: {"t": 0.0, "fps": 0.0, "size": 0}}, deque(maxlen=12)
+    state, tail = {0: {"t": 0.0, "fps": 0.0, "size": 0}}, deque(maxlen=40)
     ctx = {**ctx, "passlog": str(CONV_WORK / f"{item['id']}-pass")}
     agg = asyncio.create_task(aggregate(item, state, dur, len(passes), cur))
     try:
@@ -205,7 +206,7 @@ async def convert_single(item, src, cfg, ctx, dur, out):
         raise SkipConversion()
     if rc != 0 or not out.exists():
         out.unlink(missing_ok=True)
-        raise OSError("ffmpeg fehlgeschlagen: " + " | ".join(list(tail)[-4:]))
+        raise OSError(ffmpeg_errors.message("ffmpeg fehlgeschlagen", tail))
 
 
 async def convert_segments(item, src, cfg, ctx, dur, nseg, out):
@@ -229,7 +230,7 @@ async def convert_segments(item, src, cfg, ctx, dur, nseg, out):
             if i < nseg - 1:
                 seek += ["-to", f"{(bounds[i + 1] - 0.5) / fps:.6f}"]
             procs.append(await spawn(segment_args(src, work / f"seg{i:02d}.mkv", cfg, sctx, seek, f"{num}/{den}")))
-            tails.append(deque(maxlen=8))
+            tails.append(deque(maxlen=30))
             state[i] = {"t": 0.0, "fps": 0.0, "size": 0}
         conv_procs[item["id"]] = procs
         apply_pause(procs)
@@ -243,7 +244,7 @@ async def convert_segments(item, src, cfg, ctx, dur, nseg, out):
             raise SkipConversion()
         for i, rc in enumerate(rcs):
             if rc != 0:
-                raise OSError(f"Segment {i + 1}/{nseg} fehlgeschlagen: " + " | ".join(list(tails[i])[-3:]))
+                raise OSError(ffmpeg_errors.message(f"Segment {i + 1}/{nseg} fehlgeschlagen", tails[i], 3))
         for i in range(nseg):                                        # jedes Segment muss die erwartete Länge haben
             want = (bounds[i + 1] - bounds[i]) / fps
             got = float((await probe(work / f"seg{i:02d}.mkv"))["format"]["duration"])
