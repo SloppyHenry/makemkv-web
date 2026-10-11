@@ -19,7 +19,11 @@ fi
 grep -q "^INSTANCE_NAME=" .env || echo "INSTANCE_NAME=$(hostname)" >> .env    # Name dieser Instanz (für Sperrdateien)
 grep -q "^RENDER_GID=" .env || echo "RENDER_GID=$(getent group render | cut -d: -f3 || echo 105)" >> .env   # Gruppe render (Hardware-Encoding über /dev/dri)
 # NVIDIA-Karte (NVENC): docker-compose.nvidia.yml einbinden, wenn Docker die Karte per CDI kennt; NVIDIA=no in .env schaltet ab
-nvidia_cdi() { { command -v nvidia-ctk >/dev/null && nvidia-ctk cdi list 2>/dev/null; cat /etc/cdi/*.yaml /var/run/cdi/*.yaml 2>/dev/null; } | grep -q "nvidia.com/gpu"; }
+nvidia_cdi() {   # erst alles einlesen: grep -q in einer Pipe bräche unter pipefail mit SIGPIPE ab
+  local out
+  out="$( { command -v nvidia-ctk >/dev/null && nvidia-ctk cdi list 2>/dev/null; cat /etc/cdi/*.yaml /var/run/cdi/*.yaml 2>/dev/null; } || true)"
+  [[ "$out" == *nvidia.com/gpu* ]]
+}
 want_nvidia="$(sed -n 's/^NVIDIA=//p' .env | tail -1)"
 sed -i.bak '/^COMPOSE_FILE=/d' .env && rm -f .env.bak
 if [ "${want_nvidia:-auto}" != "no" ] && nvidia_cdi; then
