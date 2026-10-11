@@ -46,6 +46,7 @@ Aktualisieren (neue MakeMKV-Version, z. B. weil die Beta nach 60 Tagen abläuft)
 | `PUID`/`PGID` | Besitzer der gerippten Dateien |
 | `CDROM_GID` | Gruppe `cdrom` des Hosts |
 | `RENDER_GID` | Gruppe `render` des Hosts (nur für Hardware-Encoding über `/dev/dri`) |
+| `NVIDIA` | `auto` (Standard): NVIDIA-Karte in den Container durchreichen (NVENC), wenn Docker sie per CDI kennt (NVIDIA Container Toolkit, Gerät `nvidia.com/gpu=all`); `install.sh` setzt dann `COMPOSE_FILE` auf `docker-compose.yml:docker-compose.nvidia.yml`. `no` = nie |
 | `NAS_MOUNT` | Pfad des eingehängten Ziels auf dem Host |
 | `OUTPUT_DIR` | Ausgabeordner (unter `NAS_MOUNT`); ist `NAS_MOUNT` nicht gemountet, wird lokal in `data/output` gespeichert |
 | `AUTH_USER`/`AUTH_PASS` | Optionaler Passwortschutz (HTTP Basic). Ohne `AUTH_PASS` ist die Oberfläche offen |

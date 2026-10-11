@@ -1,0 +1,10 @@
+# Zusatz für Rechner mit NVIDIA-Karte: reicht die Karte per CDI in den Container (NVENC für die Konvertierung).
+# install.sh bindet die Datei automatisch ein (COMPOSE_FILE in .env), wenn Docker die Karte als CDI-Gerät nvidia.com/gpu=all kennt
+# (NVIDIA Container Toolkit; die Beschreibung legt dessen Dienst nvidia-cdi-refresh unter /var/run/cdi bzw. /etc/cdi an).
+# Abschalten: NVIDIA=no in .env, danach ./install.sh.
+services:
+  makemkv-web:
+    devices:
+      - nvidia.com/gpu=all
+    environment:
+      NVIDIA_DRIVER_CAPABILITIES: compute,video,utility

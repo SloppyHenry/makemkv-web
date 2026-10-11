@@ -18,6 +18,16 @@ if [ ! -f .env ]; then
 fi
 grep -q "^INSTANCE_NAME=" .env || echo "INSTANCE_NAME=$(hostname)" >> .env    # Name dieser Instanz (für Sperrdateien)
 grep -q "^RENDER_GID=" .env || echo "RENDER_GID=$(getent group render | cut -d: -f3 || echo 105)" >> .env   # Gruppe render (Hardware-Encoding über /dev/dri)
+# NVIDIA-Karte (NVENC): docker-compose.nvidia.yml einbinden, wenn Docker die Karte per CDI kennt; NVIDIA=no in .env schaltet ab
+nvidia_cdi() { { command -v nvidia-ctk >/dev/null && nvidia-ctk cdi list 2>/dev/null; cat /etc/cdi/*.yaml /var/run/cdi/*.yaml 2>/dev/null; } | grep -q "nvidia.com/gpu"; }
+want_nvidia="$(sed -n 's/^NVIDIA=//p' .env | tail -1)"
+sed -i.bak '/^COMPOSE_FILE=/d' .env && rm -f .env.bak
+if [ "${want_nvidia:-auto}" != "no" ] && nvidia_cdi; then
+  echo "COMPOSE_FILE=docker-compose.yml:docker-compose.nvidia.yml" >> .env
+  echo "→ NVIDIA-Karte gefunden – wird in den Container durchgereicht (NVENC)"
+elif [ "${want_nvidia:-auto}" = "yes" ]; then
+  echo "   NVIDIA=yes, aber Docker kennt keine NVIDIA-Karte (CDI) – NVIDIA Container Toolkit installieren"
+fi
 set -a; . ./.env; set +a
 mkdir -p data "${STAGING_PATH:-data/staging}"
 [ -d "${NAS_MOUNT:-/mnt/nas}" ] || { echo "→ Lege ${NAS_MOUNT:-/mnt/nas} an"; $SUDO mkdir -p "${NAS_MOUNT:-/mnt/nas}" 2>/dev/null || echo "   (Ordner fehlt – einmalig sudo ./scripts/setup-host.sh ausführen)"; }
