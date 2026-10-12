@@ -9,7 +9,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
 
-from app import ext
+from app import ext, scsi
 from app.config import DEV_DRIVE_DIR, HIDE_RE
 from app.makemkv import Parser, fetch_beta_key_sync, run_makemkv
 from app.state import beta, broadcast, drives, hidden_drives, settings
@@ -55,14 +55,20 @@ def drive_status(dev: str) -> str:
 
 
 def tray(dev: str, req: int):
+    """Schublade öffnen/schließen. Ein positives Ergebnis ist ein SCSI-Status (Laufwerk lehnt ab), kein Erfolg:
+    beim Auswerfen dann der SCSI-Weg wie bei `eject` (scsi.eject), beim Schließen ein Fehler."""
     if DEV_DRIVE_DIR:
         Path(dev).write_text("open" if req == CDROM_EJECT else "ready")
         return
     fd = os.open(dev, os.O_RDONLY | os.O_NONBLOCK)
     try:
-        fcntl.ioctl(fd, req, 0)
+        r = fcntl.ioctl(fd, req, 0)
     finally:
         os.close(fd)
+    if r and req == CDROM_EJECT:
+        scsi.eject(dev)
+    elif r:
+        raise OSError(f"Laufwerk lehnt ab (SCSI-Status {r})")
 
 
 # ---------------------------------------------------------------- Laufwerk
