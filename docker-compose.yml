@@ -11,7 +11,7 @@ services:
     ports:
       - "${PORT:-8780}:8780"
     user: "${PUID:-1000}:${PGID:-1000}"
-    group_add: ["${CDROM_GID:-24}", "${RENDER_GID:-105}"]   # cdrom; render (Hardware-Encoding über /dev/dri, falls vorhanden)
+    group_add: ["${CDROM_GID:-24}", "${RENDER_GID:-105}"]   # cdrom; render (hardware encoding via /dev/dri, if present)
     environment:
       TZ: ${TZ:-Europe/Berlin}
       INSTANCE_NAME: ${INSTANCE_NAME:-spindle}
@@ -22,11 +22,11 @@ services:
       AUTH_PASS: ${AUTH_PASS:-}
       OUTPUT_DIR: ${OUTPUT_DIR:-/mnt/nas/rips}
     volumes:
-      - /dev:/dev                                   # Laufwerk darf jederzeit neu angesteckt werden
+      - /dev:/dev                                   # the drive may be re-plugged at any time
       - ./data:/data
-      - ${STAGING_PATH:-./data/staging}:/data/staging   # Zwischenspeicher (am besten auf einer großen lokalen Platte)
+      - ${STAGING_PATH:-./data/staging}:/data/staging   # staging buffer (best on a large local disk)
       - ${NAS_MOUNT:-/mnt/nas}:${NAS_MOUNT:-/mnt/nas}:rslave
     device_cgroup_rules:
       - "b 11:* rmw"                                # /dev/sr*
       - "c 21:* rmw"                                # /dev/sg*
-      - "c 226:* rmw"                               # /dev/dri (Grafik-Hardware für das Hardware-Encoding, falls vorhanden)
+      - "c 226:* rmw"                               # /dev/dri (graphics hardware for hardware encoding, if present)

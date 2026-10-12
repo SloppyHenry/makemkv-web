@@ -1,39 +1,39 @@
 #!/usr/bin/env bash
-# Aktualisiert eine vorhandene Installation: sichert .env und data/*.json, merkt sich den Stand für den Rückweg,
-# holt den neuen Stand (git pull) und baut/startet neu (install.sh).
-# Die MakeMKV-EULA fragt install.sh ab; wer sie schon kennt, setzt ACCEPT_EULA=yes selbst.
-#   ./scripts/update.sh                 Standard (bricht ab, wenn gerade ein Rip/Scan läuft)
-#   FORCE=1 ./scripts/update.sh         auch bei laufendem Rip
-#   ./scripts/update.sh rollback        zurück auf den vor dem letzten Update gemerkten Stand
+# Updates an existing installation: backs up .env and data/*.json, remembers the current state for rollback,
+# fetches the new state (git pull) and rebuilds/restarts (install.sh).
+# install.sh asks for the MakeMKV EULA; if you already know it, set ACCEPT_EULA=yes yourself.
+#   ./scripts/update.sh                 default (aborts if a rip/scan is running)
+#   FORCE=1 ./scripts/update.sh         even while a rip is running
+#   ./scripts/update.sh rollback        back to the state remembered before the last update
 set -euo pipefail
 cd "$(dirname "$0")/.."
 BACKUPS=../spindle-backups
-[ -d ../makemkv-web-backups ] && [ ! -e "$BACKUPS" ] && mv ../makemkv-web-backups "$BACKUPS"   # alter Name
+[ -d ../makemkv-web-backups ] && [ ! -e "$BACKUPS" ] && mv ../makemkv-web-backups "$BACKUPS"   # old name
 mkdir -p "$BACKUPS"
 
 if [ "${1:-}" = "rollback" ]; then
-  [ -f "$BACKUPS/letzter-stand.txt" ] || { echo "Kein gemerkter Stand in $BACKUPS/letzter-stand.txt"; exit 1; }
+  [ -f "$BACKUPS/letzter-stand.txt" ] || { echo "No remembered state in $BACKUPS/letzter-stand.txt"; exit 1; }
   old="$(cat "$BACKUPS/letzter-stand.txt")"
-  echo "→ Zurück auf $old"
+  echo "→ Back to $old"
   git checkout -q "$old"
   ./install.sh
-  echo "Fertig. Die Sicherung von .env/data liegt in $BACKUPS (bei Bedarf von Hand zurückkopieren)."
+  echo "Done. The backup of .env/data is in $BACKUPS (copy it back by hand if needed)."
   exit 0
 fi
 
-git diff --quiet && git diff --cached --quiet || { echo "Es gibt lokale Änderungen – bitte erst klären (git status)."; exit 1; }
+git diff --quiet && git diff --cached --quiet || { echo "There are local changes – please sort them out first (git status)."; exit 1; }
 port="$(sed -n 's/^PORT=\([0-9]*\).*/\1/p' .env | head -1)"
 if [ "${FORCE:-0}" != "1" ] && curl -fs -m 5 "http://localhost:${port:-8780}/api/state" 2>/dev/null | grep -qE '"job": ?\{'; then
-  echo "Es läuft gerade ein Rip/Scan – später erneut ausführen (oder FORCE=1)."; exit 1
+  echo "A rip/scan is running right now – run again later (or FORCE=1)."; exit 1
 fi
 
 stamp="$(date +%Y%m%d-%H%M%S)"
 git rev-parse HEAD > "$BACKUPS/letzter-stand.txt"
 tar -czf "$BACKUPS/sicherung-$stamp.tgz" .env $(ls data/*.json 2>/dev/null)
-echo "→ Gesichert: $BACKUPS/sicherung-$stamp.tgz (Stand vorher: $(git rev-parse --short HEAD))"
+echo "→ Backed up: $BACKUPS/sicherung-$stamp.tgz (previous state: $(git rev-parse --short HEAD))"
 
 git fetch -q origin
 git checkout -q main
 git pull --ff-only origin main
-echo "→ Neuer Stand: $(git rev-parse --short HEAD)"
+echo "→ New state: $(git rev-parse --short HEAD)"
 ./install.sh

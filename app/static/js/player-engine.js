@@ -1,5 +1,5 @@
 // Player: Wiedergabe-Steuerung für ein <video> (Probe, Sitzung, Neustart beim Suchen, Untertitel, Wiederaufnahme). Keine Darstellung.
-// Server: app/player.py (/api/player/…). Konzept: docs/agenten/status-paket-d.md
+// Server: app/player.py (/api/player/…). Konzept: docs/agents/status-paket-d.md
 import { fmtT } from './player-ui.js';
 
 const KEY = 'player.v1';

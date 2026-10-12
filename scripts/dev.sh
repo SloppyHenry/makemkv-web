@@ -1,17 +1,17 @@
 #!/usr/bin/env bash
-# Lokale Entwicklungsumgebung (macOS/Linux) – ohne Docker, ohne echtes Laufwerk, ohne NAS.
+# Local development environment (macOS/Linux) – no Docker, no real drive, no NAS.
 #
 #   scripts/dev.sh [start] [--port 8790] [--name dev-a] [--peers "b=http://127.0.0.1:8791"] [--bg] [--reset] [--no-samples]
-#   scripts/dev.sh pair      zwei Instanzen nebeneinander: dev-a (8790) und dev-b (8791), gemeinsames Ausgabeziel, kennen sich per PEERS
-#   scripts/dev.sh stop      alle im Hintergrund gestarteten Instanzen beenden
-#   scripts/dev.sh status    laufende Instanzen zeigen
-#   scripts/dev.sh disc [--name dev-a] ready|empty|open    Disc im Attrappen-Laufwerk sr0 einlegen/entfernen/Schublade öffnen
+#   scripts/dev.sh pair      two instances side by side: dev-a (8790) and dev-b (8791), shared output target, know each other via PEERS
+#   scripts/dev.sh stop      stop all instances started in the background
+#   scripts/dev.sh status    show running instances
+#   scripts/dev.sh disc [--name dev-a] ready|empty|open    insert/remove a disc in the fake drive sr0 / open the tray
 #
-# Alles liegt in $MKW_DEV_DIR (Standard: $TMPDIR/spindle-dev):
-#   output/            gemeinsames „NAS“ mit Beispieldateien (alle Instanzen schreiben hierher, wie im echten Verbund)
-#   <name>/            data/ (config.json …), staging/ (Zwischenspeicher), drives/ (Attrappen-Laufwerke), dev.log, dev.pid
-# Nichts davon berührt echte Rechner oder das NAS. makemkvcon ist eine Attrappe (scripts/dev-bin).
-# Weitere Umgebungsvariablen: DEV_ASGI (Standard app.main:app), DEV_APP_DIR (Standard: Repo-Wurzel), DEV_RIP_SECONDS (Dauer eines Fake-Rips).
+# Everything lives in $MKW_DEV_DIR (default: $TMPDIR/spindle-dev):
+#   output/            shared "NAS" with sample files (all instances write here, like in a real cluster)
+#   <name>/            data/ (config.json …), staging/ (buffer), drives/ (fake drives), dev.log, dev.pid
+# None of this touches real machines or the NAS. makemkvcon is a stub (scripts/dev-bin).
+# More environment variables: DEV_ASGI (default app.main:app), DEV_APP_DIR (default: repo root), DEV_RIP_SECONDS (duration of a fake rip).
 set -euo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -30,27 +30,27 @@ while [ $# -gt 0 ]; do
     --no-samples) SAMPLES=0; shift ;;
     ready|empty|open) DISC_STATE="$1"; shift ;;
     -h|--help) sed -n '2,15p' "$0"; exit 0 ;;
-    *) echo "Unbekannte Option: $1 (siehe --help)" >&2; exit 2 ;;
+    *) echo "Unknown option: $1 (see --help)" >&2; exit 2 ;;
   esac
 done
 
-python_bin() {   # Python mit fastapi/uvicorn; sonst eigene virtuelle Umgebung unter $BASE/venv
+python_bin() {   # Python with fastapi/uvicorn; otherwise a private virtual environment under $BASE/venv
   local py="${PYTHON:-}" c
-  if [ -z "$py" ]; then   # die App braucht Python ab 3.10: erstes passende nehmen
+  if [ -z "$py" ]; then   # the app needs Python 3.10 or newer: take the first match
     for c in python3 python3.13 python3.12 python3.11 python3.10; do
       if command -v "$c" >/dev/null 2>&1 && "$c" -c 'import sys; sys.exit(sys.version_info < (3, 10))' 2>/dev/null; then py="$c"; break; fi
     done
-    [ -n "$py" ] || { echo "Python ab 3.10 nicht gefunden (PYTHON=… setzen)." >&2; exit 1; }
+    [ -n "$py" ] || { echo "Python 3.10 or newer not found (set PYTHON=…)." >&2; exit 1; }
   fi
   if "$py" -c 'import fastapi, uvicorn' 2>/dev/null; then echo "$py"; return; fi
   if [ ! -x "$BASE/venv/bin/python" ]; then
-    echo "Richte virtuelle Umgebung ein ($BASE/venv) …" >&2
+    echo "Setting up virtual environment ($BASE/venv) …" >&2
     mkdir -p "$BASE" && "$py" -m venv "$BASE/venv" && "$BASE/venv/bin/pip" install -q fastapi "uvicorn[standard]" >&2
   fi
   echo "$BASE/venv/bin/python"
 }
 
-prepare() {   # prepare <name>: Ordner, Attrappen-Laufwerk, Beispieldateien
+prepare() {   # prepare <name>: folders, fake drive, sample files
   local name="$1" inst="$BASE/$1"
   mkdir -p "$inst/data" "$inst/staging" "$inst/drives" "$BASE/output"
   [ -e "$inst/drives/sr0" ] || echo ready > "$inst/drives/sr0"
@@ -65,16 +65,16 @@ run_instance() {   # run_instance <name> <port> <peers> <bg>
   local name="$1" port="$2" peers="$3" bg="$4" inst="$BASE/$1" py
   py="$(python_bin)"
   prepare "$name"
-  if [ -f "$inst/dev.pid" ] && kill -0 "$(cat "$inst/dev.pid")" 2>/dev/null; then echo "$name läuft schon (PID $(cat "$inst/dev.pid")) → http://127.0.0.1:$port" >&2; return; fi
-  export DATA_DIR="$inst/data" STAGING_DIR="$inst/staging" OUTPUT_DIR="$BASE/output" FALLBACK_DIR="$BASE/output" OUTPUT_MOUNT="$BASE/kein-mount"
+  if [ -f "$inst/dev.pid" ] && kill -0 "$(cat "$inst/dev.pid")" 2>/dev/null; then echo "$name is already running (PID $(cat "$inst/dev.pid")) → http://127.0.0.1:$port" >&2; return; fi
+  export DATA_DIR="$inst/data" STAGING_DIR="$inst/staging" OUTPUT_DIR="$BASE/output" FALLBACK_DIR="$BASE/output" OUTPUT_MOUNT="$BASE/no-mount"
   export INSTANCE_NAME="$name" PEERS="$peers" HIDE_DRIVES="" DEV_DRIVE_DIR="$inst/drives" PATH="$REPO/scripts/dev-bin:$PATH" TZ="${TZ:-Europe/Berlin}"
   cd "${DEV_APP_DIR:-$REPO}"
   if [ "$bg" = 1 ]; then
     nohup "$py" -m uvicorn "${DEV_ASGI:-app.main:app}" --host 127.0.0.1 --port "$port" > "$inst/dev.log" 2>&1 &
     echo $! > "$inst/dev.pid"
-    echo "$name gestartet (PID $!) → http://127.0.0.1:$port   Protokoll: $inst/dev.log" >&2
+    echo "$name started (PID $!) → http://127.0.0.1:$port   Log: $inst/dev.log" >&2
   else
-    echo "$name → http://127.0.0.1:$port   (Ordner: $inst, Ausgabe: $BASE/output)  Strg+C beendet" >&2
+    echo "$name → http://127.0.0.1:$port   (folder: $inst, output: $BASE/output)  Ctrl+C stops" >&2
     exec "$py" -m uvicorn "${DEV_ASGI:-app.main:app}" --host 127.0.0.1 --port "$port"
   fi
 }
@@ -84,18 +84,18 @@ case "$CMD" in
   pair)
     run_instance dev-a 8790 "dev-b=http://127.0.0.1:8791" 1
     run_instance dev-b 8791 "dev-a=http://127.0.0.1:8790" 1
-    echo "Beide laufen im Hintergrund; beenden mit: scripts/dev.sh stop" >&2 ;;
+    echo "Both run in the background; stop with: scripts/dev.sh stop" >&2 ;;
   stop)
     for pidf in "$BASE"/*/dev.pid; do
       [ -f "$pidf" ] || continue
-      pid="$(cat "$pidf")"; kill "$pid" 2>/dev/null && echo "beendet: $(basename "$(dirname "$pidf")") (PID $pid)" || true; rm -f "$pidf"
+      pid="$(cat "$pidf")"; kill "$pid" 2>/dev/null && echo "stopped: $(basename "$(dirname "$pidf")") (PID $pid)" || true; rm -f "$pidf"
     done ;;
   status)
     for pidf in "$BASE"/*/dev.pid; do
       [ -f "$pidf" ] || continue
-      if kill -0 "$(cat "$pidf")" 2>/dev/null; then echo "läuft: $(basename "$(dirname "$pidf")") (PID $(cat "$pidf"))"; else echo "tot: $(basename "$(dirname "$pidf")")"; fi
+      if kill -0 "$(cat "$pidf")" 2>/dev/null; then echo "running: $(basename "$(dirname "$pidf")") (PID $(cat "$pidf"))"; else echo "dead: $(basename "$(dirname "$pidf")")"; fi
     done ;;
   disc)
-    [ -n "$DISC_STATE" ] || { echo "Zustand fehlt: ready | empty | open" >&2; exit 2; }
+    [ -n "$DISC_STATE" ] || { echo "State missing: ready | empty | open" >&2; exit 2; }
     mkdir -p "$BASE/$NAME/drives" && echo "$DISC_STATE" > "$BASE/$NAME/drives/sr0" && echo "$NAME: sr0 = $DISC_STATE" ;;
 esac

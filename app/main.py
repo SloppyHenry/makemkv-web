@@ -6,7 +6,7 @@
 - Ausgabe nach /mnt/nas/rips, solange eingehängt (sonst lokaler Fallback)
 
 Diese Datei erzeugt nur die App, bindet die Router ein und startet die Hintergrundaufgaben.
-Erweiterungspunkte: app/ext.py, Beschreibung in docs/agenten/schnittstellen.md
+Erweiterungspunkte: app/ext.py, Beschreibung in docs/agents/schnittstellen.md
 """
 import asyncio
 import importlib

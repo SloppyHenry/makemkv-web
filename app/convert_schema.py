@@ -26,7 +26,7 @@ LANGS_RE = re.compile(r"[a-z]{3}(,[a-z]{3})*")
 CROP_RE = re.compile(r"\d{1,5}:\d{1,5}:\d{1,5}:\d{1,5}")
 
 # Eigenschaften je Codec. q = (schlechteste, beste) Qualitätszahl (CRF/RF/QP): Auf dieser Strecke liegt der Regler „kleiner ← → besser“.
-# Die Skalen sind so gewählt, dass gleiche Reglerstellung ungefähr gleiche Wahrnehmung ergibt (siehe docs/agenten/status-paket-f.md).
+# Die Skalen sind so gewählt, dass gleiche Reglerstellung ungefähr gleiche Wahrnehmung ergibt (siehe docs/agents/status-paket-f.md).
 # rel = relative Rechenzeit je Stufe (medium = 1), bpp = Bits je Pixel relativ zu x265 bei gleicher Wahrnehmung.
 CODECS = {
     "x265": {"label": "H.265 / HEVC (x265)", "encoder": "libx265", "unit": "RF", "q": (30, 14), "qlim": (8, 40), "speeds": list(X265_PRESETS),

@@ -2,7 +2,7 @@
 
 Ablauf: `POST /session` (oder `GET /probe` zum Anzeigen) -> die Oberfläche bekommt entweder die Adresse der Originaldatei (`/file`, HTTP-Range, direkt)
 oder die eines ffmpeg-Stroms (`/stream/{id}`, fragmentiertes MP4). Suchen = neue Sitzung mit anderem `start`.
-Konzept und Begründung: docs/agenten/status-paket-d.md
+Konzept und Begründung: docs/agents/status-paket-d.md
 """
 import asyncio
 import json

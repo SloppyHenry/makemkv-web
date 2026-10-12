@@ -1,7 +1,7 @@
-# Zusatz für Rechner mit NVIDIA-Karte: reicht die Karte per CDI in den Container (NVENC für die Konvertierung).
-# install.sh bindet die Datei automatisch ein (COMPOSE_FILE in .env), wenn Docker die Karte als CDI-Gerät nvidia.com/gpu=all kennt
-# (NVIDIA Container Toolkit; die Beschreibung legt dessen Dienst nvidia-cdi-refresh unter /var/run/cdi bzw. /etc/cdi an).
-# Abschalten: NVIDIA=no in .env, danach ./install.sh.
+# Add-on for machines with an NVIDIA card: passes the card into the container via CDI (NVENC for conversion).
+# install.sh includes this file automatically (COMPOSE_FILE in .env) if Docker knows the card as the CDI device nvidia.com/gpu=all
+# (NVIDIA Container Toolkit; its nvidia-cdi-refresh service writes the description to /var/run/cdi or /etc/cdi).
+# To turn it off: NVIDIA=no in .env, then ./install.sh.
 services:
   spindle:
     devices:

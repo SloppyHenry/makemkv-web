@@ -1,7 +1,7 @@
 """Erweiterungspunkte: Hier melden sich Module an, ohne Kernmodule zu ändern.
 
 Dieses Modul importiert nichts aus `app`, damit jedes andere Modul es gefahrlos laden kann.
-Beschreibung und Beispiele: docs/agenten/schnittstellen.md
+Beschreibung und Beispiele: docs/agents/schnittstellen.md
 """
 import asyncio
 import inspect

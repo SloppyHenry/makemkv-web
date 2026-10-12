@@ -1,7 +1,7 @@
 FROM debian:trixie-slim AS build
-# MKV_VERSION=latest -> neueste Version wird von makemkv.com/download ermittelt
+# MKV_VERSION=latest -> the newest version is looked up on makemkv.com/download
 ARG MKV_VERSION=latest
-# MakeMKV-EULA (https://www.makemkv.com/eula/) muss bewusst mit ACCEPT_EULA=yes akzeptiert werden
+# The MakeMKV EULA (https://www.makemkv.com/eula/) must be accepted deliberately with ACCEPT_EULA=yes
 ARG ACCEPT_EULA=no
 RUN apt-get update && apt-get install -y --no-install-recommends \
       build-essential pkg-config ca-certificates curl \
@@ -9,7 +9,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /src
 RUN set -e; \
-    [ "$ACCEPT_EULA" = "yes" ] || { echo "FEHLER: MakeMKV-EULA nicht akzeptiert (--build-arg ACCEPT_EULA=yes)"; exit 1; }; \
+    [ "$ACCEPT_EULA" = "yes" ] || { echo "ERROR: MakeMKV EULA not accepted (--build-arg ACCEPT_EULA=yes)"; exit 1; }; \
     v="$MKV_VERSION"; \
     if [ "$v" = latest ]; then \
       v=$(curl -fsSL https://www.makemkv.com/download/ | grep -oE 'MakeMKV [0-9]+\.[0-9]+\.[0-9]+ for Windows' | head -1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+'); \

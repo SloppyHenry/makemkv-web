@@ -1,5 +1,5 @@
 // Erweiterungspunkte der Oberfläche (ohne Abhängigkeiten, von allen Modulen nutzbar).
-// Beschreibung und Beispiele: docs/agenten/schnittstellen.md
+// Beschreibung und Beispiele: docs/agents/schnittstellen.md
 const views = [], panels = [], sections = [], actions = [], stateFns = [], handlers = {};
 let current = null, lastState = null;
 

@@ -1,4 +1,4 @@
-"""Mitgelieferte Presets (nicht löschbar). Die Begründung der Werte steht in `why` und in docs/agenten/status-paket-f.md."""
+"""Mitgelieferte Presets (nicht löschbar). Die Begründung der Werte steht in `why` und in docs/agents/status-paket-f.md."""
 from app.convert_schema import clean_v2
 
 STD = "aq-mode=3:no-sao=1"        # bisheriger Standard: aq-mode 3 schont dunkle Szenen (weniger Blockbildung), SAO aus erhält feine Details
