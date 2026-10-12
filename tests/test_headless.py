@@ -191,6 +191,21 @@ class ChooseTest(unittest.TestCase):
         sk = dict(plan.skips({"type": "Blu-ray disc", "titles": titles}, {"picks": d["picks"], "mode": "series", "source": "Struktur der Disc"}))
         self.assertEqual((sk[7], sk[1]), ("Play-All, 136 min", "Extra, 21 min"))
 
+    def test_bonus_playall_next_to_movie(self):
+        """Jumanji (vierstein): Titel 5 (45 min) = Titel 3 + 4 ist ein Bonus-Play-All, kein Serien-Play-All – der Film (104 min) zählt."""
+        titles = [T(0, 300, 0.3, segments="10"), T(1, 6240, 30, segments="1,2,3"), T(2, 1380, 2, segments="20"), T(3, 1320, 2, segments="21"),
+                  T(4, 2700, 4, segments="20,21"), T(5, 840, 1, segments="30"), T(6, 180, 0.2, segments="31"), T(13, 1200, 1.5, segments="40")]
+        d = choose.decide({"type": "Blu-ray disc", "name": "Jumanji (1995) - Special Edition", "titles": titles}, content_bytes=40e9)
+        self.assertEqual((d["mode"], d["picks"], d["playall"]), ("movie", [1], [4]))
+
+    def test_two_movie_versions_with_bonus_playall(self):
+        """Sherlock Holmes 2 (vierstein): zwei gleich lange Fassungen (129 min) und ein Play-All aus 7 kurzen Extras (35 min)."""
+        clips = [T(i, 300, 0.4, segments=str(100 + i)) for i in range(26, 32)] + [T(7, 300, 0.4, segments="107")]
+        titles = [T(0, 2100, 3, segments="107," + ",".join(str(100 + i) for i in range(26, 32))), T(1, 7740, 35, segments="1,2"),
+                  T(2, 7745, 36, segments="1,3"), T(10, 1380, 2, segments="50"), T(16, 900, 1, segments="51")] + clips
+        d = choose.decide({"type": "Blu-ray disc", "name": "Sherlock Holmes: A Game of Shadows", "titles": titles}, content_bytes=48e9)
+        self.assertEqual((d["mode"], d["picks"], d["playall"]), ("movie", [1, 2], [0]))
+
     def test_tmdb_hint_vetoes_movie(self):
         d = choose.decide({"type": "Blu-ray disc", "name": "FILM", "titles": [T(0, 7200, 30), T(1, 600, 1)]}, content_bytes=40e9, hint="series")
         self.assertEqual(d["mode"], "unsure")

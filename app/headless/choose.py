@@ -91,38 +91,45 @@ def decide(disc: dict, content_bytes: int = 0, hint: str = "", prep: dict | None
     pr = prep or prepare(disc)
     titles, rest, det, role, playall, dropped = pr["titles"], pr["rest"], pr["det"], pr["role"], pr["playall"], pr["dropped"]
     reasons = list(pr["reasons"])
+    by_id = {t["id"]: t for t in titles}
     longs = [t for t in rest if t["duration"] >= MOVIE_MIN]
-    eps = [t for t in rest if role.get(t["id"], {}).get("role") == "episode" and t["duration"] < MOVIE_MIN]
-    mids = [t for t in rest if EP_MIN <= t["duration"] <= EP_MAX and t not in longs]
-    marker = bool(det.get("season") and det["kind"] == "series") or any(
-        detect.analyze_name(n or "")[k] for n in (disc.get("name"), disc.get("volume")) for k in ("season", "disc"))
-    mode, picks = "unsure", []
     mem = [t for t in rest if t["id"] in pr.get("members", [])]
-    if len(mem) >= 2 and hint != "movie" and all(t["duration"] < MOVIE_MIN for t in mem):
+    # Ein Play-All, das kürzer ist als der längste Titel, fasst Extras zusammen (Jumanji: 45 min Bonus neben 104 min Film)
+    bonus = bool(mem and longs) and max(t["duration"] for t in longs) > max(by_id[i]["duration"] for i in playall)
+    eps = [t for t in rest if role.get(t["id"], {}).get("role") == "episode" and t["duration"] < MOVIE_MIN]
+    mids = [t for t in rest if EP_MIN <= t["duration"] <= EP_MAX and t not in longs and not (bonus and t in mem)]
+    series_like = len(mids) >= 3 and _consistent([t["duration"] for t in mids])
+    same = 0 < len(longs) <= 3 and max(t["duration"] for t in longs) <= 1.03 * min(t["duration"] for t in longs)   # Fassungen eines Films
+    marker = any(detect.analyze_name(n or "")[k] for n in (disc.get("name"), disc.get("volume")) for k in ("season", "disc"))   # nur der Name
+    mode, picks = "unsure", []
+    if len(mem) >= 2 and hint != "movie" and not bonus and all(t["duration"] < MOVIE_MIN for t in mem):
         mode, picks = "series", [t["id"] for t in mem]
         reasons.insert(0, f"Serie: {len(mem)} Folgen aus dem Play-All")
     elif (det["kind"] == "series" and len(eps) >= 2 and (_consistent([t["duration"] for t in eps]) or len(eps) >= 3)
             and not longs and hint != "movie"):
         mode, picks = "series", [t["id"] for t in eps]
         reasons.insert(0, f"Serie: {len(eps)} Folgen à {int(min(t['duration'] for t in eps) // 60)}–{int(max(t['duration'] for t in eps) // 60)} min")
-    elif len(longs) == 1 and not (len(mids) >= 3 and _consistent([t["duration"] for t in mids])) and not marker and hint != "series":
-        mode, picks = "movie", [longs[0]["id"]]
-        reasons.insert(0, f"Film: ein Haupttitel ({longs[0]['duration_text'] or int(longs[0]['duration'] // 60)}), Rest kürzer")
+    elif same and not series_like and not marker and hint != "series":
+        mode, picks = "movie", [t["id"] for t in longs]
+        txt = longs[0]["duration_text"] or int(longs[0]["duration"] // 60)
+        reasons.insert(0, f"Film: ein Haupttitel ({txt}), Rest kürzer" if len(longs) == 1
+                       else f"Film: {len(longs)} gleich lange Fassungen des Haupttitels ({txt}), Rest kürzer")
+        if bonus:
+            reasons.append("Play-All kürzer als der Film – fasst Extras zusammen")
     else:
         why = []
-        if len(longs) > 1:
-            why.append(f"{len(longs)} lange Titel")
-        if longs and len(mids) >= 3 and _consistent([t["duration"] for t in mids]):
+        if len(longs) > 1 and not same:
+            why.append(f"{len(longs)} unterschiedlich lange Titel")
+        if longs and series_like:
             why.append("Hauptfilm und mehrere gleich lange Titel")
         if not longs and len(eps) < 2:
             why.append("weder Hauptfilm noch Folgen erkennbar")
-        if marker and longs and len(longs) == 1:
+        if marker and longs and same:
             why.append("Name deutet auf Serie")
         if hint:
             why.append(f"TMDB kennt den Namen als {'Film' if hint == 'movie' else 'Serie'}")
         reasons.insert(0, "Unsicher" + (f": {', '.join(why)}" if why else ""))
         picks = [t["id"] for t in rest]
-    by_id = {t["id"]: t for t in titles}
     total = sum(by_id[i]["bytes"] for i in picks)
     limit = int(LIMIT_FACTOR * (content_bytes or CAPACITY[disc_kind(disc)]))
     if mode == "unsure" and total > limit:
