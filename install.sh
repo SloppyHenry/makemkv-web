@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Installiert/aktualisiert MakeMKV-Web: Kernelmodule, .env, Docker-Image (neueste MakeMKV-Version), Start.
+# Installiert/aktualisiert Spindle: Kernelmodule, .env, Docker-Image (neueste MakeMKV-Version), Start.
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -51,8 +51,11 @@ if [ "${FORCE:-0}" != "1" ] && curl -fs -m 5 "http://localhost:${PORT:-8780}/api
   exit 1
 fi
 
+# Umbenennung makemkv-web → spindle: den alten Container ablösen (Daten liegen in ./data und bleiben erhalten)
+docker rm -f makemkv-web >/dev/null 2>&1 && echo "→ Alten Container makemkv-web entfernt" || true
+
 echo "→ Baue Image (lädt die neueste MakeMKV-Version) …"
 docker compose build --pull
 docker compose up -d
-echo "→ MakeMKV-Version im Image: $(docker run --rm --entrypoint cat makemkv-web /etc/makemkv-version)"
+echo "→ MakeMKV-Version im Image: $(docker run --rm --entrypoint cat spindle /etc/makemkv-version)"
 echo "Fertig: http://$(hostname -I 2>/dev/null | awk '{print $1}'):${PORT:-8780}"

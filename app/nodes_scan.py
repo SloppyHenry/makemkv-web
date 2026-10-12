@@ -34,12 +34,15 @@ CONCURRENCY = 96
 scan: dict = {"running": False, "done": 0, "total": 0, "found": [], "started": 0, "finished": 0, "nets": [], "error": "", "cancel": False}
 
 
+APP_NAMES = ("spindle", "makemkv-web")   # „makemkv-web“: Rechner, die noch unter dem alten Namen laufen
+
+
 @router.get("/hello")
 def hello():
     """Antwort auf die Suche. Nur im Verbund und nur, wenn „auffindbar“ an ist; sonst tut der Rechner, als gäbe es das nicht."""
     if not (store.active() and store.cfg()["discoverable"]):
         raise HTTPException(404, "Not found")
-    return {"app": "makemkv-web", "id": store.self_id(), "name": store.self_name(), "instance": INSTANCE, "version": VERSION, "features": FEATURES,
+    return {"app": "spindle", "id": store.self_id(), "name": store.self_name(), "instance": INSTANCE, "version": VERSION, "features": FEATURES,
             "cores": os.cpu_count() or 1, "mem": store.mem_total(), "pairing": True}
 
 
@@ -126,7 +129,7 @@ async def probe(host: str, port: int, sem: asyncio.Semaphore):
         w = None
         try:
             r, w = await asyncio.wait_for(asyncio.open_connection(host, port), 0.7)
-            w.write(f"GET /api/discovery/hello HTTP/1.0\r\nHost: {host}:{port}\r\nUser-Agent: makemkv-web-scan\r\n\r\n".encode())
+            w.write(f"GET /api/discovery/hello HTTP/1.0\r\nHost: {host}:{port}\r\nUser-Agent: spindle-scan\r\n\r\n".encode())
             await w.drain()
             raw = b""
             async def _all():
@@ -141,7 +144,7 @@ async def probe(host: str, port: int, sem: asyncio.Semaphore):
             if b" 200 " not in head.split(b"\r\n", 1)[0]:
                 return None
             d = json.loads(body)
-            return {**d, "url": f"http://{host}:{port}"} if isinstance(d, dict) and d.get("app") == "makemkv-web" else None
+            return {**d, "url": f"http://{host}:{port}"} if isinstance(d, dict) and d.get("app") in APP_NAMES else None
         except Exception:  # noqa: BLE001
             return None
         finally:

@@ -1,4 +1,4 @@
-# MakeMKV-Web
+# Spindle
 
 Headless [MakeMKV](https://www.makemkv.com/) mit Browser-Oberfläche. USB-/SATA-Laufwerk an einen Server anstecken,
 Disc einlegen – sie wird live erkannt, automatisch analysiert, und alles Weitere (Titel wählen, rippen, auswerfen)
@@ -22,14 +22,14 @@ passiert im Browser.
 - Übersteht USB-Resets des Laufwerks (wartet und wiederholt den Schritt automatisch)
 - Headless-Modus: Disc einlegen, fertig – die richtigen Titel (Hauptfilm bzw. Folgen) werden über das eigene Gedächtnis (früher von Hand gewählt), [TheDiscDB](https://thediscdb.com), TMDB-Laufzeiten oder die Struktur der Disc bestimmt, gerippt, und die Disc wird ausgeworfen; unbekannte Discs lassen sich an TheDiscDB melden
 
-![MakeMKV-Web](docs/screenshot.png)
+![Spindle](docs/screenshot.png)
 
 ## Installation
 
 Voraussetzung: Linux mit Docker + Compose-Plugin.
 
 ```bash
-git clone <dieses Repo> makemkv-web && cd makemkv-web
+git clone <dieses Repo> spindle && cd spindle
 ./install.sh
 ```
 

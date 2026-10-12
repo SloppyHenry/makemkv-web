@@ -97,7 +97,7 @@ async def probe_url(url: str) -> dict:
     except Exception as e:  # noqa: BLE001
         return {"ok": False, "error": f"keine Antwort ({type(e).__name__}: {e})"[:160]}
     if not (isinstance(d.get("drives"), list) and isinstance(d.get("output"), dict)):
-        return {"ok": False, "error": "Unter dieser Adresse läuft kein MakeMKV-Web."}
+        return {"ok": False, "error": "Unter dieser Adresse läuft kein Spindle."}
     caps, node = d.get("capabilities") or {}, d.get("node") or {}
     return {"ok": True, "ms": round((time.time() - t) * 1000), "id": node.get("id", ""), "name": node.get("name") or (d.get("capacity") or {}).get("instance", ""),
             "version": caps.get("version", ""), "legacy": not caps.get("nodes"), "mode": node.get("mode", ""),

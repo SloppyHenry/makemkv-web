@@ -68,7 +68,7 @@ def build(disc: dict, ids: dict, raw: list[str], req: ContribReq) -> tuple[dict,
                        "segment_map": seg or None, "title_type": c.type,
                        "season": (c.season or (str(req.season) if req.season and c.type == "Episode" else "")) or None,
                        "episode": c.episode or None, "match_confidence": 1.0, "match_source": "manual"})
-    payload = {"engram_version": f"makemkv-web {VERSION}", "export_version": "1", "exported_at": datetime.now(timezone.utc).isoformat(),
+    payload = {"engram_version": f"spindle {VERSION}", "export_version": "1", "exported_at": datetime.now(timezone.utc).isoformat(),
                "contribution_tier": 1,
                "disc": {"content_hash": ids["content_hash"], "volume_label": disc.get("volume") or disc.get("name") or "",
                         "content_type": content_type(disc), "disc_number": req.disc_number},
@@ -81,7 +81,7 @@ def build(disc: dict, ids: dict, raw: list[str], req: ContribReq) -> tuple[dict,
 
 def _post(url: str, data: bytes, ctype: str, timeout: float = 30) -> tuple[int, bytes]:
     """Einzige Stelle mit Netzwerkzugriff (Tests ersetzen sie)."""
-    r = urllib.request.Request(url, data=data, method="POST", headers={"Content-Type": ctype, "User-Agent": "makemkv-web", "Accept": "application/json"})
+    r = urllib.request.Request(url, data=data, method="POST", headers={"Content-Type": ctype, "User-Agent": "spindle", "Accept": "application/json"})
     try:
         with urllib.request.urlopen(r, timeout=timeout) as resp:
             return resp.status, resp.read()

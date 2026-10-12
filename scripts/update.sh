@@ -7,7 +7,8 @@
 #   ./scripts/update.sh rollback        zurück auf den vor dem letzten Update gemerkten Stand
 set -euo pipefail
 cd "$(dirname "$0")/.."
-BACKUPS=../makemkv-web-backups
+BACKUPS=../spindle-backups
+[ -d ../makemkv-web-backups ] && [ ! -e "$BACKUPS" ] && mv ../makemkv-web-backups "$BACKUPS"   # alter Name
 mkdir -p "$BACKUPS"
 
 if [ "${1:-}" = "rollback" ]; then

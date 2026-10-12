@@ -35,7 +35,7 @@ def poster_url(path: str | None, size: str = "w342") -> str:
 
 def _http_get(url: str, headers: dict, timeout: float = 10) -> tuple[int, bytes]:
     """Einzige Stelle mit Netzwerkzugriff (Tests ersetzen sie)."""
-    req = urllib.request.Request(url, headers={"User-Agent": "makemkv-web", "Accept": "application/json", **headers})
+    req = urllib.request.Request(url, headers={"User-Agent": "spindle", "Accept": "application/json", **headers})
     try:
         with urllib.request.urlopen(req, timeout=timeout) as r:
             return r.status, r.read()

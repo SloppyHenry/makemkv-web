@@ -13,7 +13,7 @@ OUT_PREFERRED = Path(os.environ.get("OUTPUT_DIR", "/mnt/nas/rips"))
 OUT_MOUNT = os.environ.get("OUTPUT_MOUNT", "/mnt/nas")
 OUT_FALLBACK = Path(os.environ.get("FALLBACK_DIR", str(DATA / "output")))
 INSTANCE = os.environ.get("INSTANCE_NAME") or socket.gethostname()
-PEERS_RAW = os.environ.get("PEERS", "")      # „name=http://host:8780,name=…“ – die anderen MakeMKV-Web-Rechner (für die Übergabe)
+PEERS_RAW = os.environ.get("PEERS", "")      # „name=http://host:8780,name=…“ – die anderen Spindle-Rechner (für die Übergabe)
 MKV_DIR = DATA / ".MakeMKV"
 CONFIG = DATA / "config.json"
 BETAKEY = DATA / "betakey.json"

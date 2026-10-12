@@ -1,4 +1,4 @@
-"""MakeMKV-Web: headless MakeMKV mit Browser-Oberfläche.
+"""Spindle: headless MakeMKV mit Browser-Oberfläche.
 
 - erkennt Laufwerke (/dev/sr*) und eingelegte Discs live (ioctl, kein Eingriff in laufende Jobs)
 - analysiert neu eingelegte Discs automatisch (makemkvcon info)
@@ -21,7 +21,7 @@ from app.config import DATA, FEATURES, VERSION
 # Fehlt ein Modul, wird es übersprungen; ein Fehler darin bricht den Start ab (damit er nicht untergeht).
 OPTIONAL_MODULES = ["app.nodes", "app.player", "app.media", "app.convert_presets", "app.headless"]
 
-app = FastAPI(title="MakeMKV-Web")
+app = FastAPI(title="Spindle")
 app.middleware("http")(auth.basic_auth)
 
 ext.register_capability("version", VERSION)

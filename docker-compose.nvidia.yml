@@ -3,7 +3,7 @@
 # (NVIDIA Container Toolkit; die Beschreibung legt dessen Dienst nvidia-cdi-refresh unter /var/run/cdi bzw. /etc/cdi an).
 # Abschalten: NVIDIA=no in .env, danach ./install.sh.
 services:
-  makemkv-web:
+  spindle:
     devices:
       - nvidia.com/gpu=all
     environment:

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Einmalige Einrichtung eines Rechners für MakeMKV Web – der Teil, der root braucht (Debian/Ubuntu):
+# Einmalige Einrichtung eines Rechners für Spindle – der Teil, der root braucht (Debian/Ubuntu):
 # Docker + Compose, Kernelmodule für das Laufwerk, Ziel-Laufwerk (NFS) mit Wiederholung beim Booten,
 # Firewall-Freigabe für das LAN. Mehrfaches Ausführen ist unschädlich.
 #
@@ -9,7 +9,7 @@
 # NAS_MOUNT   Einhängepunkt (Standard /mnt/datenstein)
 # LAN         Netz, das die Weboberfläche erreichen darf (leer = keine Firewall-Regel)
 # PORT        Port der Weboberfläche (Standard 8780)
-# Danach als normaler Benutzer: git clone … && cd makemkv-web && ./install.sh
+# Danach als normaler Benutzer: git clone … && cd spindle && ./install.sh
 set -euo pipefail
 
 [ "$(id -u)" -eq 0 ] || { echo "Bitte mit sudo ausführen."; exit 1; }
@@ -64,7 +64,7 @@ fi
 
 if [ -n "$LAN" ] && command -v ufw >/dev/null && ufw status | grep -q "Status: active"; then
   info "Firewall: Port $PORT für $LAN freigeben"
-  ufw allow from "$LAN" to any port "$PORT" proto tcp comment "makemkv-web (LAN)"
+  ufw allow from "$LAN" to any port "$PORT" proto tcp comment "spindle (LAN)"
 fi
 
-info "Fertig. Weiter als normaler Benutzer: git clone https://github.com/SloppyHenry/makemkv-web && cd makemkv-web && ./install.sh"
+info "Fertig. Weiter als normaler Benutzer: git clone https://github.com/SloppyHenry/spindle && cd spindle && ./install.sh"

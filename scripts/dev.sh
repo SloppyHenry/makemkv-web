@@ -7,7 +7,7 @@
 #   scripts/dev.sh status    laufende Instanzen zeigen
 #   scripts/dev.sh disc [--name dev-a] ready|empty|open    Disc im Attrappen-Laufwerk sr0 einlegen/entfernen/Schublade öffnen
 #
-# Alles liegt in $MKW_DEV_DIR (Standard: $TMPDIR/makemkv-web-dev):
+# Alles liegt in $MKW_DEV_DIR (Standard: $TMPDIR/spindle-dev):
 #   output/            gemeinsames „NAS“ mit Beispieldateien (alle Instanzen schreiben hierher, wie im echten Verbund)
 #   <name>/            data/ (config.json …), staging/ (Zwischenspeicher), drives/ (Attrappen-Laufwerke), dev.log, dev.pid
 # Nichts davon berührt echte Rechner oder das NAS. makemkvcon ist eine Attrappe (scripts/dev-bin).
@@ -15,7 +15,7 @@
 set -euo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-BASE="${MKW_DEV_DIR:-${TMPDIR:-/tmp}/makemkv-web-dev}"
+BASE="${MKW_DEV_DIR:-${TMPDIR:-/tmp}/spindle-dev}"
 BASE="${BASE%/}"
 CMD="start"; PORT=8790; NAME="dev-a"; PEERS_ARG=""; BG=0; RESET=0; SAMPLES=1; DISC_STATE=""
 

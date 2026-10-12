@@ -1,12 +1,12 @@
 services:
-  makemkv-web:
+  spindle:
     build:
       context: .
       args:
         MKV_VERSION: ${MKV_VERSION:-latest}
         ACCEPT_EULA: ${ACCEPT_EULA:-no}
-    image: makemkv-web
-    container_name: makemkv-web
+    image: spindle
+    container_name: spindle
     restart: unless-stopped
     ports:
       - "${PORT:-8780}:8780"
@@ -14,7 +14,7 @@ services:
     group_add: ["${CDROM_GID:-24}", "${RENDER_GID:-105}"]   # cdrom; render (Hardware-Encoding über /dev/dri, falls vorhanden)
     environment:
       TZ: ${TZ:-Europe/Berlin}
-      INSTANCE_NAME: ${INSTANCE_NAME:-makemkv-web}
+      INSTANCE_NAME: ${INSTANCE_NAME:-spindle}
       PEERS: ${PEERS:-}
       HIDE_DRIVES: ${HIDE_DRIVES-cdemu|virtual|qemu|vbox}
       OUTPUT_MOUNT: ${NAS_MOUNT:-/mnt/nas}

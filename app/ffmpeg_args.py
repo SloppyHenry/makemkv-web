@@ -24,7 +24,7 @@ SAMPLE_INFO = {"streams": [{"codec_type": "video", "codec_name": "h264", "width"
 
 
 def mark(cfg: dict) -> str:
-    """Kennzeichnung im Container: Diese Datei wurde von MakeMKV-Web konvertiert (die Bibliothek zeigt sie dann als „konvertiert“)."""
+    """Kennzeichnung im Container: Diese Datei wurde von Spindle konvertiert (die Bibliothek zeigt sie dann als „konvertiert“)."""
     return "MKW_CONVERTED=" + describe(cfg)[:150]
 
 

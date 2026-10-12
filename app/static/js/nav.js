@@ -90,5 +90,5 @@ onState(S => {
   renderTabs();
   let pct = null;
   for(const x of S.drives) if(x.job && x.job.kind !== 'scan') pct = Math.round((x.job.overall || 0) * 100);
-  document.title = pct !== null ? `${pct} % – MakeMKV Web` : 'MakeMKV Web';
+  document.title = pct !== null ? `${pct} % – Spindle` : 'Spindle';
 });

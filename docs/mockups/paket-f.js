@@ -237,7 +237,7 @@ function libBar() {
 }
 function renderLib() {
   const A = $('#libA'); if (A) {
-    A.innerHTML = `<div class="app-top"><div class="brand"><span class="brand-mark"></span>MakeMKV Web</div><div class="app-nav"><span>Laufwerke</span><span class="on">Bibliothek</span><span>Einstellungen</span></div></div>
+    A.innerHTML = `<div class="app-top"><div class="brand"><span class="brand-mark"></span>Spindle</div><div class="app-nav"><span>Laufwerke</span><span class="on">Bibliothek</span><span>Einstellungen</span></div></div>
     <div class="lib-head"><h2>Bibliothek</h2><span class="pill">/mnt/datenstein/dump</span><div class="lib-stat"><div>Frei im Ziel<br><b>2,4 TB</b> von 20 TB<div class="lib-meter"><i style="width:88%"></i></div></div><div>Originale<br><b>${fmtG(FILES.filter(f => f.st === 'orig').reduce((a, f) => a + f.size * GB, 0))}</b> in ${cnt('orig')} Dateien</div><div class="save">Mögliche Einsparung<br><b>≈ ${fmtG(FILES.filter(f => f.st === 'orig').reduce((a, f) => a + (f.size - estF(f)) * GB, 0))}</b></div></div></div>
     <div class="lib-cols ${fl.cvOpen || fl.cur ? '' : 'nodetail'}"><aside class="lib-filter ${fl.filt ? 'open' : ''}">${filterHtml()}</aside>
     <div class="lib-main"><div class="lib-tools"><button class="secondary lib-filterbtn" data-filt>☰ Filter</button><input class="input" placeholder="Filtern …"><div class="lib-view"><button class="${fl.view === 'list' ? 'on' : ''}" data-view="list">☰ Liste</button><button class="${fl.view === 'grid' ? 'on' : ''}" data-view="grid">▦ Raster</button></div><span class="muted" style="font-size:11px">12 Dateien · 0 werden geprüft</span><span style="flex:1"></span><button class="secondary" data-all>Alle „Original“ wählen</button></div>${listHtml(fl.view)}</div>
@@ -247,7 +247,7 @@ function renderLib() {
   }
   const B = $('#libB'); if (B) {
     const fs = visible();
-    B.innerHTML = `<div class="app-top"><div class="brand"><span class="brand-mark"></span>MakeMKV Web</div><div class="app-nav"><span>Laufwerke</span><span class="on">Bibliothek</span><span>Einstellungen</span></div></div>
+    B.innerHTML = `<div class="app-top"><div class="brand"><span class="brand-mark"></span>Spindle</div><div class="app-nav"><span>Laufwerke</span><span class="on">Bibliothek</span><span>Einstellungen</span></div></div>
     <div class="lib-head"><h2>Bibliothek</h2><div class="lib-stat"><div>Frei im Ziel<br><b>2,4 TB</b> von 20 TB</div><div class="save">Mögliche Einsparung<br><b>≈ ${fmtG(FILES.filter(f => f.st === 'orig').reduce((a, f) => a + (f.size - estF(f)) * GB, 0))}</b></div></div></div>
     <div class="lib-chips">${[['all', 'Alle'], ['orig', 'Original'], ['conv', 'Konvertiert'], ['run', 'In Arbeit'], ['err', 'Fehler']].map(([k, l]) => `<button class="${fl.q === k ? 'on' : ''}" data-q="${k}">${l}</button>`).join('')}<span style="width:1px;background:var(--line);margin:0 4px"></span>${[['all', 'Alles'], ['film', 'Filme'], ['serie', 'Serien'], ['uns', 'Unsortiert']].map(([k, l]) => `<button class="${fl.kind === k ? 'on' : ''}" data-kind="${k}">${l}</button>`).join('')}</div>
     <div class="lib-tools"><input class="input" placeholder="Filtern …"><div class="lib-view"><button class="${fl.view === 'list' ? 'on' : ''}" data-view="list">☰ Liste</button><button class="${fl.view === 'grid' ? 'on' : ''}" data-view="grid">▦ Raster</button></div></div>
@@ -294,7 +294,7 @@ $('#tabs').innerHTML = Object.entries(SECTIONS).map(([id, [l]]) => `<button data
 $$('.mk-frame>section[data-editor]').forEach(() => { });
 (() => {
   const set = (id, html) => { $('#' + id).innerHTML = html; };
-  const top = '<div class="app-top"><div class="brand"><span class="brand-mark"></span>MakeMKV Web</div><div class="app-nav"><span>Laufwerke</span><span>Bibliothek</span><span class="on">Einstellungen</span></div></div>';
+  const top = '<div class="app-top"><div class="brand"><span class="brand-mark"></span>Spindle</div><div class="app-nav"><span>Laufwerke</span><span>Bibliothek</span><span class="on">Einstellungen</span></div></div>';
   set('p1a', `${top}<div class="app-pad"><section class="panel"><div class="panel-head"><span class="mini-icon">⚙</span><h2>Konvertierung einstellen</h2><span class="sub">gleicher Editor in Titelliste, Bibliothek und Einstellungen</span></div><div class="app-pad" data-editor="acc"></div></section></div>`);
   set('p1b', `${top}<div class="app-pad"><section class="panel"><div class="panel-head"><span class="mini-icon">⚙</span><h2>Konvertierung einstellen</h2></div><div class="app-pad" data-editor="studio"></div></section></div>`);
   set('p1c', `${top}<div class="app-pad"><div class="set-grid"><div class="set-list"><span>Allgemein</span><span class="on">Konvertierung &amp; Presets</span><span>Rechner</span><span>Medien / Jellyfin</span><span>MakeMKV-Key</span></div>
@@ -304,7 +304,7 @@ $$('.mk-frame>section[data-editor]').forEach(() => { });
     <div class="cv-2"><div class="cv-row"><label>Gleichzeitige Dateien</label><input class="input" type="number" value="1" min="1" max="8"><span class="hint">Mehr als 1 parallel nur auf Rechnern mit vielen Kernen sinnvoll (jetzt 4 Kerne: 1).</span></div><div class="cv-row"><label>Segmente je Film (0 = automatisch)</label><input class="input" type="number" value="0"><span class="hint">Lange Filme werden zeitlich geteilt und parallel kodiert; funktioniert mit allen Software-Codecs.</span></div></div>
     <div><h4 style="margin:0 0 8px;font-size:12.5px">Fähigkeiten dieses Rechners</h4><div class="cv-chips"><span>x265 ✓</span><span>x264 ✓</span><span>SVT-AV1 ✓</span><span>VAAPI (renderD128) ✓</span><span>QSV ✓</span><span>Opus ✓</span></div></div>
     </div></section></div></div>`);
-  set('p1d', `<div class="app-top"><div class="brand"><span class="brand-mark"></span>MakeMKV Web</div><div class="app-nav"><span class="on">Laufwerke</span><span>Bibliothek</span><span>Einstellungen</span></div></div><div class="app-pad"><section class="panel" style="max-width:760px"><div class="panel-head"><span class="mini-icon">▤</span><h2>The Walking Dead – Disc 1</h2><span class="pill">5 Titel gewählt</span></div><div class="app-pad">
+  set('p1d', `<div class="app-top"><div class="brand"><span class="brand-mark"></span>Spindle</div><div class="app-nav"><span class="on">Laufwerke</span><span>Bibliothek</span><span>Einstellungen</span></div></div><div class="app-pad"><section class="panel" style="max-width:760px"><div class="panel-head"><span class="mini-icon">▤</span><h2>The Walking Dead – Disc 1</h2><span class="pill">5 Titel gewählt</span></div><div class="app-pad">
     <div class="settings flat"><div class="settings-toggle" style="cursor:default"><span class="mini-icon">⚙</span><strong>Nach dem Rippen konvertieren</strong><span class="spacer"></span><label class="switch"><input class="check" type="checkbox" checked> an</label></div><div class="settings-body"><div data-editor="compact"></div></div></div></div></section></div>`);
   const p2 = id => { $('#' + id).innerHTML = ''; };
   p2('libA'); p2('libB');

@@ -39,7 +39,7 @@ def write_makemkv_conf():
 
 def fetch_beta_key_sync():
     try:
-        req = urllib.request.Request(FORUM_URL, headers={"User-Agent": "Mozilla/5.0 makemkv-web"})
+        req = urllib.request.Request(FORUM_URL, headers={"User-Agent": "Mozilla/5.0 spindle"})
         html = urllib.request.urlopen(req, timeout=20).read().decode("utf-8", "replace")
         m = re.search(r"<code>(T-[A-Za-z0-9@_\-]{40,})</code>", html)
         if not m:

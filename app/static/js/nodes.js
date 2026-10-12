@@ -18,7 +18,7 @@ registerSettingsSection({
   render(el, s){
     const n = s.nodes || saved(), inst = (S && S.capacity && S.capacity.instance) || '';
     el.innerHTML = `<div class="node-section" id="nodeSection">
-      <p class="node-lead">Mehrere Installationen von MakeMKV-Web bilden einen Verbund: gemeinsame Aufträge, Übergabe von Konvertierungen, Fernsteuerung der Laufwerke.</p>
+      <p class="node-lead">Mehrere Installationen von Spindle bilden einen Verbund: gemeinsame Aufträge, Übergabe von Konvertierungen, Fernsteuerung der Laufwerke.</p>
       <section class="panel node-self">
         <div class="node-self-grid">
           <div class="node-field"><label for="nodeName">Name dieses Rechners</label><input class="input" type="text" id="nodeName" maxlength="40" placeholder="${esc(inst)}" value="${esc(n.name)}"><p class="help">So sehen ihn die anderen Rechner. Standard: der Hostname${inst ? ` (${esc(inst)})` : ''}.</p></div>

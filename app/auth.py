@@ -42,5 +42,5 @@ async def basic_auth(request: Request, call_next):
             except Exception:  # noqa: BLE001
                 ok = False
         if not ok:
-            return Response(status_code=401, headers={"WWW-Authenticate": 'Basic realm="MakeMKV-Web"'})
+            return Response(status_code=401, headers={"WWW-Authenticate": 'Basic realm="Spindle"'})
     return await call_next(request)

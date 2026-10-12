@@ -25,7 +25,7 @@ class DiscDbError(Exception):
 
 def _http_get(url: str, timeout: float = 15) -> tuple[int, bytes]:
     """Einzige Stelle mit Netzwerkzugriff (Tests ersetzen sie)."""
-    req = urllib.request.Request(url, headers={"User-Agent": "makemkv-web", "Accept": "application/json"})
+    req = urllib.request.Request(url, headers={"User-Agent": "spindle", "Accept": "application/json"})
     try:
         with urllib.request.urlopen(req, timeout=timeout) as r:
             return r.status, r.read()
