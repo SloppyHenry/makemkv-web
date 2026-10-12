@@ -4,12 +4,24 @@ import { cvSummary, getDefaultConfig, mountConvertEditor } from './convert-edito
 import { curDrive, driveUrl, dkey, outDir } from './drives.js';
 import { isActive, onState, registerPanel } from './registry.js';
 
+// Vorauswahl = Titelwahl des Servers (disc.suggest: Gedächtnis → TheDiscDB → TMDB → Struktur, wie im Headless-Modus) samt Namen und Ordner.
+// Bis sie da ist, die langen Titel (mainTitleIds); übernommen wird sie nur, solange nichts von Hand geändert wurde.
 export const mainTitleIds = disc => { const max = Math.max(0, ...disc.titles.map(t=>t.duration)); return disc.titles.filter(t => t.duration >= max*0.5).map(t=>t.id); };
 export function selOf(d){
-  const k = keyOf(d);
-  if(!ui.sel[k]){ ui.sel[k] = Object.fromEntries(d.disc.titles.map(t=>[t.id, false])); mainTitleIds(d.disc).forEach(i => ui.sel[k][i] = true); }
+  const k = keyOf(d), sg = d.disc.suggest;
+  if(!ui.sel[k] || (sg && ui.pre[k] === 'wait')){
+    const ids = sg ? sg.picks : mainTitleIds(d.disc);
+    ui.sel[k] = Object.fromEntries(d.disc.titles.map(t => [t.id, ids.includes(t.id)]));
+    if(sg){ ui.names[k] = {...sg.names}; if(sg.folder) ui.folder[k] = sg.folder; }
+    ui.pre[k] = sg ? 'done' : 'wait';
+  }
   return ui.sel[k];
 }
+const touched = d => { ui.pre[keyOf(d)] = 'user'; };
+const suggestNote = disc => {
+  const sg = disc.suggest;
+  return `<div class="suggest-note">${sg ? `Vorauswahl${sg.source ? ` (${esc(sg.source)})` : ''}: ${esc(sg.reasons[0] || '')}` : 'Vorauswahl wird bestimmt …'}</div>`;
+};
 // MakeMKV liefert oft für alle Titel den Disc-Namen -> bei Doppelten die Titelnummer anhängen
 export function suggestName(disc, t){
   const base = (t.name || '').trim() || `Titel ${t.id+1}`;
@@ -38,11 +50,11 @@ function renderTitles(d){
   if(!pn) return;
   if(!d || !d.disc){ pn.hidden = true; ui.sig.titles = ''; killEditor(); return; }
   pn.hidden = false;
-  const sig = [dkey(d), d.scan_id, d.job ? d.job.kind : '', outDir(d)].join('|');
+  const sig = [dkey(d), d.scan_id, d.job ? d.job.kind : '', outDir(d), !!d.disc.suggest].join('|');
   if(ui.sig.titles !== sig){ ui.sig.titles = sig; buildTitles(d); } else updateTitlesLive(d);
 }
 function buildTitles(d){
-  const disc = d.disc, k = keyOf(d), sel = selOf(d), names = ui.names[k] ||= {}, busy = !!d.job, dis = busy ? 'disabled' : '';
+  const disc = d.disc, sel = selOf(d), k = keyOf(d), names = ui.names[k] ||= {}, busy = !!d.job, dis = busy ? 'disabled' : '';
   const mainId = disc.titles.reduce((a,t) => t.duration > (a?.duration||0) ? t : a, null)?.id;
   if(ui.folder[k] === undefined) ui.folder[k] = disc.name || disc.volume || 'Disc';
   const c = convOf(d);
@@ -58,7 +70,7 @@ function buildTitles(d){
       <td><button class="row-action" data-trk="${t.id}">${cnt('Video')} V · ${cnt('Audio')} A · ${cnt('Subtitles')} UT${open?'⌃':'⌄'}</button></td></tr>${trk}`;
   }).join('');
   $('#titlesPanel').innerHTML = `
-    <div class="panel-head"><span class="mini-icon">☑</span><h2>Titel auswählen</h2><span class="spacer"></span><span class="sub" id="selectedCount"></span><button class="icon-btn" id="filterBtn" title="Kurze Titel (unter 5 Min.) ein-/ausblenden" aria-label="Kurze Titel ein-/ausblenden">▽</button></div>
+    <div class="panel-head"><span class="mini-icon">☑</span><h2>Titel auswählen</h2><span class="spacer"></span><span class="sub" id="selectedCount"></span><button class="icon-btn" id="filterBtn" title="Kurze Titel (unter 5 Min.) ein-/ausblenden" aria-label="Kurze Titel ein-/ausblenden">▽</button></div>${suggestNote(disc)}
     <div class="table-wrap"><table><thead><tr><th><input id="selectAll" class="check" type="checkbox" aria-label="Alle Titel auswählen" ${dis}></th><th>#</th><th>Dateiname</th><th>Dauer</th><th>Größe</th><th>Kapitel</th><th>Spuren</th></tr></thead><tbody>${rows}</tbody></table></div>
     <div class="settings">
       <div class="settings-toggle" id="cvToggle" role="button" tabindex="0" aria-expanded="${ui.cvOpen}"><span class="mini-icon">⚙</span><strong>Nach dem Rippen konvertieren</strong><span class="summary" id="cvSummary"></span><span class="spacer"></span>
@@ -78,6 +90,7 @@ function updateTitlesLive(d){
 }
 delegate('#titlesPanel', 'input', e => {
   const d = curDrive(); if(!d || !d.disc) return; const t = e.target, k = keyOf(d);
+  if(t.dataset.sel !== undefined || t.id === 'selectAll' || t.dataset.name !== undefined) touched(d);
   if(t.dataset.sel !== undefined){ selOf(d)[t.dataset.sel] = t.checked; updateTitlesLive(d); }
   else if(t.id === 'selectAll'){ const sel = selOf(d); d.disc.titles.forEach(x => sel[x.id] = t.checked); document.querySelectorAll('#titlesPanel [data-sel]').forEach(c => c.checked = t.checked); updateTitlesLive(d); }
   else if(t.dataset.name !== undefined){ (ui.names[k] ||= {})[t.dataset.name] = t.value; }
@@ -105,7 +118,7 @@ function renderAction(d){
   const el = $('#actionPanel');
   if(!el) return;
   const disc = d && d.disc, busy = !!(d && d.job);
-  const sig = [d?dkey(d):'', d?d.scan_id:'', busy, d?d.status:'', !!disc, d?outDir(d):S.output.dir].join('|');
+  const sig = [d?dkey(d):'', d?d.scan_id:'', busy, !!(disc && disc.suggest), d?d.status:'', !!disc, d?outDir(d):S.output.dir].join('|');
   if(ui.sig.action !== sig){
     ui.sig.action = sig;
     const k = d && keyOf(d);
@@ -116,7 +129,7 @@ function renderAction(d){
   }
   if(disc) updateTitlesLive(d);
 }
-delegate('#actionPanel', 'input', e => { const d = curDrive(); if(d && e.target.id==='folder') ui.folder[keyOf(d)] = e.target.value; });
+delegate('#actionPanel', 'input', e => { const d = curDrive(); if(d && e.target.id==='folder'){ ui.folder[keyOf(d)] = e.target.value; touched(d); } });
 async function startRip(d, mode){
   const k = keyOf(d), sel = selOf(d), names = ui.names[k]||{}, cv = convOf(d);
   const cfg = (mode==='mkv' && cv.convert) ? {...(cv.cfg || await getDefaultConfig(discKind(d))), convert:true} : null;

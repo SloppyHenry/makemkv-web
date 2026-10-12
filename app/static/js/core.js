@@ -15,7 +15,7 @@ export const baseName = p => String(p).split('/').pop();
 export let S = null;
 export const conn = { failed: false };
 // Gemeinsamer Zustand der Oberfläche (Auswahl, Namen, geöffnete Bereiche …)
-export const ui = { sel:{}, names:{}, folder:{}, open:{}, conv:{}, sig:{}, hideShort:false, cvOpen:true, rate:{}, files:[] };
+export const ui = { sel:{}, pre:{}, names:{}, folder:{}, open:{}, conv:{}, sig:{}, hideShort:false, cvOpen:true, rate:{}, files:[] };
 export const keyOf = d => `${d.host||''}|${d.id}:${d.scan_id}`;
 export const hostName = () => ((S.capacity && S.capacity.instance) || '').toLowerCase();
 

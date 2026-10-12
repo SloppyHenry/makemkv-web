@@ -26,3 +26,4 @@
   #titlesPanel tr.trk td{display:block;width:auto;padding:4px 12px 10px 17px;border:0}
   #titlesPanel .trkgrid{grid-template-columns:62px minmax(0,1fr) 54px;padding:6px 0}
 }
+.suggest-note{padding:8px 16px;font-size:12px;color:var(--muted);border-bottom:1px solid var(--line);overflow-wrap:anywhere}

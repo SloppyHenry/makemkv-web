@@ -7,7 +7,7 @@ from unittest import mock
 from tests import env  # noqa: F401
 from tests.test_headless import T
 
-from app.headless import choose, contribute, memory, plan, tmdbmatch
+from app.headless import choose, contribute, memory, plan, run, tmdbmatch
 from app.state import settings
 
 
@@ -139,6 +139,18 @@ class ContributeTest(unittest.TestCase):
     def test_types_from_names(self):
         t = contribute._types_from_names([0, 1], {0: "Serie S01E04", 1: "Bonus"}, self.disc)
         self.assertEqual((t[0]["type"], t[0]["episode"], t[1]["type"]), ("Episode", "4", "Extra"))
+
+
+class SuggestTest(unittest.TestCase):
+    def test_scan_without_headless_sets_suggest(self):
+        """Auch ohne Headless-Modus: die Titelwahl landet als Vorauswahl der Titelliste an der Disc."""
+        dr = FakeDrive({"type": "Blu-ray disc", "name": "FILM", "titles": [T(0, 7200, 30), T(1, 600, 1)]})
+        dr.busy = False
+        p = {"mode": "movie", "source": "Struktur der Disc", "picks": [0], "names": {0: "Film"}, "folder": "FILM", "reasons": ["Film: …"], "ids": {}}
+        with mock.patch.object(run, "cfg", return_value={"enabled": False}), mock.patch.object(run.planner, "plan", mock.AsyncMock(return_value=p)):
+            asyncio.run(run.on_scan({"drive": dr, "auto": True}))
+        self.assertEqual((dr.disc["suggest"]["picks"], dr.disc["suggest"]["source"]), ([0], "Struktur der Disc"))
+        self.assertNotIn("ids", dr.disc["suggest"])
 
 
 if __name__ == "__main__":

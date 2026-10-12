@@ -109,11 +109,28 @@ def _titles(p: dict) -> list[str]:
     return [p["names"].get(i) or f"Titel {i + 1}" for i in p["picks"]]
 
 
+async def suggest(drive) -> dict:
+    """Titelwahl (plan.py) für die Disc im Laufwerk; landet als Vorauswahl der Titelliste unter disc["suggest"] in /api/state."""
+    disc = drive.disc
+    try:
+        p = await planner.plan(drive)
+    except Exception as ex:  # noqa: BLE001
+        p = {"mode": "manual", "source": "", "picks": [], "names": {}, "folder": "", "reasons": [f"Erkennung fehlgeschlagen: {ex}"]}
+    if drive.disc is disc:                       # nicht inzwischen neu analysiert
+        disc["suggest"] = {k: p.get(k) for k in ("mode", "source", "picks", "names", "folder", "reasons")}
+        broadcast()
+    return p
+
+
 async def on_scan(info: dict):
     drive = info["drive"]
-    ids = await planner.get_ids(drive) if drive.disc and not drive.busy else {}
-    if not (cfg().get("enabled") and info.get("auto")) or drive.busy:
+    if drive.busy:
         return
+    if not (cfg().get("enabled") and info.get("auto")):
+        if drive.disc:
+            await suggest(drive)
+        return
+    ids = await planner.get_ids(drive) if drive.disc else {}
     key = planner.ids_key(ids)
     e = _entry(drive, "identify", key)
     if not drive.disc:
@@ -125,13 +142,12 @@ async def on_scan(info: dict):
     if (last and last["state"] in ("manual", "waiting") and time.time() - last["t"] < WAIT_SECONDS
             and not (remembered and remembered.get("t", 0) > last["t"])):           # inzwischen von Hand gerippt: Gedächtnis gilt
         drive.add_log("Headless: Disc war „von Hand“ – bleibt im Laufwerk, bitte Titel wählen und rippen.", "info")
-        return _update(e, state="waiting", message="bleibt im Laufwerk: Titel in der Titelliste wählen und rippen – die Auswahl wird gemerkt")
+        _update(e, state="waiting", message="bleibt im Laufwerk: Titel in der Titelliste wählen und rippen – die Auswahl wird gemerkt")
+        return await suggest(drive)
     drive.job = {"kind": "scan", "text": "Headless: Titel werden bestimmt …", "cur": 0, "total": 0, "started": time.time()}
     broadcast()
     try:
-        p = await planner.plan(drive)
-    except Exception as ex:  # noqa: BLE001
-        p = {"mode": "manual", "source": "", "picks": [], "names": {}, "folder": "", "reasons": [f"Erkennung fehlgeschlagen: {ex}"]}
+        p = await suggest(drive)
     finally:
         drive.job = None
     _update(e, source=p["source"], mode=p["mode"], folder=p["folder"], titles=_titles(p), reasons=p["reasons"],
@@ -173,7 +189,7 @@ def on_rip(info: dict):
 
 async def probe(drive) -> dict:
     """Nur erkennen, nicht rippen (Knopf „Erkennung testen“)."""
-    p = await planner.plan(drive)
+    p = await suggest(drive)
     e = _entry(drive, "test", planner.ids_key(p.get("ids")))
     _update(e, source=p["source"], mode=p["mode"], folder=p["folder"], titles=_titles(p), reasons=p["reasons"],
             picked=[i + 1 for i in sorted(p["picks"])], skipped=planner.skips(drive.disc, p))
