@@ -157,11 +157,19 @@ function onManual(t, redraw){
   if(ex && !redraw){ const y = w.year ? ` (${esc(w.year)})` : '', t2 = esc(w.title);
     ex.innerHTML = '<span>Wird so heißen:</span> ' + (w.kind === 'series' ? `<em>${t2}${y}</em>/Season 01/<em>${t2} S01E01.mkv</em>` : `<em>${t2}${y}</em>/<em>${t2}${y}.mkv</em>`); }
 }
+/** Welche Titel sind Folgen? Normale Länge 15–80 min; gibt es keine, zählen gleich lange lange Titel (Doppelfolgen, Miniserien: je ~ 1:45 h). */
+function episodeCandidates(items){
+  const long = items.filter(i => i.dur >= 900), normal = long.filter(i => i.dur <= 4800);
+  const pool = normal.length ? normal : long;
+  if(!pool.length) return [];
+  const d = pool.map(i => i.dur).sort((a, b) => a - b), med = d[Math.floor(d.length / 2)];
+  return long.filter(i => normal.length ? i.dur <= 4800 || (i.dur >= 0.6 * med && i.dur <= 2.2 * med) : i.dur >= 0.6 * med && i.dur <= 1.5 * med);
+}
 /** Art gewechselt: Rollen der Dateien neu setzen (Serie: lange Titel = Folgen; Film: längster Titel = Hauptfilm). */
 function retag(kind){
   w.kind = kind;
   if(kind === 'series'){
-    const eps = w.items.filter(i => i.role !== 'playall' && i.dur >= 900 && i.dur <= 4800);
+    const eps = episodeCandidates(w.items.filter(i => i.role !== 'playall'));
     w.items.forEach(i => { if(i.role !== 'playall') i.role = eps.includes(i) ? 'episode' : 'extra'; });
     let n = w.start.episode || 1;
     w.items.filter(i => i.role === 'episode').forEach(i => { Object.assign(i, {season: w.season, episodes: [n], name: (w.epList.find(e => e.n === n) || {}).name || '', runtime: null, delta: null}); n++; });
