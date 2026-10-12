@@ -7,7 +7,7 @@ import { L, byPath, decorate, groups, matches, reconcile, selectable, selectedFi
 import { filterHtml, groupHtml, headHtml, rowHtml, tileHtml } from './library-render.js';
 import { clearEst, drawDetail, stopPlayer } from './library-detail.js';
 import { closeSide, drawBar, drawSide, refreshEst, setOnChanged, setPreset, startConversion } from './library-bar.js';
-import { closed, commitEdit, deleteFile, filesIn, jobAct, saveClosed, setHooks, startEdit, stopEdit } from './library-actions.js';
+import { closed, commitEdit, deleteFile, deleteFiles, deleteFolder, filesIn, jobAct, saveClosed, setHooks, startEdit, stopEdit } from './library-actions.js';
 import { loadMeta } from './convert-meta.js';
 import './convert-settings.js';
 
@@ -97,7 +97,9 @@ function onClick(e){
   if((b = q('[data-fskip]'))){ jobAct('skip', b.dataset.fskip, b.dataset.host); return; }
   if((b = q('[data-rename]'))){ startEdit('file', b.dataset.rename); return; }
   if((b = q('[data-frename]'))){ startEdit('folder', b.dataset.frename); return; }
-  if((b = q('[data-del]'))){ deleteFile(b.dataset.del); return; }
+  if((b = q('[data-del]'))){ e.stopPropagation(); deleteFile(b.dataset.del); return; }
+  if((b = q('[data-fdel]'))){ deleteFolder(b.dataset.fdel); return; }
+  if(q('[data-delsel]')){ deleteFiles(selectedFiles().map(f => f.path)); return; }
   if(q('[data-edit-ok]')){ commitEdit(); return; }
   if(q('[data-edit-cancel]')){ stopEdit(); return; }
   if((b = q('[data-ftoggle]'))){ const d = b.dataset.ftoggle; closed.has(d) ? closed.delete(d) : closed.add(d); saveClosed(); draw('rows'); return; }

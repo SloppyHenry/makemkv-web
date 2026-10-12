@@ -45,7 +45,7 @@ export function barHtml(){
   return `<b>${fs.length} Datei${fs.length === 1 ? '' : 'en'} · ${fmtB(tot)}</b><span class="sv">≈ ${fmtB(sv)} Ersparnis</span><span class="grow"></span>
     <select data-barpreset aria-label="Preset" title="Preset für die Konvertierung"><option value="auto" ${L.preset === 'auto' ? 'selected' : ''}>Preset: automatisch je Disc-Art</option>${presets}${L.preset === 'custom' ? '<option value="custom" selected>Angepasste Einstellung</option>' : ''}</select>
     <select data-bartarget aria-label="Ausführen auf" title="Auf welchem Rechner konvertiert wird">${targetOptions()}</select>${acts}
-    <button type="button" class="secondary" data-cvopen>Anpassen …</button><button type="button" class="primary" style="width:auto" data-start ${fs.length ? '' : 'disabled'}>Konvertieren</button><button type="button" class="secondary" data-clear>Auswahl aufheben</button>`;
+    <button type="button" class="secondary" data-cvopen>Anpassen …</button><button type="button" class="primary" style="width:auto" data-start ${fs.length ? '' : 'disabled'}>Konvertieren</button><button type="button" class="secondary danger" data-delsel title="Die ausgewählten Dateien endgültig löschen">Löschen</button><button type="button" class="secondary" data-clear>Auswahl aufheben</button>`;
 }
 export function drawBar(box){
   const fs = selectedFiles();

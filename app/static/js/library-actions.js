@@ -27,13 +27,30 @@ export async function commitEdit(){
     L.edit = null; await refresh(); emit('files-changed');
   }catch{ /* api() zeigt die Meldung; die Eingabe bleibt zum Korrigieren offen */ }
 }
-export async function deleteFile(path){
-  if(!confirm(`„${path}“ endgültig löschen?`)) return;
+async function delOne(path){
   const r = await fetch('/api/files?path=' + encodeURIComponent(path), {method: 'DELETE'});
-  if(!r.ok){ let m = 'Löschen fehlgeschlagen'; try{ m = (await r.json()).detail || m; }catch{ /* ohne Text */ } toast(m, true); return; }
-  L.sel.delete(path); if(L.cur === path) L.cur = '';
+  if(r.ok) return '';
+  let m = 'Löschen fehlgeschlagen'; try{ m = (await r.json()).detail || m; }catch{ /* ohne Text */ }
+  return m;
+}
+/** Eine oder mehrere Dateien endgültig löschen (eine Rückfrage für alle). */
+export async function deleteFiles(paths, folder = ''){
+  if(!paths.length) return;
+  const one = paths.length === 1 && !folder;
+  if(!confirm(one ? `„${paths[0]}“ endgültig löschen?` : `${folder ? `Ordner „${folder}“ mit ` : ''}${paths.length} Datei${paths.length === 1 ? '' : 'en'} endgültig löschen?\n\n` + paths.slice(0, 8).map(p => '• ' + baseName(p)).join('\n') + (paths.length > 8 ? `\n… und ${paths.length - 8} weitere` : ''))) return;
+  const failed = [];
+  for(const p of paths){
+    const m = await delOne(p);
+    if(m) failed.push(`${baseName(p)}: ${m}`); else { L.sel.delete(p); if(L.cur === p) L.cur = ''; }
+  }
+  if(failed.length) toast(one ? failed[0] : `${paths.length - failed.length} gelöscht, ${failed.length} fehlgeschlagen – ${failed[0]}`, true);
+  else if(!one) toast(`${paths.length} Dateien gelöscht ✓`);
+  if(!L.sel.size){ L.est = null; L.cfg = null; L.preset = 'auto'; }
   await refresh(); emit('files-changed');
 }
+/** Alle nicht gesperrten Dateien eines Ordners löschen; der leere Ordner verschwindet mit der letzten Datei. */
+export const deleteFolder = dir => deleteFiles(filesIn(dir).filter(f => !f.live && !f.locked).map(f => f.path), dir);
+export const deleteFile = path => deleteFiles([path]);
 export async function jobAct(kind, id, host){
   if(kind === 'cancel' && !confirm('Konvertierung abbrechen? Das Original bleibt unverändert.')) return;
   try{ await api(host ? `/api/peer/${host}/conversions/${id}/${kind}` : `/api/conversions/${id}/${kind}`); }catch{ /* api() zeigt die Meldung */ }
