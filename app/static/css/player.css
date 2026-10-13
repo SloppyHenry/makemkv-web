@@ -1,10 +1,10 @@
-/* Interner Player (Besitzer: PD). Überlagerung (.player-overlay > .player-window) und eingebettet (.player allein).
-   Die Maße richten sich nach der Breite des Players bzw. des Fensters (Container Queries), nicht nach dem Browserfenster. */
+/* Built-in player (owner: PD). Overlay (.player-overlay > .player-window) and embedded (.player alone).
+   Sizes follow the width of the player or the window (container queries), not the browser window. */
 .player [hidden],.player-window [hidden]{display:none!important}
 .player-icons{position:absolute;width:0;height:0;overflow:hidden}
 .player svg,.player-window svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none}
 
-/* ---- Überlagerung ---- */
+/* ---- Overlay ---- */
 .player-overlay{position:fixed;inset:0;z-index:30;background:rgba(2,4,8,.8);display:grid;place-items:center;padding:24px}
 .player-window{container:pwin/inline-size;position:relative;width:min(1240px,100%);max-height:100%;display:flex;flex-direction:column;
   background:var(--panel);border:1px solid var(--line);border-radius:14px;overflow:hidden;box-shadow:0 20px 60px #0009}
@@ -75,7 +75,7 @@
 .player-vol{display:flex;align-items:center}
 .player-vol input{width:84px;accent-color:var(--red);margin:0 6px 0 0}
 
-/* ---- Menüs (Ton, Untertitel, Kapitel, Wiedergabe) ---- */
+/* ---- Menus (audio, subtitles, chapters, playback) ---- */
 .player-menu{position:absolute;right:10px;bottom:80px;width:min(340px,calc(100% - 20px));max-height:min(420px,70vh);overflow:auto;background:#121a25;border:1px solid var(--line);border-radius:12px;box-shadow:0 12px 40px #000a;padding:6px;z-index:5}
 .player-menu h4{margin:8px 10px 4px;font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:650}
 .player-menu h4:first-child{margin-top:4px}
@@ -109,7 +109,7 @@
 .player:fullscreen.idle{cursor:none}
 
 @media(pointer:coarse){.player-btn{width:44px;height:44px}.player-seek{height:30px}}
-/* ---- schmale Player (Handy, Seitenbereich): weniger Knöpfe, Menüs als Blatt von unten ---- */
+/* ---- narrow players (phone, side panel): fewer buttons, menus as a sheet from the bottom ---- */
 @container player (max-width:560px){
   .player-vol,.player-skip{display:none}
   .player-btn{width:38px;height:38px}
@@ -131,7 +131,7 @@
 }
 @media(prefers-reduced-motion:reduce){.player-spin{animation-duration:2.4s}}
 
-/* Dateiname als Knopf in Listen (Fertige Dateien, Bibliothek): Klick spielt ab */
+/* File name as a button in lists (finished files, library): click plays */
 .player-link{background:none;border:0;color:var(--text);font:inherit;padding:0;text-align:left;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;text-decoration:underline dotted #5b6b83;text-underline-offset:3px}
 .player-link:hover{color:#fff;text-decoration-color:var(--red)}
 .player-embed{min-width:0}

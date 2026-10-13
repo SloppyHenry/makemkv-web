@@ -1,4 +1,4 @@
-// Player: Markup (1:1 nach docs/mockups/paket-d.html), Symbole und Menüs. Reine Darstellung ohne Zustand.
+// Player: markup (1:1 after docs/mockups/paket-d.html), icons and menus. Pure rendering without state.
 import { esc, fmtB, fmtD } from './core.js';
 
 const SPRITE = `<svg class="player-icons" aria-hidden="true">
@@ -27,48 +27,48 @@ const AC = {ac3: 'AC3', eac3: 'E-AC3', dts: 'DTS', truehd: 'TrueHD', aac: 'AAC',
 const LANG = {deu: 'Deutsch', ger: 'Deutsch', eng: 'English', fra: 'Français', fre: 'Français', spa: 'Español', ita: 'Italiano', nld: 'Nederlands', por: 'Português', rus: 'Русский',
               jpn: '日本語', zho: '中文', kor: '한국어', pol: 'Polski', tur: 'Türkçe', swe: 'Svenska', dan: 'Dansk', nor: 'Norsk', fin: 'Suomi', ces: 'Čeština', hun: 'Magyar', ell: 'Ελληνικά'};
 export const langName = l => LANG[(l || '').toLowerCase()] || (l && l !== 'und' ? l : '');
-const layout = a => a.channels === 1 ? '1.0' : a.channels === 2 ? '2.0' : a.channels === 6 ? '5.1' : a.channels === 8 ? '7.1' : a.channels ? `${a.channels} Kanäle` : '';
+const layout = a => a.channels === 1 ? '1.0' : a.channels === 2 ? '2.0' : a.channels === 6 ? '5.1' : a.channels === 8 ? '7.1' : a.channels ? `${a.channels} channels` : '';
 export const audioName = a => {
   const c = a.codec === 'dts' && /MA/.test(a.profile || '') ? 'DTS-HD MA' : a.codec === 'truehd' ? 'TrueHD' : AC[a.codec] || a.codec.toUpperCase();
-  return `${langName(a.lang) || 'Tonspur ' + (a.i + 1)}${a.title ? ' – ' + a.title : ''} – ${c} ${layout(a)}`.trim();
+  return `${langName(a.lang) || 'Audio track ' + (a.i + 1)}${a.title ? ' – ' + a.title : ''} – ${c} ${layout(a)}`.trim();
 };
-export const subName = s => `${langName(s.lang) || 'Untertitel ' + (s.i + 1)}${s.forced ? ' – erzwungen' : ''}${s.title ? ' – ' + s.title : ''}`;
+export const subName = s => `${langName(s.lang) || 'Subtitles ' + (s.i + 1)}${s.forced ? ' – forced' : ''}${s.title ? ' – ' + s.title : ''}`;
 export const metaLine = (info, dir) => [dir, fmtT(info.duration), fmtB(info.size), info.video ? `${VC[info.video.codec] || info.video.codec} ${info.video.h ? info.video.h + 'p' : ''}${info.video.hdr ? ' HDR' : ''}` : '',
   info.audio[0] ? audioName(info.audio[Math.max(0, info.preferred.audio ?? 0)] || info.audio[0]).split(' – ').slice(1).join(' ') : ''].filter(Boolean).join(' · ');
 
-export const MODE_PILL = {direct: '<span class="st ok">Direkt</span>', remux: '<span class="st">Remux</span>', transcode: '<span class="st warn">Transkodiert</span>'};
+export const MODE_PILL = {direct: '<span class="st ok">Direct</span>', remux: '<span class="st">Remux</span>', transcode: '<span class="st warn">Transcoded</span>'};
 
 export function playerHtml(alone){
   return `<div class="player${alone ? ' alone' : ''}" data-state="loading" tabindex="-1">
   <div class="player-notes"></div>
   <div class="player-stage"><video class="player-video" playsinline preload="auto"></video><div class="player-subs"></div>
-    <div class="player-center"><button type="button" class="player-bigplay" aria-label="Wiedergabe" data-a="toggle">${ic('play')}</button>
-      <div class="player-wait"><div class="player-spin"></div><span class="player-waittext">Starte …</span></div><div class="player-fail"></div></div></div>
+    <div class="player-center"><button type="button" class="player-bigplay" aria-label="Play" data-a="toggle">${ic('play')}</button>
+      <div class="player-wait"><div class="player-spin"></div><span class="player-waittext">Starting …</span></div><div class="player-fail"></div></div></div>
   <div class="player-controls">
     <div class="player-seek" role="slider" aria-label="Position" tabindex="0" aria-valuemin="0"><div class="player-track" style="--p:0;--b:0"><div class="player-buf"></div><div class="player-played"></div><div class="player-ticks"></div><div class="player-thumb"></div></div><div class="player-tip" style="--x:0"></div></div>
     <div class="player-row">
-      <button type="button" class="player-btn" data-a="toggle" aria-label="Wiedergabe">${ic('play')}</button>
-      <button type="button" class="player-btn player-skip" data-a="back" aria-label="10 Sekunden zurück">${ic('back')}</button><button type="button" class="player-btn player-skip" data-a="fwd" aria-label="10 Sekunden vor">${ic('fwd')}</button>
-      <span class="player-vol"><button type="button" class="player-btn" data-a="mute" aria-label="Ton aus">${ic('vol')}</button><input type="range" min="0" max="100" value="100" aria-label="Lautstärke"></span>
+      <button type="button" class="player-btn" data-a="toggle" aria-label="Play">${ic('play')}</button>
+      <button type="button" class="player-btn player-skip" data-a="back" aria-label="Back 10 seconds">${ic('back')}</button><button type="button" class="player-btn player-skip" data-a="fwd" aria-label="Forward 10 seconds">${ic('fwd')}</button>
+      <span class="player-vol"><button type="button" class="player-btn" data-a="mute" aria-label="Mute">${ic('vol')}</button><input type="range" min="0" max="100" value="100" aria-label="Volume"></span>
       <span class="player-time"><b>0:00</b> / 0:00</span><span class="spacer"></span>
-      <button type="button" class="player-btn" data-a="m:chapters" aria-label="Kapitel" hidden>${ic('list')}</button>
-      <button type="button" class="player-btn" data-a="m:tracks" aria-label="Ton und Untertitel">${ic('cc')}</button>
-      <button type="button" class="player-btn" data-a="m:mode" aria-label="Geschwindigkeit und Info">${ic('gear')}</button>
-      ${alone ? `<button type="button" class="player-btn player-out" data-a="overlay" aria-label="In Überlagerung öffnen" title="In Überlagerung öffnen">${ic('out')}</button>` : ''}
-      <button type="button" class="player-btn" data-a="full" aria-label="Vollbild">${ic('full')}</button>
+      <button type="button" class="player-btn" data-a="m:chapters" aria-label="Chapters" hidden>${ic('list')}</button>
+      <button type="button" class="player-btn" data-a="m:tracks" aria-label="Audio and subtitles">${ic('cc')}</button>
+      <button type="button" class="player-btn" data-a="m:mode" aria-label="Speed and info">${ic('gear')}</button>
+      ${alone ? `<button type="button" class="player-btn player-out" data-a="overlay" aria-label="Open in overlay" title="Open in overlay">${ic('out')}</button>` : ''}
+      <button type="button" class="player-btn" data-a="full" aria-label="Full screen">${ic('full')}</button>
     </div>
   </div></div>`;
 }
 
 export const windowHtml = () => `<div class="player-overlay"><div class="player-window nochapters" role="dialog" aria-modal="true" aria-label="Player" tabindex="-1">
   <div class="player-head"><div class="titles"><h3></h3><span class="sub"></span></div><span class="spacer"></span><span class="pillhost"></span>
-    <button type="button" class="player-btn" data-a="m:keys" aria-label="Tastenkürzel" title="Tastenkürzel (?)">${ic('keys')}</button><button type="button" class="player-btn" data-a="close" aria-label="Schließen (Esc)" title="Schließen (Esc)">${ic('close')}</button></div>
-  <div class="player-body">${playerHtml(false)}<aside class="player-chapters" aria-label="Kapitel" hidden></aside></div></div></div>`;
+    <button type="button" class="player-btn" data-a="m:keys" aria-label="Keyboard shortcuts" title="Keyboard shortcuts (?)">${ic('keys')}</button><button type="button" class="player-btn" data-a="close" aria-label="Close (Esc)" title="Close (Esc)">${ic('close')}</button></div>
+  <div class="player-body">${playerHtml(false)}<aside class="player-chapters" aria-label="Chapters" hidden></aside></div></div></div>`;
 
-export const notesHtml = ns => ns.map(n => `<div class="player-note ${n.k || ''}" data-id="${n.id}">${ic(n.k === 'warn' || n.k === 'err' ? 'warn' : 'info')}<div class="grow">${n.t}</div><button type="button" class="x" data-a="note-x" aria-label="Schließen">×</button></div>`).join('');
+export const notesHtml = ns => ns.map(n => `<div class="player-note ${n.k || ''}" data-id="${n.id}">${ic(n.k === 'warn' || n.k === 'err' ? 'warn' : 'info')}<div class="grow">${n.t}</div><button type="button" class="x" data-a="note-x" aria-label="Close">×</button></div>`).join('');
 
-export const chaptersHtml = (chs, cur, head = true) => (head ? `<h4>Kapitel · ${chs.length}</h4>` : '') + chs.map((c, i) =>
-  `<button type="button" class="player-chap" data-a="chap:${i}" ${i === cur ? 'aria-current="true"' : ''}><time>${fmtT(c.start)}</time><span>${esc(c.title || 'Kapitel ' + (i + 1))}</span></button>`).join('');
+export const chaptersHtml = (chs, cur, head = true) => (head ? `<h4>Chapters · ${chs.length}</h4>` : '') + chs.map((c, i) =>
+  `<button type="button" class="player-chap" data-a="chap:${i}" ${i === cur ? 'aria-current="true"' : ''}><time>${fmtT(c.start)}</time><span>${esc(c.title || 'Chapter ' + (i + 1))}</span></button>`).join('');
 
 const opt = (a, label, sub, o = {}) => `<button type="button" class="player-opt" role="menuitemradio" aria-checked="${!!o.on}" data-a="${a}" ${o.dis ? 'disabled' : ''}><span class="lbl">${esc(label)}${sub ? `<small>${esc(sub)}</small>` : ''}</span>${o.tag ? `<span class="st ${o.tagk || ''}">${o.tag}</span>` : ''}</button>`;
 
@@ -77,16 +77,16 @@ export function menuHtml(kind, e){
   if(kind === 'tracks'){
     const cur = e.audioIndex();
     const conv = a => !(['aac', 'mp3'].includes(a.codec) || e.caps.has(a.codec));
-    const aud = info.audio.map(a => opt('audio:' + a.i, audioName(a), conv(a) ? 'wird in AAC Stereo umgewandelt' : '', {on: a.i === cur, tag: conv(a) ? 'Remux' : ''})).join('');
-    const subs = info.subs.map(s => s.supported ? opt('sub:' + s.i, subName(s), `${s.codec.toUpperCase()} · Text`, {on: e.sub === s.i}) : opt('x', subName(s), `${s.codec === 'hdmv_pgs_subtitle' ? 'PGS' : s.codec.toUpperCase()} · Bilduntertitel werden nicht unterstützt`, {dis: 1, tag: 'nicht unterstützt', tagk: 'warn'})).join('');
-    return `<div class="player-menu" role="menu">${info.audio.length ? '<h4>Tonspur</h4>' + aud : ''}<h4>Untertitel</h4>${opt('sub:-1', 'Aus', '', {on: e.sub < 0})}${subs}</div>`;
+    const aud = info.audio.map(a => opt('audio:' + a.i, audioName(a), conv(a) ? 'converted to AAC stereo' : '', {on: a.i === cur, tag: conv(a) ? 'Remux' : ''})).join('');
+    const subs = info.subs.map(s => s.supported ? opt('sub:' + s.i, subName(s), `${s.codec.toUpperCase()} · text`, {on: e.sub === s.i}) : opt('x', subName(s), `${s.codec === 'hdmv_pgs_subtitle' ? 'PGS' : s.codec.toUpperCase()} · image subtitles are not supported`, {dis: 1, tag: 'not supported', tagk: 'warn'})).join('');
+    return `<div class="player-menu" role="menu">${info.audio.length ? '<h4>Audio track</h4>' + aud : ''}<h4>Subtitles</h4>${opt('sub:-1', 'Off', '', {on: e.sub < 0})}${subs}</div>`;
   }
   if(kind === 'mode'){
     const p = e.plan || info.plan;
-    const how = {direct: ['Direkt', 'Die Originaldatei wird unverändert abgespielt.'], remux: ['Remux', 'Video unverändert, ' + (p.reasons.filter(r => r.startsWith('Ton')).join(' ') || 'Container neu verpackt') + ' Ein Sprung außerhalb des Gepufferten startet kurz neu.'],
-      transcode: ['Transkodiert', 'Das Video wird in H.264 umgewandelt, weil der Browser das Original nicht kann. ' + (info.busy.busy ? 'Läuft gerade Arbeit: niedrigste Priorität, Wiedergabe kann ruckeln.' : '')]}[p.mode];
-    return `<div class="player-menu" role="menu"><h4>Geschwindigkeit</h4>${[0.75, 1, 1.25, 1.5, 2].map(v => opt('speed:' + v, String(v).replace('.', ',') + '×', '', {on: e.speed === v})).join('')}<hr><h4>So wird abgespielt</h4><p class="help" style="margin:2px 10px 8px"><b style="color:var(--text)">${how[0]}</b> – ${esc(how[1])}</p></div>`;
+    const how = {direct: ['Direct', 'The original file is played unchanged.'], remux: ['Remux', 'Video unchanged, ' + (p.reasons.filter(r => r.startsWith('Audio')).join(' ') || 'container repackaged.') + ' Seeking outside the buffer restarts briefly.'],
+      transcode: ['Transcoded', 'The video is converted to H.264 because the browser cannot play the original. ' + (info.busy.busy ? 'Work is running right now: lowest priority, playback may stutter.' : '')]}[p.mode];
+    return `<div class="player-menu" role="menu"><h4>Speed</h4>${[0.75, 1, 1.25, 1.5, 2].map(v => opt('speed:' + v, String(v) + '×', '', {on: e.speed === v})).join('')}<hr><h4>How it plays</h4><p class="help" style="margin:2px 10px 8px"><b style="color:var(--text)">${how[0]}</b> – ${esc(how[1])}</p></div>`;
   }
   if(kind === 'chapters') return `<div class="player-menu" role="menu">${chaptersHtml(info.chapters, e.chapterIndex())}</div>`;
-  return `<div class="player-menu" role="menu"><h4>Tastenkürzel</h4><div class="player-keys"><kbd>Leertaste</kbd><span>Wiedergabe / Pause (auch K)</span><kbd>← →</kbd><span>10 s zurück / vor (mit Umschalt 60 s)</span><kbd>↑ ↓</kbd><span>Lautstärke</span><kbd>M</kbd><span>Ton aus</span><kbd>F</kbd><span>Vollbild (auch Doppelklick)</span><kbd>C</kbd><span>Untertitel an/aus</span><kbd>A</kbd><span>nächste Tonspur</span><kbd>B N</kbd><span>Kapitel zurück / vor</span><kbd>0–9</kbd><span>an 0–90 % springen</span><kbd>Esc</kbd><span>Schließen</span></div></div>`;
+  return `<div class="player-menu" role="menu"><h4>Keyboard shortcuts</h4><div class="player-keys"><kbd>Space</kbd><span>Play / pause (also K)</span><kbd>← →</kbd><span>10 s back / forward (with Shift 60 s)</span><kbd>↑ ↓</kbd><span>Volume</span><kbd>M</kbd><span>Mute</span><kbd>F</kbd><span>Full screen (also double-click)</span><kbd>C</kbd><span>Subtitles on/off</span><kbd>A</kbd><span>Next audio track</span><kbd>B N</kbd><span>Chapter back / forward</span><kbd>0–9</kbd><span>Jump to 0–90 %</span><kbd>Esc</kbd><span>Close</span></div></div>`;
 }

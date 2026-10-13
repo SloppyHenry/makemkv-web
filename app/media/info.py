@@ -1,4 +1,4 @@
-"""Was weiß das Tool über eine Datei? Für `GET /api/media/info` (Gruppierung in der Bibliothek, PF)."""
+"""What does the tool know about a file? For `GET /api/media/info` (grouping in the library, PF)."""
 from pathlib import Path
 
 from app.media import metadata, naming, store
@@ -6,7 +6,7 @@ from app.media import metadata, naming, store
 
 def info_for(rel: str) -> dict:
     """{path, known, source: tool|name, kind, title, year, tmdb, imdb, poster, season, episode, episode_end, episode_name}.
-    `tool`: über den Assistenten einsortiert (mit Poster); `name`: aus einem Pfad im Jellyfin-Aufbau gelesen; sonst known=false."""
+    `tool`: sorted via the wizard (with poster); `name`: read from a path in the Jellyfin layout; otherwise known=false."""
     key = str(Path(rel).resolve()) if rel.startswith("/") else rel
     rec = store.load("items.json", {}).get(key)
     if rec:

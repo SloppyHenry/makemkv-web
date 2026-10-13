@@ -1,8 +1,8 @@
-"""TMDB-Client (Suche, IMDb-ID auflösen, Details, Staffeln) mit Zwischenspeicher.
+"""TMDB client (search, resolve IMDb IDs, details, seasons) with a cache.
 
-Den API-Schlüssel liefert der Nutzer (Einstellungen → Medien / Jellyfin). Ohne Schlüssel gibt es keine Anfragen; die Oberfläche fragt dann
-Titel und Jahr von Hand ab. Zugelassen sind der v3-Schlüssel (32 Zeichen, als Parameter) und das v4-„Read Access Token“ (beginnt mit „eyJ“, als Bearer).
-`MEDIA_TMDB_BASE` überschreibt die Adresse (Tests gegen scripts/tmdb_mock.py).
+The user provides the API key (Settings → Media / Jellyfin). Without a key there are no requests; the interface then asks for
+title and year by hand. Allowed are the v3 key (32 characters, as a parameter) and the v4 "read access token" (starts with "eyJ", as a bearer).
+`MEDIA_TMDB_BASE` overrides the address (tests against scripts/tmdb_mock.py).
 """
 import asyncio
 import json
@@ -22,7 +22,7 @@ MAX_CACHE = 2000
 
 
 class MetadataError(Exception):
-    """Fehler mit lesbarer Meldung; `code`: no_key | bad_key | not_found | network | rate."""
+    """Error with a readable message; `code`: no_key | bad_key | not_found | network | rate."""
 
     def __init__(self, msg: str, code: str = "network"):
         super().__init__(msg)
@@ -34,7 +34,7 @@ def poster_url(path: str | None, size: str = "w342") -> str:
 
 
 def _http_get(url: str, headers: dict, timeout: float = 10) -> tuple[int, bytes]:
-    """Einzige Stelle mit Netzwerkzugriff (Tests ersetzen sie)."""
+    """The only place with network access (tests replace it)."""
     req = urllib.request.Request(url, headers={"User-Agent": "spindle", "Accept": "application/json", **headers})
     try:
         with urllib.request.urlopen(req, timeout=timeout) as r:
@@ -57,7 +57,7 @@ def _cache():
 
 async def _get(key: str, path: str, params: dict | None = None, ttl: float = TTL_DETAIL, fresh: bool = False) -> dict:
     if not (key or "").strip():
-        raise MetadataError("Kein TMDB-Schlüssel hinterlegt.", "no_key")
+        raise MetadataError("No TMDB key set.", "no_key")
     params = {k: v for k, v in (params or {}).items() if v not in (None, "")}
     ck = path + "?" + urllib.parse.urlencode(sorted(params.items()))
     c = _cache()
@@ -69,21 +69,21 @@ async def _get(key: str, path: str, params: dict | None = None, ttl: float = TTL
     try:
         status, body = await asyncio.to_thread(_http_get, url, headers)
     except (OSError, ValueError) as e:
-        if hit:                                                      # lieber alte Daten als gar keine
+        if hit:                                                      # old data is better than none
             return hit["v"]
-        raise MetadataError(f"TMDB nicht erreichbar: {e}", "network")
+        raise MetadataError(f"TMDB not reachable: {e}", "network")
     if status in (401, 403):
-        raise MetadataError("TMDB lehnt den Schlüssel ab (ungültig oder gesperrt).", "bad_key")
+        raise MetadataError("TMDB refuses the key (invalid or blocked).", "bad_key")
     if status == 404:
-        raise MetadataError("Bei TMDB nicht gefunden.", "not_found")
+        raise MetadataError("Not found on TMDB.", "not_found")
     if status == 429:
-        raise MetadataError("TMDB-Anfragegrenze erreicht, bitte kurz warten.", "rate")
+        raise MetadataError("TMDB request limit reached, please wait a moment.", "rate")
     if status != 200:
-        raise MetadataError(f"TMDB-Fehler {status}.", "network")
+        raise MetadataError(f"TMDB error {status}.", "network")
     try:
         val = json.loads(body)
     except ValueError:
-        raise MetadataError("Ungültige Antwort von TMDB.", "network")
+        raise MetadataError("Invalid answer from TMDB.", "network")
     c[ck] = {"t": time.time(), "v": val}
     if len(c) > MAX_CACHE:
         for k in sorted(c, key=lambda k: c[k]["t"])[:MAX_CACHE // 10]:
@@ -112,23 +112,23 @@ def _hit(kind: str, r: dict) -> dict:
 
 
 async def test_key(key: str) -> dict:
-    """Schlüssel prüfen (GET /authentication). {ok, message}."""
+    """Check the key (GET /authentication). {ok, message}."""
     try:
         v = await _get(key, "/authentication", fresh=True)
-        return {"ok": bool(v.get("success", True)), "message": "Verbindung ok"}
+        return {"ok": bool(v.get("success", True)), "message": "Connection ok"}
     except MetadataError as e:
         return {"ok": False, "message": str(e), "code": e.code}
 
 
-async def search(key: str, kind: str, query: str, year: int | None = None, lang: str = "de-DE") -> list[dict]:
-    """kind: movie | tv. Treffer mit Titel, Jahr, Kurzbeschreibung und Poster (höchstens 10)."""
+async def search(key: str, kind: str, query: str, year: int | None = None, lang: str = "en-US") -> list[dict]:
+    """kind: movie | tv. Results with title, year, short description and poster (at most 10)."""
     ytype = "year" if kind == "movie" else "first_air_date_year"
     v = await _get(key, f"/search/{kind}", {"query": query.strip(), ytype: year or "", "language": lang, "include_adult": "false"}, TTL_SEARCH)
     return [_hit(kind, r) for r in v.get("results", [])[:10]]
 
 
-async def details(key: str, kind: str, tmdb: int, lang: str = "de-DE") -> dict:
-    """Film bzw. Serie samt IMDb-ID (aus external_ids), Laufzeit und Staffelzahl."""
+async def details(key: str, kind: str, tmdb: int, lang: str = "en-US") -> dict:
+    """Movie or series including the IMDb ID (from external_ids), runtime and number of seasons."""
     v = await _get(key, f"/{kind}/{int(tmdb)}", {"language": lang, "append_to_response": "external_ids"})
     ids = v.get("external_ids") or {}
     runtime = v.get("runtime") or (v.get("episode_run_time") or [None])[0]
@@ -137,11 +137,11 @@ async def details(key: str, kind: str, tmdb: int, lang: str = "de-DE") -> dict:
             "status": v.get("status", "")}
 
 
-async def find_imdb(key: str, imdb: str, lang: str = "de-DE") -> dict | None:
-    """IMDb-ID (tt…) über TMDB /find auflösen -> Treffer wie bei `search` oder None."""
+async def find_imdb(key: str, imdb: str, lang: str = "en-US") -> dict | None:
+    """Resolve an IMDb ID (tt…) via TMDB /find -> a result like `search` or None."""
     imdb = imdb.strip()
     if not re.fullmatch(r"tt\d{6,10}", imdb):
-        raise MetadataError("Das ist keine gültige IMDb-ID (Beispiel: tt1520211).", "not_found")
+        raise MetadataError("That is not a valid IMDb ID (example: tt1520211).", "not_found")
     v = await _get(key, f"/find/{imdb}", {"external_source": "imdb_id", "language": lang}, TTL_DETAIL)
     for kind, field in (("movie", "movie_results"), ("tv", "tv_results")):
         if v.get(field):
@@ -149,7 +149,7 @@ async def find_imdb(key: str, imdb: str, lang: str = "de-DE") -> dict | None:
     return None
 
 
-async def season(key: str, tmdb: int, number: int, lang: str = "de-DE") -> list[dict]:
-    """Folgen einer Staffel: [{n, name, runtime, air}]."""
+async def season(key: str, tmdb: int, number: int, lang: str = "en-US") -> list[dict]:
+    """Episodes of a season: [{n, name, runtime, air}]."""
     v = await _get(key, f"/tv/{int(tmdb)}/season/{int(number)}", {"language": lang})
     return [{"n": e["episode_number"], "name": e.get("name") or "", "runtime": e.get("runtime"), "air": e.get("air_date") or ""} for e in v.get("episodes", [])]

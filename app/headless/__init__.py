@@ -1,9 +1,9 @@
-"""Headless-Modus: Disc einlegen → richtige Titel werden gerippt → Disc wird ausgeworfen (fertig, nächste Disc).
+"""Headless mode: insert a disc → the right titles are ripped → the disc is ejected (done, next disc).
 
-Titelwahl (plan.py): Gedächtnis (memory.py) → TheDiscDB (discid.py/discdb.py) → TMDB-Laufzeiten (tmdbmatch.py) → Struktur (choose.py).
-Einstellungen im Namensraum `headless` (enabled, use_db, convert), Status unter `headless` in /api/state, Protokoll in DATA/headless.json.
-API: POST /api/headless/test/{laufwerk} (nur erkennen), /clear (Protokoll leeren), /memory/lookup (für andere Rechner), /memory/forget,
-/contribute/{laufwerk}/prefill und /contribute/{laufwerk} (Disc an TheDiscDB melden, `send: false` = Vorschau).
+Title choice (plan.py): memory (memory.py) → TheDiscDB (discid.py/discdb.py) → TMDB runtimes (tmdbmatch.py) → structure (choose.py).
+Settings in the `headless` namespace (enabled, use_db, convert), state under `headless` in /api/state, log in DATA/headless.json.
+API: POST /api/headless/test/{drive} (detect only), /clear (clear the log), /memory/lookup (for other machines), /memory/forget,
+/contribute/{drive}/prefill and /contribute/{drive} (report the disc to TheDiscDB, `send: false` = preview).
 """
 import time
 
@@ -19,9 +19,9 @@ router = APIRouter(prefix="/api/headless")
 
 
 class HeadlessSettings(BaseModel):
-    enabled: bool = False       # Headless-Modus an
-    use_db: bool = True         # TheDiscDB fragen
-    convert: bool = False       # nach dem Rippen mit dem Standard-Preset der Disc-Art konvertieren
+    enabled: bool = False       # headless mode on
+    use_db: bool = True         # ask TheDiscDB
+    convert: bool = False       # after ripping, convert with the default preset for the disc type
 
 
 class MemoryReq(BaseModel):
@@ -32,9 +32,9 @@ class MemoryReq(BaseModel):
 def _ready_drive(n: str, what: str):
     dr = get_drive(n)
     if dr.busy:
-        raise HTTPException(409, "Laufwerk ist beschäftigt")
+        raise HTTPException(409, "Drive is busy")
     if not dr.disc:
-        raise HTTPException(409, "Disc wurde noch nicht analysiert")
+        raise HTTPException(409, "Disc has not been analyzed yet")
     dr.job = {"kind": "scan", "text": what, "cur": 0, "total": 0, "started": time.time()}
     broadcast()
     return dr
@@ -47,7 +47,7 @@ def _release(dr):
 
 @router.post("/test/{n}")
 async def api_test(n: str):
-    dr = _ready_drive(n, "Erkennung wird getestet …")
+    dr = _ready_drive(n, "Testing detection …")
     try:
         return await run.probe(dr)
     finally:
@@ -60,7 +60,7 @@ class EnableReq(BaseModel):
 
 @router.post("/enable")
 async def api_enable(req: EnableReq):
-    """Schalter auf der Oberfläche (auch von anderen Rechnern für ihr Laufwerk hier)."""
+    """Switch on the interface (also from other machines for their drive here)."""
     from app import settings as st
     await st.api_settings({"headless": {"enabled": req.enabled}})
     return {"ok": True, "enabled": req.enabled}
@@ -86,7 +86,7 @@ async def api_memory_forget(req: MemoryReq):
 
 @router.post("/contribute/{n}/prefill")
 async def api_contribute_prefill(n: str):
-    dr = _ready_drive(n, "Meldung an TheDiscDB wird vorbereitet …")
+    dr = _ready_drive(n, "Preparing the report to TheDiscDB …")
     try:
         return await contribute.prefill(dr)
     finally:
@@ -97,7 +97,7 @@ async def api_contribute_prefill(n: str):
 async def api_contribute(n: str, req: contribute.ContribReq):
     dr = get_drive(n)
     if not dr.disc:
-        raise HTTPException(409, "Disc wurde noch nicht analysiert")
+        raise HTTPException(409, "Disc has not been analyzed yet")
     ids = await run.planner.get_ids(dr) if not dr.busy else (run.planner.cached_ids(dr) or {})
     try:
         payload, log = contribute.build(dr.disc, ids, dr.scan_raw, req)
@@ -106,7 +106,7 @@ async def api_contribute(n: str, req: contribute.ContribReq):
         res = await contribute.submit(payload, log)
     except contribute.ContribError as e:
         raise HTTPException(400, str(e))
-    dr.add_log(f"An TheDiscDB gemeldet ({'aktualisiert' if res['updated'] else 'neu'}); TheDiscDB prüft die Einreichung.", "ok")
+    dr.add_log(f"Reported to TheDiscDB ({'updated' if res['updated'] else 'new'}); TheDiscDB reviews the submission.", "ok")
     broadcast()
     return res
 

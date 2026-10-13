@@ -1,4 +1,4 @@
-"""Erkennung samt TMDB-Abgleich: aus einer Auswahl von Dateien einen Vorschlag für den Assistenten machen."""
+"""Detection including TMDB matching: turn a selection of files into a suggestion for the wizard."""
 import re
 from difflib import SequenceMatcher
 
@@ -8,7 +8,7 @@ _norm = lambda s: re.sub(r"[^a-z0-9äöüß]+", "", (s or "").lower())      # no
 
 
 def best_match(cands: list[dict], title: str, year: int | None) -> tuple[dict | None, float]:
-    """Treffer mit dem ähnlichsten Titel (Titel oder Originaltitel), Jahr zählt mit. Rückgabe (Treffer, Ähnlichkeit 0–1)."""
+    """The match with the most similar title (title or original title), the year counts too. Returns (match, similarity 0–1)."""
     best, score = None, 0.0
     for c in cands:
         r = max(SequenceMatcher(None, _norm(title), _norm(c["title"])).ratio(), SequenceMatcher(None, _norm(title), _norm(c["original"])).ratio())
@@ -31,7 +31,7 @@ def start_episode(det: dict, season: int, n_eps: int) -> dict:
 
 
 async def episodes_for(items: list[dict], season: int, start: int, tmdb: int | None, key: str, lang: str) -> dict:
-    """Staffel/Episode je Episodentitel; mit TMDB-Folgenliste samt Namen und Laufzeit-Abgleich. {assigned, episode_list, error}."""
+    """Season/episode per episode title; with the TMDB episode list including names and runtime matching. {assigned, episode_list, error}."""
     tm_eps, err = [], ""
     if tmdb and key:
         try:
@@ -59,7 +59,7 @@ async def analyze(paths: list[str]) -> dict:
                 tm["chosen"] = await metadata.details(key, kind, hit["tmdb"], lang)
                 tm["similarity"] = round(score, 2)
                 det["confidence"] = round(min(0.98, det["confidence"] + (0.05 if score >= 0.85 else 0.0) + (0.03 if hit["year"] == det["year"] else 0.0)), 2)
-                det["reasons"].append(f"TMDB-Treffer „{hit['title']}“ ({hit['year']})")
+                det["reasons"].append(f"TMDB match \"{hit['title']}\" ({hit['year']})")
         except metadata.MetadataError as e:
             tm["error"] = str(e)
     ch = tm["chosen"] or {}
@@ -67,7 +67,7 @@ async def analyze(paths: list[str]) -> dict:
         main = next((i for i in det["items"] if i["role"] == "movie"), None)
         if main and main["dur"] and abs(main["dur"] / 60 - ch["runtime"]) <= 0.06 * ch["runtime"]:
             det["confidence"] = round(min(0.98, det["confidence"] + 0.05), 2)
-            det["reasons"].append(f"Laufzeit passt zu TMDB ({ch['runtime']} min)")
+            det["reasons"].append(f"Runtime matches TMDB ({ch['runtime']} min)")
     out = {"detect": det, "tmdb": tm, "files": files_, "episodes": None, "start": None}
     if det["kind"] == "series":
         n_eps = sum(1 for i in det["items"] if i["role"] == "episode")
@@ -78,5 +78,5 @@ async def analyze(paths: list[str]) -> dict:
         deltas = [a["delta"] for a in out["episodes"]["assigned"] if a["delta"] is not None]
         if deltas and max(abs(x) for x in deltas) <= 6:
             det["confidence"] = round(min(0.98, det["confidence"] + 0.03), 2)
-            det["reasons"].append("Laufzeiten passen zu den TMDB-Folgen")
+            det["reasons"].append("Runtimes match the TMDB episodes")
     return out

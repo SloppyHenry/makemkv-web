@@ -1,11 +1,11 @@
-"""Ablage der Begleitdaten unter DATA/media/ (nicht im NAS-Ordner, damit Jellyfin nicht stolpert).
+"""Storage of the companion data under DATA/media/ (not in the NAS folder, so that Jellyfin does not trip over it).
 
-- discs.json   Disc-Infos beim Rippen: {"discs": {id: {name, type, volume, titles}}, "files": {pfad: {disc, title}}}
-- items.json   bekannte Medien je Datei (nach dem Einsortieren): {pfad: {kind, title, year, tmdb, imdb, poster, season, episode …}}
-- series.json  Fortschritt je Serie: {"tmdb:1402" | "titel|jahr": {"seasons": {"1": {"next": 6, "discs": {"1": [1, 5]}}}}}
-- history.json Liste der Einsortier-Aktionen (neueste zuletzt, höchstens 50) für „Rückgängig“
-- cache.json   Antworten von TMDB
-Pfade sind relativ zum Ausgabeordner, solange die Datei dort liegt, sonst absolut.
+- discs.json   disc info when ripping: {"discs": {id: {name, type, volume, titles}}, "files": {path: {disc, title}}}
+- items.json   known media per file (after sorting): {path: {kind, title, year, tmdb, imdb, poster, season, episode …}}
+- series.json  progress per series: {"tmdb:1402" | "title|year": {"seasons": {"1": {"next": 6, "discs": {"1": [1, 5]}}}}}
+- history.json list of sort actions (newest last, at most 50) for "undo"
+- cache.json   answers from TMDB
+Paths are relative to the output folder as long as the file is there, otherwise absolute.
 """
 import json
 import os
@@ -43,12 +43,12 @@ def save(name: str):
 
 
 def reset_memory():
-    """Nur für Tests: Zwischenspeicher im Arbeitsspeicher vergessen (Datei wird neu gelesen)."""
+    """Tests only: forget the in-memory cache (the file is read again)."""
     with _lock:
         _mem.clear()
 
 
-# ---- Begleitdaten beim Rippen
+# ---- companion data when ripping
 def disc_id(disc: dict) -> str:
     import hashlib
     raw = f"{disc.get('name')}|{disc.get('volume')}|" + ",".join(str(t.get("duration")) for t in disc.get("titles", []))
@@ -56,7 +56,7 @@ def disc_id(disc: dict) -> str:
 
 
 def remember_rip(info: dict):
-    """Rip-Hook: Disc-Name, Label, alle Titel mit Laufzeiten und diesen Titel unter seinem Zielpfad merken."""
+    """Rip hook: remember the disc name, label, all titles with runtimes and this title under its target path."""
     disc, title = info.get("disc") or {}, info.get("title") or {}
     if not disc or not info.get("rel"):
         return
@@ -66,14 +66,14 @@ def remember_rip(info: dict):
         d["discs"][did] = {"name": disc.get("name", ""), "type": disc.get("type", ""), "volume": disc.get("volume", ""),
                            "titles": [{k: t.get(k) for k in ("id", "name", "duration", "bytes", "chapters")} for t in disc.get("titles", [])]}
         d["files"][info["rel"]] = {"disc": did, "title": {k: title.get(k) for k in ("id", "name", "duration", "bytes", "chapters")}}
-        if len(d["files"]) > 5000:                                   # alte Einträge verwerfen
+        if len(d["files"]) > 5000:                                   # discard old entries
             for k in list(d["files"])[:500]:
                 del d["files"][k]
         save("discs.json")
 
 
 def rekey_file(old: str, new: str):
-    """Übertragung hat einen anderen Namen gewählt (unique_path): Eintrag umhängen."""
+    """The transfer chose a different name (unique_path): move the entry."""
     with _lock:
         d = load("discs.json", {"discs": {}, "files": {}})
         if old != new and old in d["files"]:
@@ -82,7 +82,7 @@ def rekey_file(old: str, new: str):
 
 
 def sidecar(rel: str) -> dict | None:
-    """{disc: {name, volume, titles}, title: {id, duration …}} oder None."""
+    """{disc: {name, volume, titles}, title: {id, duration …}} or None."""
     d = load("discs.json", {"discs": {}, "files": {}})
     f = d["files"].get(rel)
     if not f or f["disc"] not in d["discs"]:
@@ -91,7 +91,7 @@ def sidecar(rel: str) -> dict | None:
 
 
 def move_keys(old: str, new: str):
-    """Pfad geändert (Einsortieren, Rückgängig): Begleitdaten und Medien-Einträge folgen."""
+    """Path changed (sorting, undo): companion data and media entries follow."""
     with _lock:
         for name, default in (("discs.json", {"discs": {}, "files": {}}), ("items.json", {})):
             data = load(name, default)

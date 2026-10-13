@@ -1,4 +1,4 @@
-/* Konvertierungs-Editor (Besitzer: PF). Die Maße richten sich nach der Breite des Editors (Container Query auf .cv), nicht nach dem Fenster. */
+/* Conversion editor (owner: PF). Sizes follow the width of the editor (container query on .cv), not the window. */
 .cv{container:cv/inline-size}
 .cv-in{display:grid;gap:14px}
 .cv-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px}
@@ -42,7 +42,7 @@
 .cv .hint,.lib-detail .hint{font-size:10.5px;color:var(--muted);line-height:1.5}
 .cv-seg{justify-self:start;max-width:100%}
 .cv-2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 16px}
-/* Qualitätsregler */
+/* Quality slider */
 .cv-q{display:grid;gap:4px}
 .cv-qhead{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
 .cv-qhead .val{font-size:22px;font-weight:750;color:var(--text)}
@@ -90,7 +90,7 @@
 .cv-table{width:100%;border-collapse:collapse;white-space:normal}
 .cv-table td,.cv-table th{padding:9px 10px;font-size:12px;vertical-align:middle}
 .cv-table select{height:30px;background:#0c121a;color:var(--text);border:1px solid #2b3748;border-radius:7px;padding:0 8px}
-/* Zusätze der echten Oberfläche */
+/* Additions of the real interface */
 .cv .hint.warn{color:var(--amber)}
 .cv-inline{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .cv-inline .input{max-width:240px}

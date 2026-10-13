@@ -1,9 +1,9 @@
-"""TheDiscDB (thediscdb.com): Disc nachschlagen und deren Titel den MakeMKV-Titeln zuordnen.
+"""TheDiscDB (thediscdb.com): look up a disc and assign its titles to the MakeMKV titles.
 
-Abfrage ohne Anmeldung: GET /api/discid/<Disc-ID> (Liste) und /api/dischash/<Inhalts-Hash> (ein Eintrag).
-Jeder Titel dort hat optional ein `item` mit `type` (MainMovie, Episode, Extra, Trailer, DeletedScene …), bei Folgen `season`/`episode`.
-Zugeordnet wird über Laufzeit plus Playlist (Blu-ray, `source_file` = MakeMKV-Attribut 16) bzw. Größe (DVD); die Titelnummern
-weichen ab, weil dort ohne Mindestlänge gescannt wurde. `HEADLESS_DISCDB_BASE` überschreibt die Adresse (Tests).
+Query without login: GET /api/discid/<disc ID> (list) and /api/dischash/<content hash> (one entry).
+Every title there optionally has an `item` with `type` (MainMovie, Episode, Extra, Trailer, DeletedScene …), for episodes `season`/`episode`.
+Assignment works via runtime plus playlist (Blu-ray, `source_file` = MakeMKV attribute 16) or size (DVD); the title numbers
+differ because the scan there ran without a minimum length. `HEADLESS_DISCDB_BASE` overrides the address (tests).
 """
 import asyncio
 import json
@@ -24,7 +24,7 @@ class DiscDbError(Exception):
 
 
 def _http_get(url: str, timeout: float = 15) -> tuple[int, bytes]:
-    """Einzige Stelle mit Netzwerkzugriff (Tests ersetzen sie)."""
+    """The only place with network access (tests replace it)."""
     req = urllib.request.Request(url, headers={"User-Agent": "spindle", "Accept": "application/json"})
     try:
         with urllib.request.urlopen(req, timeout=timeout) as r:
@@ -41,32 +41,32 @@ async def _get(path: str) -> dict | list | None:
     try:
         status, body = await asyncio.to_thread(_http_get, BASE + path)
     except OSError as e:
-        raise DiscDbError(f"TheDiscDB nicht erreichbar: {e}") from e
+        raise DiscDbError(f"TheDiscDB not reachable: {e}") from e
     if status == 404:
         _cache[path] = (time.time() + TTL_MISS, None)
         return None
     if status != 200:
-        raise DiscDbError(f"TheDiscDB antwortet mit {status}")
+        raise DiscDbError(f"TheDiscDB answers with {status}")
     try:
         val = json.loads(body)
     except ValueError as e:
-        raise DiscDbError("TheDiscDB: unlesbare Antwort") from e
+        raise DiscDbError("TheDiscDB: unreadable answer") from e
     _cache[path] = (time.time() + TTL_HIT, val)
     return val
 
 
 async def lookup(disc_id: str, content_hash: str) -> tuple[dict | None, str]:
-    """Erst über die Disc-ID, dann über den Inhalts-Hash. Rückgabe (Eintrag oder None, womit gefunden)."""
+    """First via the disc ID, then via the content hash. Returns (entry or None, what it was found by)."""
     if disc_id:
         v = await _get(f"/api/discid/{disc_id}")
         if isinstance(v, list) and v:
-            return v[0], "Disc-ID"
+            return v[0], "disc ID"
         if isinstance(v, dict) and v.get("titles") is not None:
-            return v, "Disc-ID"
+            return v, "disc ID"
     if content_hash:
         v = await _get(f"/api/dischash/{content_hash}")
         if isinstance(v, dict) and v.get("titles") is not None:
-            return v, "Inhalts-Hash"
+            return v, "content hash"
     return None, ""
 
 
@@ -95,8 +95,8 @@ def candidates(dt: dict, titles: list[dict], bluray: bool) -> list[int]:
 
 
 def match(entry: dict, disc: dict) -> dict:
-    """Gewünschte Titel (Hauptfilm bzw. Folgen) den gescannten Titeln zuordnen.
-    Ergebnis: {ok, kind: movie|series, title, year, disc_name, picks: [{id, type, season, episode, item}], reason}."""
+    """Assign the wanted titles (main feature or episodes) to the scanned titles.
+    Result: {ok, kind: movie|series, title, year, disc_name, picks: [{id, type, season, episode, item}], reason}."""
     media = entry.get("media") or {}
     kind = "series" if (media.get("type") or "").lower() == "series" else "movie"
     want_type = "episode" if kind == "series" else "mainmovie"
@@ -106,14 +106,14 @@ def match(entry: dict, disc: dict) -> dict:
            "tmdb": (media.get("external_ids") or {}).get("tmdb") or ""}
     wanted = [dt for dt in entry.get("titles") or [] if ((dt.get("item") or {}).get("type") or "").lower() == want_type]
     if not wanted:
-        res["reason"] = "Eintrag ohne " + ("Folgen" if kind == "series" else "Hauptfilm")
+        res["reason"] = "entry without " + ("episodes" if kind == "series" else "a main feature")
         return res
     used: set[int] = set()
     for dt in wanted:
         c = [i for i in candidates(dt, disc["titles"], bluray) if i not in used]
         if len(c) != 1:
-            res["reason"] = (f"Titel {dt.get('source_file') or dt.get('index')} ({dt.get('duration')}) "
-                             + ("nicht gefunden" if not c else "nicht eindeutig") + " – Disc weicht vom Eintrag ab")
+            res["reason"] = (f"Title {dt.get('source_file') or dt.get('index')} ({dt.get('duration')}) "
+                             + ("not found" if not c else "not unambiguous") + " – the disc differs from the entry")
             res["picks"] = []
             return res
         used.add(c[0])

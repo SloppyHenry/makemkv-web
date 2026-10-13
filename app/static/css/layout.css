@@ -1,4 +1,4 @@
-/* Seitenaufbau: Hauptbereich und zwei Spalten */
+/* Page layout: main area and two columns */
 main{max-width:1540px;margin:0 auto;padding:16px 24px 28px}
 .layout{display:grid;grid-template-columns:minmax(0,1.8fr) minmax(330px,.92fr);gap:16px;align-items:start}
 .left,.right{min-width:0;display:flex;flex-direction:column;gap:12px}

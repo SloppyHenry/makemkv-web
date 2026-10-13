@@ -1,30 +1,55 @@
 # Spindle
 
-Headless [MakeMKV](https://www.makemkv.com/) with a browser interface. Plug a USB/SATA drive into a server and insert a
-disc – it is detected live and analyzed automatically, and everything else (choosing titles, ripping, ejecting) happens
-in the browser.
+A browser interface around [MakeMKV](https://www.makemkv.com/) for a headless server. Plug a USB/SATA drive into a
+server and insert a disc – it is detected live and analyzed automatically, and everything else (choosing titles,
+ripping, converting, sorting into your Jellyfin library, ejecting) happens in the browser.
 
-> The web interface is currently in German.
+![Spindle: drives view while ripping](docs/screenshot.png)
+
+## What MakeMKV does and what Spindle adds
+
+Spindle does not read or decrypt discs itself. That is MakeMKV's work – Spindle runs `makemkvcon` in the background
+and builds everything else around it.
+
+| | Provided by |
+|---|---|
+| Reading DVDs, Blu-rays and UHD Blu-rays, decryption (AACS/BD+/CSS) | **MakeMKV** |
+| Title and track list of a disc (duration, size, chapters, audio/subtitle tracks) | **MakeMKV** |
+| Ripping titles to MKV, decrypted disc backup (BDMV/VIDEO_TS) | **MakeMKV** |
+| Selecting audio/subtitle languages when ripping | **MakeMKV** (Spindle writes its settings) |
+| Web interface, live detection of drives and discs (insert, eject, unplug), auto-eject | Spindle |
+| Title preselection and headless mode (memory of earlier choices, [TheDiscDB](https://thediscdb.com), TMDB runtimes, disc structure) | Spindle |
+| Staging buffer and background transfer to a NAS, recovery after USB resets of the drive | Spindle |
+| Conversion with ffmpeg (x265/x264/SVT-AV1/hardware, presets, forecast, test encode, segments in parallel) | Spindle |
+| Library, built-in player, sorting into Jellyfin folders with TMDB, undo | Spindle |
+| Cluster of several machines (discovery, pairing, hand-over of conversions, remote drives) | Spindle |
+
+### Support MakeMKV
+
+Spindle would not exist without MakeMKV. MakeMKV is shareware: DVDs are free, Blu-ray support needs a registration
+key after the 30-day trial (the public beta key works in the meantime). If Spindle is useful to you, please consider
+supporting MakeMKV's developer by [buying a registration key](https://www.makemkv.com/buy/) – that is the way to
+contribute to MakeMKV; there is no separate donation page. The same links are in the interface under
+Settings › MakeMKV key and Settings › About.
+
+## Features
 
 - Live detection of drive and disc (insert, eject, unplug)
 - Automatic analysis of newly inserted discs (DVD / Blu-ray)
 - Title list with duration, size, chapters and tracks; file names and target folder are editable
 - Rip as MKV or as a decrypted disc backup, progress with remaining time, cancel, log
-- Language filter for audio/subtitles, auto-eject, file list with download/delete
+- Language filter for audio/subtitles, auto-eject
 - Staging buffer: every title is ripped locally first and transferred to the target (e.g. a NAS) in the background once it is finished, while the next title is already ripping – a slow network does not slow the rip down
-- Conversion after ripping (x265 10-bit, ffmpeg): a preset per disc type (Blu-ray preselected), changeable in the browser; large films are split into segments automatically according to free cores/RAM and encoded in parallel
-- "Library" tab: convert existing files in the target after the fact – the original is replaced once the check passes; lock files keep two instances from working on the same file
-- Freely adjustable conversion: presets (DVD/Blu-ray optimal, animation, film grain, UHD/HDR, small & fast), codecs x265/x264/SVT-AV1 and hardware encoders, size and duration forecast per machine, test encode with a before/after comparison, warning for Dolby Vision
-- New library with filters, list/grid view, detail pane and selection bar; conversion on a machine of your choice in the cluster
+- Conversion after ripping or later from the library (ffmpeg): presets (DVD/Blu-ray optimal, animation, film grain, UHD/HDR, small & fast, NVIDIA), codecs x265/x264/SVT-AV1 and hardware encoders, size and duration forecast per machine, test encode with a before/after comparison, warning for Dolby Vision; large movies are split into segments according to free cores/RAM and encoded in parallel
+- Library with filters, list/grid view, detail pane and selection bar; converted files replace the original once the check passes; lock files keep two instances from working on the same file
 - Built-in browser player (direct, remux or transcode, subtitles, seeking)
 - Sorting into Jellyfin folders (movies/series) with TMDB search, plan, undo and optional automation
-- Several machines in a cluster: discovery on the network, pairing via token, hand-over of conversions
-- Transfer tile with speed and remaining time
+- Several machines in a cluster: discovery on the network, pairing via token, hand-over of conversions, remote control of drives
 - Output to a mounted network share (NFS/SMB), with a local fallback
 - Survives USB resets of the drive (waits and repeats the step automatically)
-- Headless mode: insert a disc, done – the right titles (main feature or episodes) are determined from its own memory (formerly picked by hand), [TheDiscDB](https://thediscdb.com), TMDB runtimes or the structure of the disc, ripped, and the disc is ejected; unknown discs can be reported to TheDiscDB
+- Headless mode: insert a disc, done – the right titles (main feature or episodes) are determined from its own memory (formerly picked by hand), TheDiscDB, TMDB runtimes or the structure of the disc, ripped, and the disc is ejected; unknown discs can be reported to TheDiscDB
 
-![Spindle](docs/screenshot.png)
+![Spindle: library](docs/screenshot-library.png)
 
 ## Installation
 

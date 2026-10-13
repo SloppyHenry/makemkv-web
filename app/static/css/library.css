@@ -1,4 +1,4 @@
-/* Bibliothek (Besitzer: PF). Die Maße richten sich nach der Breite der Bibliothek (Container Query auf .lib), nicht nach dem Fenster. */
+/* Library (owner: PF). Sizes follow the width of the library (container query on .lib), not the window. */
 .lib{container:lib/inline-size;overflow:clip}
 .lib-head{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;padding:14px 20px;border-bottom:1px solid var(--line)}
 .lib-head h2{margin:0;font-size:16px}
@@ -88,7 +88,7 @@
 .lib-sidecv h3 .sp{flex:1}
 .lib-filterbtn{display:none}
 
-/* Zusätze der echten Oberfläche */
+/* Additions of the real interface */
 .lib-player{border:0;background:transparent}
 .lib-player.player-embed,.lib-player .player{border-radius:10px;overflow:hidden}
 .lib-namebtn{background:transparent;border:0;color:inherit;font:inherit;font-weight:600;padding:0;text-align:left;cursor:pointer;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block}
@@ -138,7 +138,7 @@
   .lib-detail .lib-acts .primary{flex:1 1 100%}
 }
 .lib [hidden],.cv [hidden]{display:none!important}
-@media (max-width:700px){#libside{scroll-margin-top:64px}.lib-bar{bottom:calc(58px + env(safe-area-inset-bottom))}}   /* über der festen Reiterleiste (shell.css) */
+@media (max-width:700px){#libside{scroll-margin-top:64px}.lib-bar{bottom:calc(58px + env(safe-area-inset-bottom))}}   /* above the fixed tab bar (shell.css) */
 .lib-grp{flex-wrap:nowrap}
 .lib-grp .secondary{white-space:nowrap;flex:none}
 .lib-grp .lbl{display:inline-block;max-width:120px;overflow:hidden;text-overflow:ellipsis;vertical-align:bottom}

@@ -1,4 +1,4 @@
-"""makemkvcon: Konfiguration, Beta-Key und Auswertung des Robot-Modus."""
+"""makemkvcon: configuration, beta key and parsing of robot mode."""
 import asyncio
 import json
 import os
@@ -43,7 +43,7 @@ def fetch_beta_key_sync():
         html = urllib.request.urlopen(req, timeout=20).read().decode("utf-8", "replace")
         m = re.search(r"<code>(T-[A-Za-z0-9@_\-]{40,})</code>", html)
         if not m:
-            raise ValueError("Key nicht auf der Forumsseite gefunden")
+            raise ValueError("Key not found on the forum page")
         beta.update(key=m.group(1), fetched=int(time.time()), error="")
         BETAKEY.write_text(json.dumps(beta))
         return True
@@ -61,7 +61,7 @@ INFO_RE = {
 
 
 class Parser:
-    """Liest den makemkvcon-Robot-Modus."""
+    """Reads makemkvcon's robot mode."""
 
     def __init__(self, drive, job: dict):
         self.d, self.job = drive, job
@@ -69,7 +69,7 @@ class Parser:
         self.saved = None
         self.disc_index = None
         self.errors = []
-        self.raw = []          # Titel-/Spurangaben im Robot-Format (ohne Laufwerks- und Systemzeilen), z. B. für TheDiscDB
+        self.raw = []          # title/track details in robot format (without drive and system lines), e.g. for TheDiscDB
 
     def line(self, line: str):
         d, job = self.d, self.job
@@ -80,7 +80,7 @@ class Parser:
             if m:
                 code, text = int(m.group(1)), m.group(4)
                 level = "error" if 2000 <= code < 3000 or code in (5010, 5037) else "info"
-                if code == 5074:    # Update-Hinweis
+                if code == 5074:    # update notice
                     return
                 if level == "error":
                     self.errors.append(text)
@@ -116,7 +116,7 @@ class Parser:
             m = INFO_RE["S"].match(line)
             if m:
                 self.sinfo.setdefault((int(m.group(1)), int(m.group(2))), {})[int(m.group(3))] = m.group(5)
-        elif line.strip() and not line.startswith(("MSG:", "DRV:", "PRG", "TCOUNT:", "CINFO:", "TINFO:", "SINFO:")):   # Klartext-Fehler von makemkvcon
+        elif line.strip() and not line.startswith(("MSG:", "DRV:", "PRG", "TCOUNT:", "CINFO:", "TINFO:", "SINFO:")):   # plain-text errors from makemkvcon
             self.errors.append(line.strip())
             d.add_log(line.strip(), "error")
 
@@ -135,7 +135,7 @@ class Parser:
                 })
             secs = hms_to_sec(t.get(9, ""))
             titles.append({
-                "id": tid, "name": t.get(2, f"Titel {tid}"), "duration": secs, "duration_text": t.get(9, ""),
+                "id": tid, "name": t.get(2, f"Title {tid}"), "duration": secs, "duration_text": t.get(9, ""),
                 "bytes": int(t.get(11, "0") or 0), "size_text": t.get(10, ""),
                 "chapters": int(t.get(8, "0") or 0), "source": t.get(16, ""), "segments": t.get(26, ""), "outname": t.get(27, ""),
                 "tracks": tracks,

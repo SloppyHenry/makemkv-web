@@ -1,4 +1,4 @@
-"""Auftragsliste aufräumen: nur beendete Einträge lassen sich entfernen, laufende nicht."""
+"""Tidying up the job list: only finished entries can be removed, running ones cannot."""
 import unittest
 
 from fastapi import HTTPException
@@ -19,36 +19,36 @@ class DismissTest(unittest.IsolatedAsyncioTestCase):
         conversions.clear()
         uploads.clear()
 
-    async def test_beendeter_eintrag_wird_entfernt(self):
+    async def test_finished_entry_is_removed(self):
         _setup()
         self.assertEqual(await joblist.api_conv_dismiss(3), {"ok": True})
         self.assertNotIn(3, [c["id"] for c in conversions])
         await joblist.api_upload_dismiss(1)
         self.assertNotIn(1, [u["id"] for u in uploads])
 
-    async def test_laufender_oder_wartender_eintrag_bleibt(self):
+    async def test_running_or_waiting_entry_stays(self):
         _setup()
         for cid in (2, 6):
             with self.assertRaises(HTTPException) as e:
                 await joblist.api_conv_dismiss(cid)
             self.assertEqual(e.exception.status_code, 409)
-        for uid in (2, 3):     # „retry“ wird noch versucht
+        for uid in (2, 3):     # "retry" is still being attempted
             with self.assertRaises(HTTPException) as e:
                 await joblist.api_upload_dismiss(uid)
             self.assertEqual(e.exception.status_code, 409)
         self.assertEqual(len(conversions), 6)
         self.assertEqual(len(uploads), 4)
 
-    async def test_unbekannter_eintrag_gibt_404(self):
+    async def test_unknown_entry_gives_404(self):
         _setup()
         with self.assertRaises(HTTPException) as e:
             await joblist.api_conv_dismiss(99)
         self.assertEqual(e.exception.status_code, 404)
 
-    async def test_alle_beendeten_entfernen(self):
+    async def test_remove_all_finished(self):
         _setup()
         r = await joblist.api_dismiss_finished()
-        self.assertEqual(r["removed"], 6)    # 4 Konvertierungen (fertig, abgebrochen, übersprungen, Fehler) + 2 Übertragungen (fertig, Fehler)
+        self.assertEqual(r["removed"], 6)    # 4 conversions (done, cancelled, skipped, error) + 2 transfers (done, error)
         self.assertEqual([c["id"] for c in conversions], [2, 6])
         self.assertEqual([u["id"] for u in uploads], [2, 3])
 

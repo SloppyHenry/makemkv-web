@@ -1,4 +1,4 @@
-"""Gemeinsame Testumgebung: eigene Ordner, bevor `app` importiert wird. Aufruf: python3 -m unittest discover -s tests -t . -v"""
+"""Shared test environment: own folders before `app` is imported. Run: python3 -m unittest discover -s tests -t . -v"""
 import os
 import sys
 import tempfile

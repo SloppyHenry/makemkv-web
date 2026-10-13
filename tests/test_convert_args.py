@@ -13,7 +13,7 @@ HDR = {"streams": [{"codec_type": "video", "codec_name": "hevc", "width": 3840, 
                     "color_primaries": "bt2020", "color_space": "bt2020nc"}, {"codec_type": "audio", "channels": 8}], "format": {"duration": "7200"}}
 
 
-def old_x265(cfg, pools=0):          # Stand vor Schema v2 (zum Vergleich: für alte Einstellungen muss der Befehl gleich bleiben)
+def old_x265(cfg, pools=0):          # state before schema v2 (for comparison: for old settings the command must stay the same)
     a = ["-c:v", "libx265", "-preset", cfg["preset"], "-crf", str(cfg["rf"]), "-pix_fmt", "yuv420p10le"]
     if cfg["tune"] in ("grain", "animation"):
         a += ["-tune", cfg["tune"]]
@@ -59,7 +59,7 @@ def ctx(info=INFO, **kw):
 
 
 class ArgsTest(unittest.TestCase):
-    def test_alte_einstellungen_geben_denselben_befehl(self):
+    def test_old_settings_give_the_same_command(self):
         for v1 in ({"rf": 21, "preset": "slow", "tune": "none", "extra": "aq-mode=3:no-sao=1", "audio": "copy"},
                    {"rf": 18, "preset": "veryslow", "tune": "grain", "extra": "", "audio": "aac"},
                    {"rf": 25, "preset": "fast", "tune": "film", "extra": "a=1:b=2", "audio": "opus"},
@@ -109,12 +109,12 @@ class ArgsTest(unittest.TestCase):
         a = fa.video_args(cfg, ctx())
         self.assertEqual(a[:2], ["-c:v", "hevc_nvenc"])
         self.assertEqual(a[a.index("-cq") + 1], "22")
-        self.assertEqual(a.count("-preset"), 1)                                            # ersetzt den Grundwert p5
+        self.assertEqual(a.count("-preset"), 1)                                            # replaces the base value p5
         for k, v in (("-preset", "p7"), ("-tune", "hq"), ("-profile", "main10"), ("-multipass", "fullres"), ("-rc-lookahead", "32"), ("-spatial-aq", "1"),
                      ("-temporal-aq", "1"), ("-bf", "4"), ("-b_ref_mode", "middle")):
             self.assertEqual(a[a.index(k) + 1], v)
         self.assertEqual(fa.filter_chain(cfg, ctx())[-1], "format=p010le")
-        self.assertEqual(fa.nvenc_extra("preset=p7:f=null:y"), ["-preset", "p7"])          # unbekannte Schlüssel fallen weg
+        self.assertEqual(fa.nvenc_extra("preset=p7:f=null:y"), ["-preset", "p7"])          # unknown keys are dropped
 
     def test_remux(self):
         cfg = clean_v2({"v": 2, "video": {"codec": "copy"}, "sound": {"mode": "aac"}})
@@ -124,7 +124,7 @@ class ArgsTest(unittest.TestCase):
         self.assertNotIn("libx265", a)
         self.assertIn("aac", a)
 
-    def test_filter_reihenfolge(self):
+    def test_filter_order(self):
         cfg = clean_v2({"v": 2, "picture": {"scale": "720", "denoise": "light", "deint": "on"}})
         f = fa.filter_chain(cfg, ctx(crop="crop=1920:800:0:140"))
         self.assertEqual([x.split("=")[0] for x in f], ["bwdif", "crop", "hqdn3d", "scale"])
@@ -141,11 +141,11 @@ class ArgsTest(unittest.TestCase):
         self.assertTrue(fa.changes_framecount(cfg, ctx(scan="telecine")))
         self.assertFalse(fa.changes_framecount(cfg, ctx(scan="interlaced")))
 
-    def test_ton(self):
+    def test_audio(self):
         st = clean_v2({"v": 2, "sound": {"mode": "aac", "channels": "stereo"}})
         a = fa.audio_args(st, INFO)
-        self.assertIn("-ac:a:0", a)                      # 5.1 -> Stereo
-        self.assertNotIn("-ac:a:1", a)                   # Stereo bleibt
+        self.assertIn("-ac:a:0", a)                      # 5.1 -> stereo
+        self.assertNotIn("-ac:a:1", a)                   # stereo stays
         self.assertEqual(a.count("160k"), 3)
         five = clean_v2({"v": 2, "sound": {"mode": "opus", "channels": "51", "kbps": 300}})
         b = fa.audio_args(five, INFO)
@@ -153,7 +153,7 @@ class ArgsTest(unittest.TestCase):
         self.assertIn("300k", b)
         self.assertEqual(fa.audio_args(clean_v2({"v": 2}), INFO), ["-c:a", "copy"])
 
-    def test_untertitel(self):
+    def test_subtitles(self):
         sc = lambda m, l="": clean_v2({"v": 2, "subs": {"mode": m, "langs": l}})      # noqa: E731
         self.assertEqual(fa.sub_maps(sc("all"), INFO), ["-map", "0:s?"])
         self.assertEqual(fa.sub_maps(sc("none"), INFO), [])
@@ -167,7 +167,7 @@ class ArgsTest(unittest.TestCase):
         p = fa.x265_args(cfg, ctx(HDR, hdr=h))[-1]
         for want in ("colorprim=bt2020", "transfer=smpte2084", "colormatrix=bt2020nc", "hdr10-opt=1", "repeat-headers=1", "master-display=G(13250", "max-cll=1000,400"):
             self.assertIn(want, p)
-        self.assertNotIn("hdr10", fa.x265_args(cfg, ctx(INFO))[-1])                 # SDR-Quelle: nichts davon
+        self.assertNotIn("hdr10", fa.x265_args(cfg, ctx(INFO))[-1])                 # SDR source: none of that
         self.assertEqual(fa.hdr_problem(clean_v2({"v": 2, "video": {"codec": "x264"}}), HDR) != "", True)
         self.assertEqual(fa.hdr_problem(cfg, HDR), "")
         self.assertEqual(fa.hdr_problem(clean_v2({"v": 2, "video": {"codec": "x264"}, "picture": {"hdr": "tonemap"}}), HDR), "")
@@ -175,10 +175,10 @@ class ArgsTest(unittest.TestCase):
         self.assertTrue(any(x.startswith("zscale") for x in fa.filter_chain(tm, ctx(HDR))))
         self.assertNotIn("hdr10", fa.x265_args(tm, ctx(HDR))[-1])
 
-    def test_zielgroesse_und_zwei_durchgaenge(self):
+    def test_target_size_and_two_passes(self):
         cfg = clean_v2({"v": 2, "video": {"codec": "x265"}, "quality": {"mode": "size", "size_gb": 4}, "sound": {"mode": "aac"}})
         k = fa.target_kbps(cfg, INFO, 7200)
-        self.assertTrue(4000 < k < 5000, k)               # 4 GB über 2 h abzüglich Ton
+        self.assertTrue(4000 < k < 5000, k)               # 4 GB over 2 h minus audio
         self.assertTrue(fa.two_pass(cfg))
         c1 = fa.ffmpeg_args("a.mkv", "b.mkv", cfg, ctx(kbps=k, passlog="/t/p"), 1)
         c2 = fa.ffmpeg_args("a.mkv", "b.mkv", cfg, ctx(kbps=k, passlog="/t/p"), 2)
@@ -192,7 +192,7 @@ class ArgsTest(unittest.TestCase):
         self.assertFalse(fa.two_pass(sv))
         self.assertIn("3000k", fa.video_args(sv, ctx(kbps=3000)))
 
-    def test_vorschau(self):
+    def test_preview(self):
         s = fa.command_preview(clean_v2({"rf": 20}))
         self.assertTrue(s.startswith("ffmpeg"))
         self.assertIn("libx265", s)

@@ -1,9 +1,9 @@
-"""TMDB als zweite Stufe, wenn TheDiscDB die Disc nicht kennt (z. B. deutsche Ausgaben): Name der Disc suchen, Laufzeiten abgleichen.
+"""TMDB as the second stage if TheDiscDB does not know the disc (e.g. local editions): search the disc's name, compare runtimes.
 
-Nur ein eindeutiger Name zählt (genau gleicher Titel unter den ersten drei Treffern, und nur als Film oder nur als Serie).
-Film: genau ein Titel, dessen Länge zur TMDB-Laufzeit passt (± 4 %, mindestens ± 3 min). Serie: die Titel, deren Länge zu den
-Folgen der Staffel passt (± 12 %, mindestens ± 2 min), mindestens zwei. Sonst entscheidet die Struktur (choose.decide) mit dem
-gefundenen Namen als Gegenprobe.
+Only an unambiguous name counts (exactly the same title among the first three results, and only as a movie or only as a series).
+Movie: exactly one title whose length matches the TMDB runtime (± 4 %, at least ± 3 min). Series: the titles whose length matches the
+episodes of the season (± 12 %, at least ± 2 min), at least two. Otherwise the structure decides (choose.decide) with the
+found name as a cross-check.
 """
 import re
 
@@ -17,13 +17,13 @@ def _norm(s: str) -> str:
 
 
 async def lookup(disc: dict) -> dict | None:
-    """{kind: movie|series, tmdb, title, year, runtime, season, episodes: [Minuten]} oder None (kein Schlüssel, kein eindeutiger Name)."""
+    """{kind: movie|series, tmdb, title, year, runtime, season, episodes: [minutes]} or None (no key, no unambiguous name)."""
     try:
         from app.media import conf, metadata
     except ImportError:
         return None
     st = conf.cfg()
-    key, lang = st.get("tmdb_key"), st.get("language") or "de-DE"
+    key, lang = st.get("tmdb_key"), st.get("language") or "en-US"
     if not key:
         return None
     a = detect.analyze_name(disc.get("name") or disc.get("volume") or "")
@@ -48,35 +48,35 @@ async def lookup(disc: dict) -> dict | None:
             d = await metadata.details(key, "tv", h["tmdb"], lang)
             eps = [d["runtime"]] if d.get("runtime") else []
         return {"kind": "series", "tmdb": h["tmdb"], "title": h["title"], "year": h["year"], "runtime": 0, "season": season, "episodes": eps}
-    except Exception:  # noqa: BLE001  (Netz, Schlüssel, nicht gefunden: dann ohne TMDB)
+    except Exception:  # noqa: BLE001  (network, key, not found: then without TMDB)
         return None
 
 
 def match(info: dict, prep: dict, disc: dict) -> dict:
-    """info: aus lookup(); prep: choose.prepare(). {ok, mode, picks, reason, folder}."""
+    """info: from lookup(); prep: choose.prepare(). {ok, mode, picks, reason, folder}."""
     rest = prep["rest"]
     base = info["title"] + (f" ({info['year']})" if info.get("year") else "")
     res = {"ok": False, "mode": info["kind"], "picks": [], "reason": "", "folder": base}
     if info["kind"] == "movie":
         rt = info.get("runtime") or 0
         if not rt:
-            res["reason"] = f"TMDB: „{base}“ ohne Laufzeit"
+            res["reason"] = f"TMDB: \"{base}\" without a runtime"
             return res
         c = [t for t in rest if t["duration"] >= MIN_MOVIE and abs(t["duration"] / 60 - rt) <= max(3, 0.04 * rt)]
         if len(c) != 1:
-            res["reason"] = f"TMDB: Laufzeit von „{base}“ ({rt} min) passt zu {len(c) or 'keinem'} Titel{'n' if len(c) > 1 else ''}"
+            res["reason"] = f"TMDB: runtime of \"{base}\" ({rt} min) matches {len(c) or 'no'} title{'s' if len(c) != 1 else ''}"
             return res
         res.update(ok=True, picks=[c[0]["id"]],
-                   reason=f"TMDB: „{base}“, {rt} min – passt zu Titel {c[0]['id'] + 1} ({c[0].get('duration_text') or int(c[0]['duration'] // 60)})")
+                   reason=f"TMDB: \"{base}\", {rt} min – matches title {c[0]['id'] + 1} ({c[0].get('duration_text') or int(c[0]['duration'] // 60)})")
         return res
     rts = info.get("episodes") or []
     c = [t for t in rest if t["duration"] >= 5 * 60 and any(abs(t["duration"] / 60 - r) <= max(2, 0.12 * r) for r in rts)]
     a = detect.analyze_name(disc.get("name") or disc.get("volume") or "")
-    res["folder"] = base + f" - Staffel {info['season']}" + (f" Disc {a['disc']}" if a.get("disc") else "")
+    res["folder"] = base + f" - Season {info['season']}" + (f" Disc {a['disc']}" if a.get("disc") else "")
     if not rts or len(c) < 2:
-        res["reason"] = f"TMDB: Folgenlängen von „{base}“ passen zu {len(c) or 'keinem'} Titel{'n' if len(c) > 1 else ''}"
+        res["reason"] = f"TMDB: episode lengths of \"{base}\" match {len(c) or 'no'} title{'s' if len(c) != 1 else ''}"
         return res
     lo, hi = min(rts), max(rts)
     res.update(ok=True, picks=[t["id"] for t in c],
-               reason=f"TMDB: „{base}“ Staffel {info['season']}, Folgen {lo}{'–' + str(hi) if hi != lo else ''} min – {len(c)} Titel passen")
+               reason=f"TMDB: \"{base}\" season {info['season']}, episodes {lo}{'–' + str(hi) if hi != lo else ''} min – {len(c)} titles match")
     return res

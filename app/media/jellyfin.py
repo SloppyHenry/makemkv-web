@@ -1,4 +1,4 @@
-"""Optional: Jellyfin nach dem Einsortieren zum Bibliotheks-Scan auffordern (POST /Library/Refresh)."""
+"""Optional: ask Jellyfin to scan its library after sorting (POST /Library/Refresh)."""
 import asyncio
 import urllib.error
 import urllib.request
@@ -15,24 +15,24 @@ def _call(url: str, key: str, path: str, method: str) -> tuple[int, str]:
 
 
 async def test(url: str, key: str) -> dict:
-    """Erreichbarkeit und Schlüssel prüfen (GET /System/Info). {ok, message}."""
+    """Check reachability and the key (GET /System/Info). {ok, message}."""
     if not url or not key:
-        return {"ok": False, "message": "Adresse und Schlüssel eintragen"}
+        return {"ok": False, "message": "Enter the address and the key"}
     try:
         code, _ = await asyncio.to_thread(_call, url, key, "/System/Info", "GET")
     except (OSError, ValueError) as e:
-        return {"ok": False, "message": f"Jellyfin nicht erreichbar: {e}"}
+        return {"ok": False, "message": f"Jellyfin not reachable: {e}"}
     if code in (401, 403):
-        return {"ok": False, "message": "Jellyfin lehnt den Schlüssel ab"}
-    return {"ok": code == 200, "message": "Verbindung ok" if code == 200 else f"Jellyfin antwortet mit {code}"}
+        return {"ok": False, "message": "Jellyfin refuses the key"}
+    return {"ok": code == 200, "message": "Connection ok" if code == 200 else f"Jellyfin answers with {code}"}
 
 
 async def refresh(url: str, key: str) -> dict:
-    """Bibliotheks-Scan anstoßen. {ok, message} – ein Fehler stört das Einsortieren nie."""
+    """Trigger a library scan. {ok, message} – an error never disturbs the sorting."""
     if not url or not key:
-        return {"ok": False, "message": "nicht eingerichtet"}
+        return {"ok": False, "message": "not set up"}
     try:
         code, _ = await asyncio.to_thread(_call, url, key, "/Library/Refresh", "POST")
     except (OSError, ValueError) as e:
-        return {"ok": False, "message": f"Jellyfin nicht erreichbar: {e}"}
-    return {"ok": code in (200, 204), "message": "Bibliothek wird aktualisiert" if code in (200, 204) else f"Jellyfin antwortet mit {code}"}
+        return {"ok": False, "message": f"Jellyfin not reachable: {e}"}
+    return {"ok": code in (200, 204), "message": "Library is being refreshed" if code in (200, 204) else f"Jellyfin answers with {code}"}

@@ -1,4 +1,4 @@
-"""Einsortieren ausführen (im Hintergrund, mit Fortschritt), Verlauf führen und die letzte Aktion rückgängig machen."""
+"""Run the sorting (in the background, with progress), keep the history and undo the last action."""
 import asyncio
 import time
 import uuid
@@ -7,12 +7,12 @@ from pathlib import Path
 from app import files, state
 from app.media import conf, jellyfin, moves, plan as planner, series, store
 
-ops: dict[str, dict] = {}            # laufende und kürzlich beendete Aktionen (nur im Arbeitsspeicher)
+ops: dict[str, dict] = {}            # running and recently finished actions (in memory only)
 HISTORY_MAX = 50
 
 
 def key_for(p: Path) -> str:
-    """Schlüssel für Begleitdaten: relativ zum Ausgabeordner, sonst absolut."""
+    """Key for companion data: relative to the output folder, otherwise absolute."""
     try:
         return str(p.resolve().relative_to(files.out_dir()[0].resolve()))
     except ValueError:
@@ -29,14 +29,14 @@ def last_undoable() -> dict | None:
 
 
 async def start(req: dict) -> dict:
-    """Plan neu berechnen (dem Browser wird nicht vertraut) und die Ausführung starten. Rückgabe: {id, plan}."""
+    """Recalculate the plan (the browser is not trusted) and start the run. Returns: {id, plan}."""
     p = planner.build_plan(req)
     if not p["ok"] and not p["summary"]["move"]:
-        raise planner.PlanError("Nichts zu tun: keine Datei kann einsortiert werden.")
+        raise planner.PlanError("Nothing to do: no file can be sorted.")
     if p["summary"]["error"]:
-        raise planner.PlanError("Der Plan enthält Fehler, bitte die Vorschau prüfen.")
+        raise planner.PlanError("The plan contains errors, please check the preview.")
     if any(o["status"] == "running" for o in ops.values()):
-        raise planner.PlanError("Es läuft schon eine Einsortier-Aktion.")
+        raise planner.PlanError("A sort action is already running.")
     oid = uuid.uuid4().hex[:8]
     ops[oid] = {"id": oid, "status": "running", "t": time.time(), "title": req.get("title") or "", "rows": [{**r} for r in p["rows"]], "copied": 0,
                 "total": p["summary"]["bytes"], "jellyfin": None, "history_id": None}
@@ -56,13 +56,13 @@ async def _run(oid: str, req: dict, p: dict):
             src, dst = files.inside_out(row["src"]), root / row["dst"]
             try:
                 if not src.is_file():
-                    raise OSError("Datei nicht mehr vorhanden")
+                    raise OSError("File no longer exists")
                 why = files.busy_reason(row["src"], False, src)
                 if why:
                     raise OSError(why)
                 owner = files.acquire_lock(src)
                 if owner:
-                    raise OSError(f"wird gerade von „{owner}“ bearbeitet")
+                    raise OSError(f"being processed by \"{owner}\"")
                 lp = str(files.lock_path(src))
                 try:
                     created += await asyncio.to_thread(moves.make_dirs, dst.parent, root)
@@ -105,7 +105,7 @@ async def _run(oid: str, req: dict, p: dict):
 
 
 def _remember(req: dict, op: dict, done_rows: list, p: dict) -> dict | None:
-    """Medien-Einträge je Ziel-Datei speichern (für `info`), Begleitdaten umhängen, Serienfortschritt merken."""
+    """Store media entries per target file (for `info`), move companion data along, remember the series progress."""
     items = {it["path"]: it for it in req.get("items") or []}
     data = store.load("items.json", {})
     prev = None
@@ -128,22 +128,22 @@ def _remember(req: dict, op: dict, done_rows: list, p: dict) -> dict | None:
 
 
 def undo(oid: str) -> dict:
-    """Nur die jeweils letzte, noch nicht zurückgenommene Aktion. Dateien gehen an ihren alten Ort; bei „kopieren“ wird die Kopie entfernt."""
+    """Only the most recent action that has not been undone. Files go back to their old location; with "copy" the copy is removed."""
     entry = last_undoable()
     if not entry or entry["id"] != oid:
-        raise planner.PlanError("Nur die letzte Aktion lässt sich rückgängig machen.")
+        raise planner.PlanError("Only the last action can be undone.")
     results = []
     for r in reversed(entry["rows"]):
         src, dst = Path(r["src"]), Path(r["dst"])
         try:
             if not dst.is_file() or dst.stat().st_size != r["size"]:
-                raise OSError("Datei im Ziel nicht mehr vorhanden oder verändert")
+                raise OSError("File in the target no longer exists or was changed")
             if r["how"] == "copy-keep":
                 store.load("items.json", {}).pop(key_for(dst), None)
                 dst.unlink()
             else:
                 if src.exists():
-                    raise OSError("am alten Ort liegt schon etwas")
+                    raise OSError("something already exists at the old location")
                 moves.make_dirs(src.parent, files.out_dir()[0])
                 store.load("items.json", {}).pop(key_for(dst), None)
                 moves.move_file(dst, src, "verschieben")
@@ -161,7 +161,7 @@ def undo(oid: str) -> dict:
     if prog:
         series.restore(prog["key"], prog["season"], prog["old"])
     failed = {x["dst"] for x in results if not x["ok"]}
-    if failed:                                    # Rest bleibt rückgängig-fähig
+    if failed:                                    # the rest can still be undone
         entry["rows"] = [r for r in entry["rows"] if r["dst"] in failed]
     else:
         entry["undone"] = True

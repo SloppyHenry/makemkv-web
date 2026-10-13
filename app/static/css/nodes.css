@@ -1,4 +1,4 @@
-/* Rechnerverwaltung (Besitzer: PC), Aufbau 1:1 nach docs/mockups/paket-c.html */
+/* Machine management (owner: PC), layout 1:1 after docs/mockups/paket-c.html */
 .node-section{display:grid;gap:14px;min-width:0}
 .node-section h3{margin:0;font-size:15px}
 .node-lead{color:var(--muted);font-size:12px;margin:-6px 0 0}

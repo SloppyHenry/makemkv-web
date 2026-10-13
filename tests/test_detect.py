@@ -1,15 +1,15 @@
-"""Tests für app/media/detect.py"""
+"""Tests for app/media/detect.py"""
 import unittest
 
 from app.media import detect as d
 
-WD = [2652, 2620, 2695, 2601, 2648]                 # Episoden der Beispiel-Disc „The Walking Dead – Disc 1“
+WD = [2652, 2620, 2695, 2601, 2648]                 # episodes of the sample disc "The Walking Dead – Disc 1"
 
 
 def twd_files(with_playall=True, sidecar=False):
-    files = [{"path": f"The Walking Dead - Disc 1/The Walking Dead - Disc 1 - Titel {i + 1:02d}.mkv", "dur": s, "size": 7e9} for i, s in enumerate(WD)]
+    files = [{"path": f"The Walking Dead - Disc 1/The Walking Dead - Disc 1 - Title {i + 1:02d}.mkv", "dur": s, "size": 7e9} for i, s in enumerate(WD)]
     if with_playall:
-        files.append({"path": "The Walking Dead - Disc 1/The Walking Dead - Disc 1 - Titel 06.mkv", "dur": sum(WD[:4]), "size": 28e9})
+        files.append({"path": "The Walking Dead - Disc 1/The Walking Dead - Disc 1 - Title 06.mkv", "dur": sum(WD[:4]), "size": 28e9})
     if sidecar:
         disc = {"name": "The Walking Dead - Disc 1", "volume": "THE_WALKING_DEAD_S1_D1",
                 "titles": [{"id": i, "duration": f["dur"]} for i, f in enumerate(files)]}
@@ -32,7 +32,7 @@ class AnalyzeTest(unittest.TestCase):
         self.assertEqual((a["title"], a["year"]), ("Blade Runner 2049", None))
 
     def test_title_number(self):
-        a = d.analyze_name("The Walking Dead - Disc 1 - Titel 06.mkv")
+        a = d.analyze_name("The Walking Dead - Disc 1 - Title 06.mkv")
         self.assertEqual((a["title"], a["disc"], a["title_no"]), ("The Walking Dead", 1, 6))
         self.assertEqual(d.analyze_name("2012")["title"], "2012")
 
@@ -65,7 +65,7 @@ class DetectTest(unittest.TestCase):
 
     def test_series_with_sidecar_selection_of_three(self):
         files = twd_files(sidecar=True)
-        sel = [files[0], files[1], files[5]]                 # nur zwei Folgen und der Play-All gewählt
+        sel = [files[0], files[1], files[5]]                 # only two episodes and the play-all chosen
         r = d.detect(sel)
         self.assertEqual([i["role"] for i in r["items"]], ["episode", "episode", "playall"])
         self.assertEqual(r["title"], "The Walking Dead")
@@ -76,15 +76,15 @@ class DetectTest(unittest.TestCase):
         r = d.detect(files)
         self.assertEqual((r["kind"], r["title"]), ("movie", "Blade Runner 2049"))
         self.assertEqual([i["role"] for i in r["items"]], ["movie", "extra"])
-        self.assertLess(r["confidence"], 0.8)                 # kein Jahr im Namen
+        self.assertLess(r["confidence"], 0.8)                 # no year in the name
 
     def test_movie_with_year_is_more_certain(self):
-        r = d.detect([{"path": "Beispielfilm (2019)/Beispielfilm (2019).mkv", "dur": 7200, "size": 1}])
-        self.assertEqual((r["kind"], r["title"], r["year"]), ("movie", "Beispielfilm", 2019))
+        r = d.detect([{"path": "Sample Movie (2019)/Sample Movie (2019).mkv", "dur": 7200, "size": 1}])
+        self.assertEqual((r["kind"], r["title"], r["year"]), ("movie", "Sample Movie", 2019))
         self.assertGreaterEqual(r["confidence"], 0.8)
 
     def test_unknown_without_durations(self):
-        r = d.detect([{"path": "x/irgendwas.mkv", "dur": 0, "size": 1}])
+        r = d.detect([{"path": "x/whatever.mkv", "dur": 0, "size": 1}])
         self.assertEqual(r["kind"], "unknown")
         r = d.detect([{"path": "Show/Show.S02E05.mkv", "dur": 0, "size": 1}])
         self.assertEqual(r["kind"], "series")
@@ -96,10 +96,10 @@ class DetectTest(unittest.TestCase):
 class EpisodesTest(unittest.TestCase):
     def test_numbers_and_tmdb(self):
         r = d.detect(twd_files())
-        tm = [{"n": i + 1, "name": f"Folge {i + 1}", "runtime": 44} for i in range(10)]
+        tm = [{"n": i + 1, "name": f"Episode {i + 1}", "runtime": 44} for i in range(10)]
         a = d.assign_episodes(r["items"], 1, 1, tm)
         self.assertEqual([x["episodes"] for x in a], [[1], [2], [3], [4], [5]])
-        self.assertEqual(a[0]["name"], "Folge 1")
+        self.assertEqual(a[0]["name"], "Episode 1")
         self.assertIsNotNone(a[0]["delta"])
 
     def test_continue_on_disc2(self):

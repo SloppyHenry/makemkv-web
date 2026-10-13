@@ -1,12 +1,12 @@
-"""Spindle: headless MakeMKV mit Browser-Oberfläche.
+"""Spindle: headless MakeMKV with a browser interface.
 
-- erkennt Laufwerke (/dev/sr*) und eingelegte Discs live (ioctl, kein Eingriff in laufende Jobs)
-- analysiert neu eingelegte Discs automatisch (makemkvcon info)
-- rippt gewählte Titel als MKV oder macht ein entschlüsseltes Disc-Backup
-- Ausgabe nach /mnt/nas/rips, solange eingehängt (sonst lokaler Fallback)
+- detects drives (/dev/sr*) and inserted discs live (ioctl, no interference with running jobs)
+- analyzes newly inserted discs automatically (makemkvcon info)
+- rips selected titles as MKV or makes a decrypted disc backup
+- output to /mnt/nas/rips while it is mounted (otherwise a local fallback)
 
-Diese Datei erzeugt nur die App, bindet die Router ein und startet die Hintergrundaufgaben.
-Erweiterungspunkte: app/ext.py, Beschreibung in docs/agents/schnittstellen.md
+This file only creates the app, includes the routers and starts the background tasks.
+Extension points: app/ext.py, description in docs/agents/schnittstellen.md
 """
 import asyncio
 import importlib
@@ -17,8 +17,8 @@ from app import (auth, cluster, convert, drives, ext, files, joblist, library, m
                  ui, upload)
 from app.config import DATA, FEATURES, VERSION
 
-# Optionale Module der Arbeitspakete. Sie melden sich beim Import selbst über app.ext an (Router, Einstellungen, Hooks …).
-# Fehlt ein Modul, wird es übersprungen; ein Fehler darin bricht den Start ab (damit er nicht untergeht).
+# Optional modules of the work packages. They register themselves on import via app.ext (routers, settings, hooks …).
+# A missing module is skipped; an error inside one aborts the start (so that it does not go unnoticed).
 OPTIONAL_MODULES = ["app.nodes", "app.player", "app.media", "app.convert_presets", "app.headless"]
 
 app = FastAPI(title="Spindle")
@@ -26,7 +26,7 @@ app.middleware("http")(auth.basic_auth)
 
 ext.register_capability("version", VERSION)
 ext.register_capability("features", FEATURES)
-ext.register_capability("jobs_dismiss", True)    # beendete Aufträge lassen sich aus der Liste entfernen
+ext.register_capability("jobs_dismiss", True)    # finished jobs can be removed from the list
 
 for _name in OPTIONAL_MODULES:
     try:
@@ -53,7 +53,7 @@ async def startup():
     library.load_cache()
     asyncio.create_task(library.lib_probe_worker())
     asyncio.create_task(files.lock_heartbeat())
-    asyncio.create_task(cluster.peer_prober())   # fragt die Rechnerliste ab (auch wenn sie erst später gefüllt wird)
+    asyncio.create_task(cluster.peer_prober())   # polls the machine list (even if it only gets filled later)
     asyncio.create_task(upload.upload_worker())
     asyncio.create_task(convert.convert_worker())
     ext.start_all()

@@ -1,8 +1,8 @@
-"""Konvertierungs-Presets, Namensraum „convert“ der Einstellungen und die API /api/convert/… (Meta, Vorhersage, Prüfung, Start auf einem Rechner).
+"""Conversion presets, the "convert" namespace of the settings and the API /api/convert/… (meta, prediction, checks, start on a machine).
 
-Wird von main.py automatisch geladen (OPTIONAL_MODULES). Eigene Presets des Nutzers liegen in `settings["convert"]["presets"]`,
-die Zuordnung „welches Preset für welche Disc-Art“ in `settings["convert"]["default_for"]`. `conv_parallel`/`conv_segments` und die alten
-Standard-Presets (`presets.bluray/dvd`, Schema v1 bzw. migriert) bleiben im Namensraum „general“; die Oberfläche speichert beides.
+Loaded automatically by main.py (OPTIONAL_MODULES). The user's own presets live in `settings["convert"]["presets"]`,
+the assignment "which preset for which disc type" in `settings["convert"]["default_for"]`. `conv_parallel`/`conv_segments` and the old
+default presets (`presets.bluray/dvd`, schema v1 or migrated) stay in the "general" namespace; the interface saves both.
 """
 import os
 import re
@@ -23,8 +23,8 @@ ID_RE = re.compile(r"[a-z0-9][a-z0-9\-]{0,29}")
 
 
 class ConvertSettings(BaseModel):
-    presets: dict = {}          # eigene Presets: Kennung -> {name, desc, cfg}
-    default_for: dict = {}      # "bluray" | "dvd" | "uhd" -> Preset-Kennung
+    presets: dict = {}          # own presets: id -> {name, desc, cfg}
+    default_for: dict = {}      # "bluray" | "dvd" | "uhd" -> preset id
 
     @field_validator("presets")
     @classmethod
@@ -55,29 +55,29 @@ def find_preset(pid: str) -> dict | None:
 
 
 def builtin_default(kind: str) -> str:
-    """Mitgeliefertes Standard-Preset für eine Disc-Art; mit NVIDIA-Karte (hevc_nvenc 10 Bit erkannt) die NVIDIA-Presets."""
+    """Built-in default preset for a disc type; with an NVIDIA card (hevc_nvenc 10 bit detected) the NVIDIA presets."""
     if "hevc_nvenc" in convert_caps.caps["hw10"] and kind in NVIDIA_DEFAULT_FOR:
         return NVIDIA_DEFAULT_FOR[kind]
     return DEFAULT_FOR.get(kind, "bluray")
 
 
 def default_for(kind: str) -> dict:
-    """Vorgabe für eine Disc-Art: {id, cfg}. Die alten flachen Standard-Presets (general.presets) gelten weiter: nur wenn sie der Wahl entsprechen, steht
-    eine Kennung dabei, sonst ist es eine „eigene Vorgabe“ (id leer)."""
+    """Default for a disc type: {id, cfg}. The old flat default presets (general.presets) still apply: only if they match the choice is
+    there an id, otherwise it is a "custom default" (id empty)."""
     pid = conf()["default_for"].get(kind) or builtin_default(kind)
     p = find_preset(pid) or find_preset(builtin_default(kind))
     flat = (settings.get("presets") or {}).get(kind) if kind in PRESET_DEFAULTS else None
     if flat is None or kind not in PRESET_DEFAULTS:
         return {"id": p["id"], "cfg": p["cfg"]}
     legacy_default = clean_convert(PRESET_DEFAULTS[kind])
-    if clean_convert(flat) == legacy_default and kind not in conf()["default_for"]:          # nie angefasst: neuer mitgelieferter Standard
+    if clean_convert(flat) == legacy_default and kind not in conf()["default_for"]:          # never touched: new built-in default
         return {"id": p["id"], "cfg": p["cfg"]}
     same = {k: v for k, v in clean_convert(flat).items() if k not in ("convert", "origin")} == {k: v for k, v in p["cfg"].items() if k not in ("convert", "origin")}
     return {"id": p["id"] if same else "", "cfg": clean_convert(flat)}
 
 
 def sync_flat(old: dict, new: dict):
-    """Die gewählten Standard-Presets auch in die alten flachen Felder schreiben (alte Oberflächen, Rip-Voreinstellung)."""
+    """Also write the chosen default presets into the old flat fields (old interfaces, rip default)."""
     for kind in PRESET_DEFAULTS:
         pid = new.get("default_for", {}).get(kind)
         p = find_preset(pid) if pid else None
@@ -94,7 +94,7 @@ def save_conf():
     broadcast()
 
 
-# ---------------------------------------------------------------- Rechner (dieser und andere) für Vorhersage und „Ausführen auf“
+# ---------------------------------------------------------------- machines (this one and others) for prediction and "Run on"
 def node_list(cfg: dict) -> list[dict]:
     me = {"name": INSTANCE, "local": True, "cores": os.cpu_count() or 1, "load": 0.0, "speed": convert_stats.speed_table(), "ok": True, "reason": ""}
     try:
@@ -146,7 +146,7 @@ def predict(cfg: dict, srcs: list[dict]) -> dict:
 
 class CfgReq(BaseModel):
     cfg: dict = {}
-    files: list[dict] = []          # Beispieldateien: {path} aus der Bibliothek oder {size, dur, w, h, fps, audio}
+    files: list[dict] = []          # sample files: {path} from the library or {size, dur, w, h, fps, audio}
     paths: list[str] = []
 
 
@@ -162,7 +162,7 @@ def srcs_of(req: CfgReq) -> list[dict]:
 
 
 def file_flags(cfg: dict, paths: list[str]) -> dict:
-    """Je Bibliotheksdatei: Grund, warum sie mit diesen Einstellungen nicht geht ('issue'), und ob Dolby Vision verloren ginge ('dovi')."""
+    """Per library file: the reason why it does not work with these settings ('issue'), and whether Dolby Vision would be lost ('dovi')."""
     from app import library
     from app.library_info import file_issue
     out = {}
@@ -178,7 +178,7 @@ def api_meta():
     codecs = {k: {**{a: b for a, b in c.items() if a not in ("rel",)}, "id": k, "available": k in convert_caps.codecs_available()} for k, c in CODECS.items()}
     return {"schema": SCHEMA, "codecs": codecs, "presets": all_presets(), "defaults": {k: default_for(k) for k in DEFAULT_FOR}, "caps": convert_caps.public_caps(convert_stats.speed_table())["convert"],
             "stats": convert_stats.summary(), "instance": INSTANCE, "scale": {c: {"worst": CODECS[c]["q"][0], "best": CODECS[c]["q"][1]} for c in CODECS},
-            "words": [[80, "optisch verlustfrei"], [56, "hoch"], [33, "ausgewogen"], [12, "klein"], [0, "sehr klein"]]}
+            "words": [[80, "visually lossless"], [56, "high"], [33, "balanced"], [12, "small"], [0, "very small"]]}
 
 
 @router.post("/normalize")
@@ -189,11 +189,11 @@ def api_normalize(req: CfgReq):
 
 @router.post("/translate")
 def api_translate(req: CfgReq):
-    """Codec wechseln und die Qualität auf die gleiche Wahrnehmungsstufe legen: {cfg, to: codec}."""
+    """Switch the codec and put the quality at the same perceived level: {cfg, to: codec}."""
     cfg = clean_convert(req.cfg)
     to = req.files[0].get("to") if req.files else ""
     if to not in CODECS:
-        raise HTTPException(400, "Unbekannter Codec")
+        raise HTTPException(400, "Unknown codec")
     lvl = crf_to_level(cfg["video"]["codec"], cfg["quality"]["crf"])
     new = {**cfg, "video": {**cfg["video"], "codec": to, "speed": CODECS[to]["speed_def"], "extra": "", "hw": "hevc_vaapi" if to == "hw" else ""},
            "quality": {**cfg["quality"], "crf": level_to_crf(to, lvl)}}
@@ -212,7 +212,7 @@ def api_stats():
     return {**convert_stats.summary(), "records": convert_stats.records[-50:]}
 
 
-# ---------------------------------------------------------------- eigene Presets
+# ---------------------------------------------------------------- own presets
 class PresetReq(BaseModel):
     name: str
     desc: str = ""
@@ -230,7 +230,7 @@ def _slug(name: str) -> str:
 @router.post("/presets")
 def api_preset_create(req: PresetReq):
     if not req.name.strip():
-        raise HTTPException(400, "Der Name fehlt.")
+        raise HTTPException(400, "The name is missing.")
     pid = _slug(req.name)
     conf()["presets"][pid] = {"name": req.name.strip()[:60], "desc": req.desc.strip()[:200], "cfg": {**clean_convert({**req.cfg, "convert": True}), "origin": pid}}
     save_conf()
@@ -240,7 +240,7 @@ def api_preset_create(req: PresetReq):
 @router.patch("/presets/{pid}")
 def api_preset_update(pid: str, req: PresetReq):
     if pid not in conf()["presets"]:
-        raise HTTPException(404, "Eigenes Preset nicht gefunden (mitgelieferte lassen sich nicht ändern; zuerst kopieren).")
+        raise HTTPException(404, "Custom preset not found (built-in ones cannot be changed; copy them first).")
     p = conf()["presets"][pid]
     p["name"] = req.name.strip()[:60] or p["name"]
     p["desc"] = req.desc.strip()[:200]
@@ -253,9 +253,9 @@ def api_preset_update(pid: str, req: PresetReq):
 @router.delete("/presets/{pid}")
 def api_preset_delete(pid: str):
     if pid in BUILTIN_IDS:
-        raise HTTPException(409, "Mitgelieferte Presets lassen sich nicht löschen.")
+        raise HTTPException(409, "Built-in presets cannot be deleted.")
     if conf()["presets"].pop(pid, None) is None:
-        raise HTTPException(404, "Preset nicht gefunden")
+        raise HTTPException(404, "Preset not found")
     conf()["default_for"] = {k: v for k, v in conf()["default_for"].items() if v != pid}
     save_conf()
     return {"ok": True}
@@ -269,14 +269,14 @@ class DefaultReq(BaseModel):
 @router.post("/defaults")
 def api_default(req: DefaultReq):
     if req.kind not in DEFAULT_FOR or not find_preset(req.preset):
-        raise HTTPException(400, "Unbekannte Disc-Art oder unbekanntes Preset")
+        raise HTTPException(400, "Unknown disc type or unknown preset")
     conf()["default_for"][req.kind] = req.preset
     sync_flat({}, conf())
     save_conf()
     return {k: default_for(k) for k in DEFAULT_FOR}
 
 
-# ---------------------------------------------------------------- Start auf diesem oder einem anderen Rechner
+# ---------------------------------------------------------------- start on this or another machine
 class StartReq(BaseModel):
     target: str = "local"
     paths: list[str] = []
@@ -286,15 +286,15 @@ class StartReq(BaseModel):
 
 @router.post("/start")
 async def api_start(req: StartReq):
-    """Bibliotheks-Dateien konvertieren lassen, auf diesem Rechner oder einem anderen. Ein Rechner, der die Einstellungen nicht versteht
-    (alter Stand) oder dem ein Encoder fehlt, bekommt den Auftrag nie – sonst würde er still mit x265-Standard kodieren."""
+    """Have library files converted, on this machine or another one. A machine that does not understand the settings
+    (old version) or lacks an encoder never gets the job – otherwise it would silently encode with the x265 default."""
     from app import library
     cfg = clean_convert({**req.convert, "convert": True})
     if req.target in ("", "local", INSTANCE):
         return await library.api_library_convert(library.LibReq(paths=req.paths, convert=cfg, takeover_from=req.takeover_from))
     peer = peers_state.get(req.target)
     if not peer:
-        raise HTTPException(404, f"Rechner „{req.target}“ ist nicht bekannt.")
+        raise HTTPException(404, f"Machine \"{req.target}\" is not known.")
     send, why = cluster.cfg_for_peer(cfg, peer)
     if send is None:
         raise HTTPException(409, f"{req.target}: {why}")

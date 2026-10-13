@@ -1,4 +1,4 @@
-"""HTTP-Schnittstelle `/api/media/…` (Einstellungen prüfen, Suche, Erkennen, Einsortieren, Verlauf, Info)."""
+"""HTTP interface `/api/media/…` (check settings, search, detect, sort, history, info)."""
 import os
 
 from fastapi import APIRouter, HTTPException
@@ -14,7 +14,7 @@ def _meta_error(e: metadata.MetadataError):
     raise HTTPException(401 if e.code == "bad_key" else 404 if e.code == "not_found" else 502, str(e))
 
 
-# ---- Einstellungen: Ordner und Verbindungen prüfen
+# ---- settings: check folders and connections
 @router.get("/check-dir")
 def check_dir(path: str = ""):
     return conf.check_dir(path)
@@ -22,18 +22,18 @@ def check_dir(path: str = ""):
 
 @router.get("/browse")
 def browse(path: str = ""):
-    """Unterordner innerhalb des eingehängten Ziels (für die Ordnerauswahl)."""
+    """Subfolders inside the mounted target (for the folder selection)."""
     root = conf.media_root()
     p = conf.inside_root(path)
     if not p.is_dir():
-        raise HTTPException(404, "Ordner nicht gefunden")
+        raise HTTPException(404, "Folder not found")
     dirs = []
     try:
         for e in sorted(os.scandir(p), key=lambda x: x.name.lower()):
             if e.is_dir(follow_symlinks=False) and not e.name.startswith(".") and len(dirs) < 500:
                 dirs.append({"name": e.name, "path": e.path})
     except OSError as e:
-        raise HTTPException(403, f"Ordner nicht lesbar: {e}")
+        raise HTTPException(403, f"Folder not readable: {e}")
     return {"root": str(root), "path": str(p), "parent": str(p.parent) if p != root else "", "dirs": dirs, "writable": os.access(p, os.W_OK)}
 
 
@@ -46,16 +46,16 @@ class MkdirReq(BaseModel):
 def mkdir(req: MkdirReq):
     p = conf.inside_root(req.path) / valid_name(req.name)
     if p.exists():
-        raise HTTPException(409, "Ordner existiert schon")
+        raise HTTPException(409, "Folder already exists")
     try:
         mkdir_open(p, conf.media_root())
     except OSError as e:
-        raise HTTPException(403, f"Ordner konnte nicht angelegt werden: {e}")
+        raise HTTPException(403, f"Folder could not be created: {e}")
     return {"path": str(p)}
 
 
 class KeyReq(BaseModel):
-    key: str | None = None            # None = den gespeicherten Schlüssel prüfen
+    key: str | None = None            # None = check the saved key
     url: str | None = None
 
 
@@ -81,15 +81,15 @@ def cache_info():
     return {"entries": metadata.cache_size()}
 
 
-# ---- Metadaten
+# ---- metadata
 @router.get("/search")
 async def search(q: str, type: str = "tv", year: int | None = None):
-    """Titelvorschläge (type: movie | tv). Ohne Schlüssel `{available: false}` – die Oberfläche fragt dann von Hand."""
+    """Title suggestions (type: movie | tv). Without a key `{available: false}` – the interface then asks for it by hand."""
     st = conf.cfg()
     if not st["tmdb_key"]:
         return {"available": False, "results": []}
     if type not in ("movie", "tv"):
-        raise HTTPException(400, "type muss movie oder tv sein")
+        raise HTTPException(400, "type must be movie or tv")
     try:
         return {"available": True, "results": await metadata.search(st["tmdb_key"], type, q, year, st["language"])}
     except metadata.MetadataError as e:
@@ -124,7 +124,7 @@ class DetectReq(BaseModel):
 @router.post("/detect")
 async def detect_(req: DetectReq):
     if not req.paths:
-        raise HTTPException(400, "Keine Dateien gewählt")
+        raise HTTPException(400, "No files chosen")
     return await analyze.analyze(req.paths)
 
 
@@ -137,12 +137,12 @@ class AssignReq(BaseModel):
 
 @router.post("/episodes")
 async def episodes(req: AssignReq):
-    """Episoden neu zuordnen (anderer Titel, andere Staffel oder Startfolge gewählt)."""
+    """Reassign episodes (another title, another season or another starting episode chosen)."""
     st = conf.cfg()
     return await analyze.episodes_for(req.items, req.season, req.start, req.tmdb, st["tmdb_key"], st["language"])
 
 
-# ---- Einsortieren
+# ---- sorting
 class PlanReq(BaseModel):
     kind: str
     title: str = ""
@@ -176,7 +176,7 @@ async def run(req: PlanReq):
 def run_status(oid: str):
     op = organize.ops.get(oid)
     if not op:
-        raise HTTPException(404, "Aktion unbekannt")
+        raise HTTPException(404, "Unknown action")
     return op
 
 
@@ -200,7 +200,7 @@ def undo(oid: str):
         raise HTTPException(409, str(e))
 
 
-# ---- Info für die Bibliothek (PF)
+# ---- info for the library (PF)
 class InfoReq(BaseModel):
     paths: list[str]
 
@@ -213,7 +213,7 @@ def info_one(path: str):
 
 @router.post("/infos")
 def infos(req: InfoReq):
-    """Sammelabfrage für die Bibliothek: {pfad: {kind, title, year, poster, season, episode, …}}; Unbekanntes fehlt."""
+    """Batch query for the library: {path: {kind, title, year, poster, season, episode, …}}; unknown ones are left out."""
     out = {}
     for p in req.paths[:2000]:
         i = info.info_for(p)

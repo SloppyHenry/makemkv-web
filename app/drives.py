@@ -1,4 +1,4 @@
-"""Laufwerke: Erkennung (ioctl), Analyse, Auswerfen, Hintergrund-Poller."""
+"""Drives: detection (ioctl), analysis, ejecting, background poller."""
 import asyncio
 import fcntl
 import glob
@@ -16,7 +16,7 @@ from app.state import beta, broadcast, drives, hidden_drives, settings
 
 router = APIRouter()
 ext.allow_proxy(r"drives/[A-Za-z0-9]+/(scan|rip|eject|close|cancel)")
-DEV_ROOT = DEV_DRIVE_DIR or "/dev"       # Entwicklung (scripts/dev.sh): Attrappen-Laufwerke als Dateien statt /dev/sr*
+DEV_ROOT = DEV_DRIVE_DIR or "/dev"       # development (scripts/dev.sh): fake drives as files instead of /dev/sr*
 
 
 CDROM_EJECT, CDROM_CLOSE_TRAY, CDROM_DRIVE_STATUS = 0x5309, 0x5319, 0x5326
@@ -26,7 +26,7 @@ CDS_NO_DISC, CDS_TRAY_OPEN, CDS_NOT_READY, CDS_DISC_OK = 1, 2, 3, 4
 def drive_name(dev: str) -> str:
     base = Path(dev).name
     if DEV_DRIVE_DIR:
-        return f"Attrappe BD-ROM ({base})"
+        return f"Fake BD-ROM ({base})"
     try:
         v = Path(f"/sys/class/block/{base}/device/vendor").read_text().strip()
         m = Path(f"/sys/class/block/{base}/device/model").read_text().strip()
@@ -36,7 +36,7 @@ def drive_name(dev: str) -> str:
 
 
 def drive_status(dev: str) -> str:
-    if DEV_DRIVE_DIR:                       # Datei enthält: ready | empty | open | loading
+    if DEV_DRIVE_DIR:                       # the file contains: ready | empty | open | loading
         try:
             return Path(dev).read_text().strip() or "empty"
         except OSError:
@@ -55,8 +55,8 @@ def drive_status(dev: str) -> str:
 
 
 def tray(dev: str, req: int):
-    """Schublade öffnen/schließen. Ein positives Ergebnis ist ein SCSI-Status (Laufwerk lehnt ab), kein Erfolg:
-    beim Auswerfen dann der SCSI-Weg wie bei `eject` (scsi.eject), beim Schließen ein Fehler."""
+    """Open/close the tray. A positive result is a SCSI status (the drive refuses), not success:
+    when ejecting, then the SCSI path like `eject` (scsi.eject), when closing an error."""
     if DEV_DRIVE_DIR:
         Path(dev).write_text("open" if req == CDROM_EJECT else "ready")
         return
@@ -68,10 +68,10 @@ def tray(dev: str, req: int):
     if r and req == CDROM_EJECT:
         scsi.eject(dev)
     elif r:
-        raise OSError(f"Laufwerk lehnt ab (SCSI-Status {r})")
+        raise OSError(f"Drive refuses (SCSI status {r})")
 
 
-# ---------------------------------------------------------------- Laufwerk
+# ---------------------------------------------------------------- Drive
 
 
 class Drive:
@@ -80,7 +80,7 @@ class Drive:
         self.name = drive_name(dev)
         self.status = "unknown"
         self.ready_polls = 0
-        self.attempted = False    # für diese Disc wurde ein Scan versucht
+        self.attempted = False    # a scan was attempted for this disc
         self.scan_id = 0
         self.disc = None
         self.label = ""
@@ -89,7 +89,7 @@ class Drive:
         self.proc = None
         self.cancel = False
         self.log = deque(maxlen=300)
-        self.scan_raw: list[str] = []    # Robot-Ausgabe der letzten Analyse (Titel/Spuren), nicht in /api/state
+        self.scan_raw: list[str] = []    # robot output of the last analysis (titles/tracks), not in /api/state
         self.last_msg = ("", 0)
 
     @property
@@ -115,7 +115,7 @@ class Drive:
 
 
 def device_lost(p: "Parser", drive: Drive) -> bool:
-    """Das USB-Laufwerk hat sich während des Laufs zurückgesetzt/getrennt."""
+    """The USB drive reset/disconnected during the run."""
     return any("SG:<unknown>" in e or "No such device" in e for e in p.errors) or drive_status(drive.dev) == "gone"
 
 
@@ -131,25 +131,25 @@ async def wait_ready(drive: Drive, timeout=60) -> bool:
 
 
 async def do_scan(drive: Drive, auto: bool = False):
-    """Disc analysieren; `auto`: vom Poller beim Einlegen gestartet. Danach laufen die Scan-Hooks (ext.register_scan_hook)."""
+    """Analyze the disc; `auto`: started by the poller on insertion. Afterwards the scan hooks run (ext.register_scan_hook)."""
     drive.attempted = True
     drive.scan_id += 1
     drive.disc, drive.error, drive.scan_raw = None, "", []
     drive.log.clear()
     drive.last_msg = ("", 0)
-    drive.job = {"kind": "scan", "text": "Disc wird analysiert …", "cur": 0, "total": 0, "started": time.time()}
+    drive.job = {"kind": "scan", "text": "Analyzing disc …", "cur": 0, "total": 0, "started": time.time()}
     broadcast()
     ml = int(settings["minlength"])
     try:
         if not (settings["key"].strip() or beta["key"]):
-            drive.job["text"] = "Hole MakeMKV-Beta-Key …"
+            drive.job["text"] = "Fetching MakeMKV beta key …"
             broadcast()
             await asyncio.to_thread(fetch_beta_key_sync)
         for attempt in range(3):
             p = Parser(drive, drive.job)
             rc = await run_makemkv(drive, [f"--minlength={ml}", "info", f"dev:{drive.dev}"], p)
             if drive.cancel:
-                drive.error = "Analyse abgebrochen"
+                drive.error = "Analysis cancelled"
                 break
             if p.tinfo:
                 drive.disc = p.disc(ml)
@@ -159,19 +159,19 @@ async def do_scan(drive: Drive, auto: bool = False):
                 drive.error = ""
                 break
             if attempt < 2 and device_lost(p, drive):
-                drive.add_log("Laufwerk hat sich zurückgesetzt – warte und versuche es erneut …", "error")
-                drive.job.update(text="Laufwerk wird neu verbunden …", cur=0, total=0)
+                drive.add_log("Drive reset itself – waiting and trying again …", "error")
+                drive.job.update(text="Reconnecting drive …", cur=0, total=0)
                 broadcast()
                 if await wait_ready(drive):
                     drive.log.clear()
                     drive.last_msg = ("", 0)
-                    drive.job.update(text="Disc wird analysiert …")
+                    drive.job.update(text="Analyzing disc …")
                     continue
             drive.error = next((e for e in reversed(p.errors) if "No such device" not in e and "SG:<unknown>" not in e), "") \
-                or f"Keine Titel gefunden (Exit-Code {rc}). Disc beschädigt, nicht unterstützt oder Key abgelaufen?"
+                or f"No titles found (exit code {rc}). Disc damaged, not supported or key expired?"
             break
     except Exception as e:  # noqa: BLE001
-        drive.error = f"Analyse fehlgeschlagen: {e}"
+        drive.error = f"Analysis failed: {e}"
     finally:
         drive.cancel = False
         drive.job = None
@@ -183,7 +183,7 @@ async def do_scan(drive: Drive, auto: bool = False):
 async def poller():
     while True:
         try:
-            devs = sorted(d for d in glob.glob(f"{DEV_ROOT}/sr[0-9]*") if not Path(d).suffix)    # Attrappe: sr0.json/sr0.iso sind keine Laufwerke
+            devs = sorted(d for d in glob.glob(f"{DEV_ROOT}/sr[0-9]*") if not Path(d).suffix)    # fake drive: sr0.json/sr0.iso are not drives
             changed = False
             hidden_drives.intersection_update(devs)
             for d in devs:
@@ -224,7 +224,7 @@ async def poller():
 def get_drive(n: str) -> Drive:
     dr = drives.get(f"{DEV_ROOT}/{n}")
     if not dr:
-        raise HTTPException(404, "Laufwerk nicht gefunden")
+        raise HTTPException(404, "Drive not found")
     return dr
 
 
@@ -232,9 +232,9 @@ def get_drive(n: str) -> Drive:
 async def api_scan(n: str):
     dr = get_drive(n)
     if dr.busy:
-        raise HTTPException(409, "Laufwerk ist beschäftigt")
+        raise HTTPException(409, "Drive is busy")
     if dr.status != "ready":
-        raise HTTPException(409, "Keine Disc im Laufwerk")
+        raise HTTPException(409, "No disc in the drive")
     asyncio.create_task(do_scan(dr))
     return {"ok": True}
 
@@ -253,11 +253,11 @@ async def api_cancel(n: str):
 async def api_eject(n: str):
     dr = get_drive(n)
     if dr.busy:
-        raise HTTPException(409, "Laufwerk ist beschäftigt")
+        raise HTTPException(409, "Drive is busy")
     try:
         await asyncio.to_thread(tray, dr.dev, CDROM_EJECT)
     except OSError as e:
-        raise HTTPException(500, f"Auswerfen fehlgeschlagen: {e}")
+        raise HTTPException(500, f"Eject failed: {e}")
     return {"ok": True}
 
 
@@ -265,9 +265,9 @@ async def api_eject(n: str):
 async def api_close(n: str):
     dr = get_drive(n)
     if dr.busy:
-        raise HTTPException(409, "Laufwerk ist beschäftigt")
+        raise HTTPException(409, "Drive is busy")
     try:
         await asyncio.to_thread(tray, dr.dev, CDROM_CLOSE_TRAY)
     except OSError as e:
-        raise HTTPException(500, f"Einziehen fehlgeschlagen: {e}")
+        raise HTTPException(500, f"Closing the tray failed: {e}")
     return {"ok": True}

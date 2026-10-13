@@ -1,4 +1,4 @@
-"""Fortschritt je Serie merken (welche Episode kommt als Nächstes?), damit Disc 2 bei der richtigen Folge weitermacht."""
+"""Remember the progress per series (which episode comes next?), so that disc 2 continues with the right episode."""
 from app.media import store
 
 
@@ -11,7 +11,7 @@ def _data() -> dict:
 
 
 def next_episode(k: str, season: int, disc: int | None) -> int | None:
-    """Nächste Episode der Staffel (None = unbekannt). Kommt eine frühere Disc nachträglich dran, als schon spätere eingetragen sind, ist der Stand unbrauchbar."""
+    """Next episode of the season (None = unknown). If an earlier disc comes later, after later ones were recorded, the state is unusable."""
     rec = (_data().get(k) or {}).get("seasons", {}).get(str(season))
     if not rec:
         return None
@@ -21,7 +21,7 @@ def next_episode(k: str, season: int, disc: int | None) -> int | None:
 
 
 def remember(k: str, season: int, disc: int | None, first: int, last: int) -> dict | None:
-    """Fortschritt eintragen; gibt den alten Stand zurück (für Rückgängig)."""
+    """Record the progress; returns the old state (for undo)."""
     d = _data()
     ser = d.setdefault(k, {"seasons": {}})
     old = ser["seasons"].get(str(season))

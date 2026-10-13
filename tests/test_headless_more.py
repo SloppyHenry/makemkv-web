@@ -1,4 +1,4 @@
-"""Tests für TMDB-Laufzeitabgleich, Gedächtnis, Titelwahl-Reihenfolge und Meldung an TheDiscDB."""
+"""Tests for TMDB runtime matching, memory, the order of the title choice and reports to TheDiscDB."""
 import asyncio
 import json
 import unittest
@@ -18,9 +18,9 @@ class FakeDrive:
 
 class TmdbMatchTest(unittest.TestCase):
     def test_movie_runtime_picks_one(self):
-        disc = {"type": "Blu-ray disc", "name": "DER_FILM", "titles": [T(0, 7080, 30), T(1, 5400, 10), T(2, 600, 1)]}
-        r = tmdbmatch.match({"kind": "movie", "title": "Der Film", "year": 2001, "runtime": 118}, choose.prepare(disc), disc)
-        self.assertEqual((r["ok"], r["picks"], r["folder"]), (True, [0], "Der Film (2001)"))
+        disc = {"type": "Blu-ray disc", "name": "THE_MOVIE", "titles": [T(0, 7080, 30), T(1, 5400, 10), T(2, 600, 1)]}
+        r = tmdbmatch.match({"kind": "movie", "title": "The Movie", "year": 2001, "runtime": 118}, choose.prepare(disc), disc)
+        self.assertEqual((r["ok"], r["picks"], r["folder"]), (True, [0], "The Movie (2001)"))
 
     def test_movie_runtime_ambiguous(self):
         disc = {"type": "Blu-ray disc", "name": "X", "titles": [T(0, 7080, 30, segments="1"), T(1, 7140, 31, segments="2")]}
@@ -31,12 +31,12 @@ class TmdbMatchTest(unittest.TestCase):
         disc = {"type": "Blu-ray disc", "name": "SHERLOCK_S1_D1", "titles": [T(0, 5280, 20), T(1, 5340, 20), T(2, 5300, 20), T(3, 1200, 2)]}
         self.assertEqual(choose.decide(disc, 45e9)["mode"], "unsure")
         r = tmdbmatch.match({"kind": "series", "title": "Sherlock", "year": 2010, "season": 1, "episodes": [88, 89, 89]}, choose.prepare(disc), disc)
-        self.assertEqual((r["ok"], sorted(r["picks"]), r["folder"]), (True, [0, 1, 2], "Sherlock (2010) - Staffel 1 Disc 1"))
+        self.assertEqual((r["ok"], sorted(r["picks"]), r["folder"]), (True, [0, 1, 2], "Sherlock (2010) - Season 1 Disc 1"))
 
     def test_lookup_needs_unique_kind(self):
         async def search(key, kind, q, year=None, lang=""):
             return [{"title": "Dune", "original": "Dune", "tmdb": 1 if kind == "movie" else 2, "year": 2021}]
-        with mock.patch("app.media.conf.cfg", return_value={"tmdb_key": "k", "language": "de-DE"}), \
+        with mock.patch("app.media.conf.cfg", return_value={"tmdb_key": "k", "language": "en-US"}), \
                 mock.patch("app.media.metadata.search", search):
             self.assertIsNone(asyncio.run(tmdbmatch.lookup({"name": "DUNE"})))
 
@@ -49,38 +49,38 @@ class MemoryTest(unittest.TestCase):
     def test_record_and_match_other_title_ids(self):
         ids = {"disc_id": "A" * 40, "content_hash": "B" * 32}
         disc = {"type": "Blu-ray disc", "name": "FILM", "titles": [T(0, 7080, 30, source="00800.mpls"), T(1, 600, 1, source="00010.mpls")]}
-        memory.record(ids, disc, disc["titles"][0], "Mein Film (2001)", "Mein Film (2001)")
+        memory.record(ids, disc, disc["titles"][0], "My Movie (2001)", "My Movie (2001)")
         self.assertEqual(memory.count(), 1)
         later = {"type": "Blu-ray disc", "titles": [T(0, 30, 0.01, source="00001.mpls"), T(1, 600, 1, source="00010.mpls"), T(2, 7080, 30, source="00800.mpls")]}
         m = memory.match(memory.find_local("A" * 40, ""), later)
-        self.assertEqual((m["ok"], m["picks"], m["names"], m["folder"]), (True, [2], {2: "Mein Film (2001)"}, "Mein Film (2001)"))
+        self.assertEqual((m["ok"], m["picks"], m["names"], m["folder"]), (True, [2], {2: "My Movie (2001)"}, "My Movie (2001)"))
 
     def test_plan_prefers_memory(self):
         ids = {"disc_id": "", "content_hash": "C" * 32, "content_bytes": 40e9}
-        disc = {"type": "DVD disc", "name": "SERIE", "titles": [T(0, 1300, byt=900_000_111), T(1, 1310, byt=900_000_222), T(2, 2610, byt=1_800_000_333)]}
-        memory.record(ids, disc, disc["titles"][1], "Serie S01E02", "Serie Staffel 1")
+        disc = {"type": "DVD disc", "name": "SHOW", "titles": [T(0, 1300, byt=900_000_111), T(1, 1310, byt=900_000_222), T(2, 2610, byt=1_800_000_333)]}
+        memory.record(ids, disc, disc["titles"][1], "Show S01E02", "Show Season 1")
         dr = FakeDrive(disc)
         with mock.patch.object(plan, "get_ids", mock.AsyncMock(return_value=ids)), mock.patch.object(plan.discdb, "lookup") as db:
             p = asyncio.run(plan.plan(dr))
         db.assert_not_called()
-        self.assertEqual((p["mode"], p["picks"], p["names"][1], p["folder"]), ("memory", [1], "Serie S01E02", "Serie Staffel 1"))
+        self.assertEqual((p["mode"], p["picks"], p["names"][1], p["folder"]), ("memory", [1], "Show S01E02", "Show Season 1"))
 
     def test_plan_falls_through_to_tmdb_then_structure(self):
         settings.setdefault("headless", {})["use_db"] = True
         ids = {"disc_id": "", "content_hash": "D" * 32, "content_bytes": 40e9}
-        disc = {"type": "Blu-ray disc", "name": "DER_FILM", "titles": [T(0, 7080, 30), T(1, 8400, 30), T(2, 600, 1)]}
-        info = {"kind": "movie", "tmdb": 5, "title": "Der Film", "year": 2001, "runtime": 118, "season": None, "episodes": []}
+        disc = {"type": "Blu-ray disc", "name": "THE_MOVIE", "titles": [T(0, 7080, 30), T(1, 8400, 30), T(2, 600, 1)]}
+        info = {"kind": "movie", "tmdb": 5, "title": "The Movie", "year": 2001, "runtime": 118, "season": None, "episodes": []}
         with mock.patch.object(plan, "get_ids", mock.AsyncMock(return_value=ids)), \
                 mock.patch.object(plan.discdb, "lookup", mock.AsyncMock(return_value=(None, ""))), \
                 mock.patch.object(plan.tmdbmatch, "lookup", mock.AsyncMock(return_value=info)):
             p = asyncio.run(plan.plan(FakeDrive(disc)))
-        self.assertEqual((p["mode"], p["source"], p["picks"], p["names"]), ("movie", "TMDB (Laufzeit)", [0], {0: "Der Film (2001)"}))
-        self.assertIn("Disc nicht in TheDiscDB", p["reasons"])
+        self.assertEqual((p["mode"], p["source"], p["picks"], p["names"]), ("movie", "TMDB (runtime)", [0], {0: "The Movie (2001)"}))
+        self.assertIn("Disc not in TheDiscDB", p["reasons"])
         with mock.patch.object(plan, "get_ids", mock.AsyncMock(return_value=ids)), \
                 mock.patch.object(plan.discdb, "lookup", mock.AsyncMock(return_value=(None, ""))), \
                 mock.patch.object(plan.tmdbmatch, "lookup", mock.AsyncMock(return_value=None)):
             p = asyncio.run(plan.plan(FakeDrive(disc)))
-        self.assertEqual((p["mode"], p["source"]), ("unsure", "Struktur der Disc"))
+        self.assertEqual((p["mode"], p["source"]), ("unsure", "Disc structure"))
 
 
 class PeerMemoryTest(unittest.TestCase):
@@ -92,23 +92,23 @@ class PeerMemoryTest(unittest.TestCase):
         async def peer_call(name, path, body=None, timeout=15):
             calls.append((name, path, body))
             return {"entry": {"content_hash": "F" * 32, "titles": [], "folder": "X"}}
-        peers = {"alt": {"reachable": True, "capabilities": {}}, "aus": {"reachable": False, "capabilities": {"headless_memory": True}},
-                 "neu": {"reachable": True, "capabilities": {"headless_memory": True}}}
+        peers = {"old": {"reachable": True, "capabilities": {}}, "off": {"reachable": False, "capabilities": {"headless_memory": True}},
+                 "new": {"reachable": True, "capabilities": {"headless_memory": True}}}
         with mock.patch.dict(memory.peers_state, peers, clear=True), mock.patch("app.cluster.peer_call", peer_call):
             e, where = asyncio.run(memory.lookup({"content_hash": "F" * 32}))
-        self.assertEqual((where, e["folder"], [c[0] for c in calls]), ("neu", "X", ["neu"]))
+        self.assertEqual((where, e["folder"], [c[0] for c in calls]), ("new", "X", ["new"]))
         self.assertEqual(calls[0][1:], ("headless/memory/lookup", {"disc_id": "", "content_hash": "F" * 32}))
 
 
 class ContributeTest(unittest.TestCase):
-    disc = {"type": "Blu-ray disc", "name": "FILM", "volume": "FILM_DE", "titles": [T(0, 7080, 30, source="00800.mpls", segments="1,2"), T(1, 600, 1, source="00010.mpls")]}
+    disc = {"type": "Blu-ray disc", "name": "FILM", "volume": "FILM_EN", "titles": [T(0, 7080, 30, source="00800.mpls", segments="1,2"), T(1, 600, 1, source="00010.mpls")]}
     ids = {"content_hash": "E" * 32, "disc_id": ""}
 
     def test_build_payload(self):
         req = contribute.ContribReq(kind="movie", tmdb_id=42, title="Film", upc="4 006680 012345",
                                     titles=[contribute.ContribTitle(id=0, type="MainMovie"), contribute.ContribTitle(id=1, type="Trailer")])
         p, log = contribute.build(self.disc, self.ids, ["TCOUNT:2"], req)
-        self.assertEqual(p["disc"], {"content_hash": "E" * 32, "volume_label": "FILM_DE", "content_type": "blu-ray", "disc_number": None})
+        self.assertEqual(p["disc"], {"content_hash": "E" * 32, "volume_label": "FILM_EN", "content_type": "blu-ray", "disc_number": None})
         self.assertEqual(p["identification"]["tmdb_id"], 42)
         self.assertIsNone(p["identification"]["detected_season"])
         self.assertEqual([(t["index"], t["title_type"], t["source_filename"], t["segment_count"]) for t in p["titles"]],
@@ -137,19 +137,19 @@ class ContributeTest(unittest.TestCase):
         self.assertEqual(calls, [("engram/disc", "application/json"), (f"engram/disc/{'E' * 32}/logs/scan", "text/plain")])
 
     def test_types_from_names(self):
-        t = contribute._types_from_names([0, 1], {0: "Serie S01E04", 1: "Bonus"}, self.disc)
+        t = contribute._types_from_names([0, 1], {0: "Show S01E04", 1: "Bonus"}, self.disc)
         self.assertEqual((t[0]["type"], t[0]["episode"], t[1]["type"]), ("Episode", "4", "Extra"))
 
 
 class SuggestTest(unittest.TestCase):
     def test_scan_without_headless_sets_suggest(self):
-        """Auch ohne Headless-Modus: die Titelwahl landet als Vorauswahl der Titelliste an der Disc."""
+        """Even without headless mode: the title choice ends up on the disc as the title list's preselection."""
         dr = FakeDrive({"type": "Blu-ray disc", "name": "FILM", "titles": [T(0, 7200, 30), T(1, 600, 1)]})
         dr.busy = False
-        p = {"mode": "movie", "source": "Struktur der Disc", "picks": [0], "names": {0: "Film"}, "folder": "FILM", "reasons": ["Film: …"], "ids": {}}
+        p = {"mode": "movie", "source": "Disc structure", "picks": [0], "names": {0: "Film"}, "folder": "FILM", "reasons": ["Movie: …"], "ids": {}}
         with mock.patch.object(run, "cfg", return_value={"enabled": False}), mock.patch.object(run.planner, "plan", mock.AsyncMock(return_value=p)):
             asyncio.run(run.on_scan({"drive": dr, "auto": True}))
-        self.assertEqual((dr.disc["suggest"]["picks"], dr.disc["suggest"]["source"]), ([0], "Struktur der Disc"))
+        self.assertEqual((dr.disc["suggest"]["picks"], dr.disc["suggest"]["source"]), ([0], "Disc structure"))
         self.assertNotIn("ids", dr.disc["suggest"])
 
 

@@ -1,4 +1,4 @@
-// Assistent „Einsortieren“: Ablauf, Zustand und Ereignisse (Darstellung: media-steps.js).
+// "Sort" wizard: flow, state and events (rendering: media-steps.js).
 import { toast } from './core.js';
 import { emit } from './registry.js';
 import { baseName, esc, mapi } from './media-util.js';
@@ -11,17 +11,17 @@ const noteErr = t => `<div class="media-note err"><span class="media-ico">!</spa
 function draw(){
   if(!dlg || !w) return;
   const keep = document.activeElement && document.activeElement.id, pos = keep ? document.activeElement.selectionStart : null;
-  const s = w.loading ? {body: `<div class="empty">${esc(w.loading)}</div>`, footer: '<button type="button" class="secondary" data-act="close">Abbrechen</button>'}
-    : w.fatal ? {body: noteErr(w.fatal), footer: '<button type="button" class="secondary" data-act="close">Schließen</button>'} : RENDER[w.step](w);
-  dlg.innerHTML = `<div class="media-root"><div class="media-dlg"><header><h3>Einsortieren</h3><span class="pill">${w.title && w.step > 1 ? esc(w.title) : w.paths.length + (w.paths.length === 1 ? ' Datei' : ' Dateien')}</span><span class="sp"></span><button type="button" class="icon-btn" data-act="close" aria-label="Schließen">✕</button></header>
+  const s = w.loading ? {body: `<div class="empty">${esc(w.loading)}</div>`, footer: '<button type="button" class="secondary" data-act="close">Cancel</button>'}
+    : w.fatal ? {body: noteErr(w.fatal), footer: '<button type="button" class="secondary" data-act="close">Close</button>'} : RENDER[w.step](w);
+  dlg.innerHTML = `<div class="media-root"><div class="media-dlg"><header><h3>Sort into library</h3><span class="pill">${w.title && w.step > 1 ? esc(w.title) : w.paths.length + (w.paths.length === 1 ? ' file' : ' files')}</span><span class="sp"></span><button type="button" class="icon-btn" data-act="close" aria-label="Close">✕</button></header>
     ${stepper(w)}<div class="media-dbody">${s.body}</div><footer>${s.footer}</footer></div></div>`;
   const el = keep && dlg.querySelector('#' + CSS.escape(keep));
-  if(el){ el.focus(); if(pos != null && el.setSelectionRange) try{ el.setSelectionRange(pos, pos); }catch{ /* Feldtyp ohne Auswahl */ } }
+  if(el){ el.focus(); if(pos != null && el.setSelectionRange) try{ el.setSelectionRange(pos, pos); }catch{ /* field type without selection */ } }
 }
 
 function ensureDialog(){
   if(dlg) return;
-  dlg = document.createElement('dialog'); dlg.className = 'media-modal'; dlg.setAttribute('aria-label', 'Einsortieren');
+  dlg = document.createElement('dialog'); dlg.className = 'media-modal'; dlg.setAttribute('aria-label', 'Sort into library');
   document.body.append(dlg);
   dlg.addEventListener('click', onClick); dlg.addEventListener('change', onChange);
   dlg.addEventListener('input', e => { const f = e.target.dataset.f; if(!w || !f) return; if(f.startsWith('s-')) w.s[f.slice(2)] = e.target.value; if(f.startsWith('m-')) onManual(e.target, false); });
@@ -36,7 +36,7 @@ function ensureDialog(){
 // ---- Start
 export async function openWizard(paths){
   ensureDialog();
-  w = {paths, step: 1, hist: [], loading: 'Ich schaue mir die Dateien an …', det: null, tmdbOn: false, kind: 'movie', title: '', year: null, tmdb: null, imdb: '', chosen: null, season: 1, disc: null,
+  w = {paths, step: 1, hist: [], loading: 'Looking at the files …', det: null, tmdbOn: false, kind: 'movie', title: '', year: null, tmdb: null, imdb: '', chosen: null, season: 1, disc: null,
        start: {episode: 1, known: false, estimated: false}, items: [], skip: new Set(), epList: [], epError: '', s: {type: 'tv', q: '', year: '', imdb: '', results: null, error: ''}, manual: false,
        plan: null, planError: '', decisions: {}, op: null, history: null};
   if(!dlg.open) dlg.showModal();
@@ -75,14 +75,14 @@ async function reassign(){
   }catch(e){ w.epError = e.message; }
 }
 
-// ---- Anfrage für Plan und Ausführen
+// ---- Request for plan and run
 const stem = p => baseName(p).replace(/\.[^.]+$/, '');
 function planReq(){
   const items = w.items.map(it => {
-    if(w.skip.has(it.path)) return {path: it.path, role: 'skip', why: 'nicht mitgenommen'};
+    if(w.skip.has(it.path)) return {path: it.path, role: 'skip', why: 'not included'};
     if(w.kind === 'series'){
       if(it.role === 'episode') return {path: it.path, role: 'episode', season: it.season, episodes: it.episodes, name: it.name};
-      return it.keep === 'extra' ? {path: it.path, role: 'extra', season: w.season, extra_kind: 'extras', name: stem(it.path)} : {path: it.path, role: 'skip', why: it.role === 'playall' ? 'Play-All' : 'ausgelassen'};
+      return it.keep === 'extra' ? {path: it.path, role: 'extra', season: w.season, extra_kind: 'extras', name: stem(it.path)} : {path: it.path, role: 'skip', why: it.role === 'playall' ? 'play-all' : 'left out'};
     }
     if(w.kind === 'extras' || it.role === 'extra') return {path: it.path, role: 'extra', extra_kind: 'extras', name: stem(it.path)};
     return {path: it.path, role: 'movie'};
@@ -92,7 +92,7 @@ function planReq(){
 }
 
 async function loadPlan(){
-  w.loading = 'Vorschau wird berechnet …'; draw();
+  w.loading = 'Calculating preview …'; draw();
   try{ w.plan = await mapi('/plan', 'POST', planReq(), true); w.planError = ''; }catch(e){ w.plan = null; w.planError = e.message; }
   w.loading = '';
 }
@@ -110,9 +110,9 @@ async function next(){
     return go(w.kind === 'series' ? 3 : 4);
   }
   if(w.step === 2){
-    if(!(w.title || '').trim()){ toast('Bitte einen Titel eingeben', true); return; }
-    if(w.year && !/^\d{4}$/.test(String(w.year))){ toast('Jahr bitte vierstellig eingeben', true); return; }
-    if(w.kind === 'series'){ w.loading = 'Episoden werden zugeordnet …'; draw(); await reassign(); w.loading = ''; return go(3); }
+    if(!(w.title || '').trim()){ toast('Please enter a title', true); return; }
+    if(w.year && !/^\d{4}$/.test(String(w.year))){ toast('Please enter the year with four digits', true); return; }
+    if(w.kind === 'series'){ w.loading = 'Assigning episodes …'; draw(); await reassign(); w.loading = ''; return go(3); }
     return go(4);
   }
   if(w.step === 3) return go(4);
@@ -123,17 +123,17 @@ function back(){
   w.step = prev; draw();
 }
 
-// ---- Suche
+// ---- Search
 async function search(){
   const s = w.s; if(!s.q.trim()) return;
-  s.error = ''; s.results = null; w.loading = 'Suche …'; draw();
+  s.error = ''; s.results = null; w.loading = 'Searching …'; draw();
   try{ s.results = (await mapi(`/search?type=${s.type}&q=${encodeURIComponent(s.q.trim())}${/^\d{4}$/.test(s.year) ? '&year=' + s.year : ''}`, 'GET', null, true)).results; }catch(e){ s.error = e.message; }
   w.loading = ''; draw();
 }
 async function pick(x){
-  w.loading = 'Details werden geholt …'; draw();
+  w.loading = 'Fetching details …'; draw();
   let d = x;
-  try{ d = {...x, ...(await mapi(`/title?type=${x.kind}&id=${x.tmdb}`, 'GET', null, true))}; }catch{ /* ohne IMDb-ID weiter */ }
+  try{ d = {...x, ...(await mapi(`/title?type=${x.kind}&id=${x.tmdb}`, 'GET', null, true))}; }catch{ /* continue without the IMDb ID */ }
   w.chosen = d; w.title = d.title; w.year = d.year; w.tmdb = d.tmdb; w.imdb = d.imdb || '';
   const was = w.kind;
   if(d.kind === 'tv' && was !== 'series'){ retag('series'); await reassign(); }
@@ -142,10 +142,10 @@ async function pick(x){
   w.loading = '';
 }
 async function findImdb(){
-  w.loading = 'Wird nachgeschlagen …'; draw();
+  w.loading = 'Looking it up …'; draw();
   try{
     const r = await mapi('/find?imdb=' + encodeURIComponent(w.s.imdb.trim()), 'GET', null, true);
-    if(r.result) await pick(r.result); else toast('Zu dieser IMDb-ID gibt es keinen Treffer', true);
+    if(r.result) await pick(r.result); else toast('There is no match for this IMDb ID', true);
   }catch(e){ toast(e.message, true); }
   w.loading = ''; draw();
 }
@@ -155,9 +155,9 @@ function onManual(t, redraw){
   if(w.chosen && (w.chosen.tmdb !== w.tmdb || w.chosen.title !== w.title)) w.chosen = null;
   const ex = dlg.querySelector('.media-ex');
   if(ex && !redraw){ const y = w.year ? ` (${esc(w.year)})` : '', t2 = esc(w.title);
-    ex.innerHTML = '<span>Wird so heißen:</span> ' + (w.kind === 'series' ? `<em>${t2}${y}</em>/Season 01/<em>${t2} S01E01.mkv</em>` : `<em>${t2}${y}</em>/<em>${t2}${y}.mkv</em>`); }
+    ex.innerHTML = '<span>Will be named:</span> ' + (w.kind === 'series' ? `<em>${t2}${y}</em>/Season 01/<em>${t2} S01E01.mkv</em>` : `<em>${t2}${y}</em>/<em>${t2}${y}.mkv</em>`); }
 }
-/** Welche Titel sind Folgen? Normale Länge 15–80 min; gibt es keine, zählen gleich lange lange Titel (Doppelfolgen, Miniserien: je ~ 1:45 h). */
+/** Which titles are episodes? Normal length 15–80 min; if there are none, long titles of equal length count (double episodes, miniseries: ~1:45 h each). */
 function episodeCandidates(items){
   const long = items.filter(i => i.dur >= 900), normal = long.filter(i => i.dur <= 4800);
   const pool = normal.length ? normal : long;
@@ -165,7 +165,7 @@ function episodeCandidates(items){
   const d = pool.map(i => i.dur).sort((a, b) => a - b), med = d[Math.floor(d.length / 2)];
   return long.filter(i => normal.length ? i.dur <= 4800 || (i.dur >= 0.6 * med && i.dur <= 2.2 * med) : i.dur >= 0.6 * med && i.dur <= 1.5 * med);
 }
-/** Art gewechselt: Rollen der Dateien neu setzen (Serie: lange Titel = Folgen; Film: längster Titel = Hauptfilm). */
+/** Type changed: set the files' roles again (series: long titles = episodes; movie: longest title = main feature). */
 function retag(kind){
   w.kind = kind;
   if(kind === 'series'){
@@ -179,7 +179,7 @@ function retag(kind){
   }
 }
 
-// ---- Ereignisse
+// ---- Events
 async function onClick(e){
   const b = e.target.closest('[data-act]'); if(!b || b.disabled || !w) return;
   const [act, a, c] = b.dataset.act.split(':');
@@ -216,7 +216,7 @@ function onChange(e){
   if(f === 'ep') return editEpisode(w.items[i], t.value);
   if(f === 'all-season'){
     const v = parseInt(t.value, 10); if(!(v >= 0)) return;
-    w.season = v; w.start = {...w.start, episode: 1, known: false, estimated: false}; w.loading = 'Neu zuordnen …'; draw();
+    w.season = v; w.start = {...w.start, episode: 1, known: false, estimated: false}; w.loading = 'Reassigning …'; draw();
     return reassign().then(() => { w.loading = ''; draw(); });
   }
   if(f === 'start'){ const v = parseInt(t.value, 10); if(v > 0){ w.start = {...w.start, episode: v, known: false, estimated: false}; reassign().then(draw); } return; }
@@ -224,7 +224,7 @@ function onChange(e){
 }
 function editEpisode(it, text){
   const m = text.trim().match(/^(\d+)(?:\s*[-–]\s*(\d+))?$/);
-  if(!m || (m[2] && +m[2] < +m[1])){ toast('Episode als Zahl oder Bereich eingeben, z. B. 3 oder 3-4', true); return draw(); }
+  if(!m || (m[2] && +m[2] < +m[1])){ toast('Enter the episode as a number or a range, e.g. 3 or 3-4', true); return draw(); }
   const a = +m[1], z = +(m[2] || m[1]), look = n => w.epList.find(x => x.n === n) || {};
   it.episodes = Array.from({length: z - a + 1}, (_, k) => a + k);
   it.name = it.episodes.map(n => look(n).name).filter(Boolean).join(' & ');
@@ -233,7 +233,7 @@ function editEpisode(it, text){
   draw();
 }
 
-// ---- Ausführen, Verlauf, Rückgängig
+// ---- Run, history, undo
 async function run(){
   w.hist.push(w.step); w.step = 5; w.op = {status: 'running', copied: 0, total: 0, rows: []}; w.history = null; draw();
   try{ watch((await mapi('/run', 'POST', planReq())).id); }
@@ -248,11 +248,11 @@ async function watch(id){
     emit('files-changed'); await loadHistory();
   }catch(e){ if(w){ w.op = {status: 'failed', error: e.message, rows: []}; draw(); } }
 }
-async function loadHistory(){ try{ const h = await mapi('/history', 'GET', null, true); if(w){ w.history = h; draw(); } }catch{ /* Liste bleibt leer */ } }
+async function loadHistory(){ try{ const h = await mapi('/history', 'GET', null, true); if(w){ w.history = h; draw(); } }catch{ /* list stays empty */ } }
 async function undo(id){
   try{
     const r = await mapi('/undo/' + id, 'POST', {});
-    toast(r.ok ? 'Rückgängig gemacht ✓' : 'Nicht alles ließ sich zurücknehmen: ' + r.results.filter(x => !x.ok).map(x => x.why).join('; '), !r.ok);
+    toast(r.ok ? 'Undone ✓' : 'Not everything could be undone: ' + r.results.filter(x => !x.ok).map(x => x.why).join('; '), !r.ok);
     emit('files-changed'); await loadHistory();
-  }catch{ /* Meldung als Toast */ }
+  }catch{ /* message shown as a toast */ }
 }

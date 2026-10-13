@@ -1,8 +1,8 @@
-"""Einsortieren planen (ohne etwas zu ändern): Zielpfade nach Jellyfin-Schema, Konflikte, gesperrte Dateien, neue Ordner.
+"""Plan the sorting (without changing anything): target paths after the Jellyfin scheme, conflicts, locked files, new folders.
 
-Eingabe (`req`): {kind: movie|series, title, year, tmdb, imdb, items: [{path, role: movie|episode|extra|skip, season, episodes, name, version,
-extra_kind}], decisions: {pfad: "skip"|"rename"}}; Pfade relativ zum Ausgabeordner.
-Ausgabe: {ok, root, action, naming, same_fs, rows, dirs, summary}; `rows[i].status`: move | conflict | locked | skip | missing | error.
+Input (`req`): {kind: movie|series, title, year, tmdb, imdb, items: [{path, role: movie|episode|extra|skip, season, episodes, name, version,
+extra_kind}], decisions: {path: "skip"|"rename"}}; paths relative to the output folder.
+Output: {ok, root, action, naming, same_fs, rows, dirs, summary}; `rows[i].status`: move | conflict | locked | skip | missing | error.
 """
 import time
 from pathlib import Path
@@ -24,7 +24,7 @@ class PlanError(Exception):
 def target_root(kind: str, st: dict) -> Path:
     d = st["movies_dir"] if kind == "movie" else st["series_dir"]
     if not d:
-        raise PlanError("Der Ordner für " + ("Filme" if kind == "movie" else "Serien") + " ist noch nicht eingestellt (Einstellungen → Medien / Jellyfin).")
+        raise PlanError("The folder for " + ("movies" if kind == "movie" else "series") + " is not set yet (Settings → Media / Jellyfin).")
     try:
         return conf.inside_root(d)
     except HTTPException as e:
@@ -32,7 +32,7 @@ def target_root(kind: str, st: dict) -> Path:
 
 
 def dest_rel(req: dict, it: dict, st: dict) -> str:
-    """Zielpfad einer Datei relativ zum Filme-/Serien-Ordner."""
+    """Target path of a file relative to the movies/series folder."""
     if st["naming"] == "unveraendert":
         return it["path"]
     p = Path(it["path"])
@@ -56,9 +56,9 @@ def dest_rel(req: dict, it: dict, st: dict) -> str:
 def build_plan(req: dict) -> dict:
     st = conf.cfg()
     if req.get("kind") not in ("movie", "series"):
-        raise PlanError("Art fehlt (Film oder Serie).")
+        raise PlanError("Type missing (movie or series).")
     if st["naming"] == "jellyfin" and not (req.get("title") or "").strip():
-        raise PlanError("Titel fehlt.")
+        raise PlanError("Title missing.")
     root = target_root(req["kind"], st)
     decisions = req.get("decisions") or {}
     rows, taken = [], set()
@@ -67,20 +67,20 @@ def build_plan(req: dict) -> dict:
         row = {"src": rel, "role": it.get("role", ""), "dst": "", "status": "move", "why": "", "size": 0}
         rows.append(row)
         if it.get("role") == "skip":
-            row.update(status="skip", why=it.get("why") or "ausgelassen")
+            row.update(status="skip", why=it.get("why") or "left out")
             continue
         try:
             src = files.inside_out(rel)
         except HTTPException:
-            row.update(status="error", why="ungültiger Pfad")
+            row.update(status="error", why="invalid path")
             continue
         if not src.is_file():
-            row.update(status="missing", why="Datei nicht mehr vorhanden")
+            row.update(status="missing", why="file no longer exists")
             continue
         row["size"] = src.stat().st_size
         why = files.busy_reason(rel, False, src)
         if not why and files.fresh_lock_in(src, False):
-            why = "wird gerade von einer anderen Instanz bearbeitet"
+            why = "is being processed by another instance"
         if why:
             row.update(status="locked", why=why[0].upper() + why[1:])
         try:
@@ -90,10 +90,10 @@ def build_plan(req: dict) -> dict:
             continue
         dst = root / row["dst"]
         if root not in dst.resolve().parents:
-            row.update(status="error", why="Zielpfad außerhalb des Ziels")
+            row.update(status="error", why="target path outside the target")
             continue
         if dst == src:
-            row.update(status="skip", why="liegt schon dort", dst=row["dst"])
+            row.update(status="skip", why="already there", dst=row["dst"])
             continue
         if dst.exists() or str(dst) in taken:
             if decisions.get(rel) == "rename":
@@ -102,14 +102,14 @@ def build_plan(req: dict) -> dict:
                     n += 1
                 row["dst"] = naming.unique_variant(row["dst"], n)
                 dst = root / row["dst"]
-                row["why"] = "Ziel existierte schon, anderer Name"
+                row["why"] = "target already existed, different name"
             else:
                 try:
                     old = dst.stat()
-                    info = f" ({fmt_bytes(old.st_size)}, {time.strftime('%d.%m.%Y', time.localtime(old.st_mtime))})"
+                    info = f" ({fmt_bytes(old.st_size)}, {time.strftime('%Y-%m-%d', time.localtime(old.st_mtime))})"
                 except OSError:
                     info = ""
-                row.update(status="conflict" if row["status"] == "move" else row["status"], why="Existiert schon im Ziel" + info if dst.exists() else "Zwei Dateien hätten denselben Namen")
+                row.update(status="conflict" if row["status"] == "move" else row["status"], why="Already exists in the target" + info if dst.exists() else "Two files would have the same name")
                 continue
         if row["status"] == "move":
             taken.add(str(dst))

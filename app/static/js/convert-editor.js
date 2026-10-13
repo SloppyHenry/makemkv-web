@@ -1,9 +1,9 @@
-// Konvertierungs-Editor (wiederverwendbar): Preset-Karten, Anpassen in Ebenen, Vorhersage, Probe. Besitzer: PF.
+// Conversion editor (reusable): preset cards, adjusting in layers, prediction, test encode. Owner: PF.
 //   const ed = mountConvertEditor(el, value, {target, onChange, mode, discKind, files, readonly})
-//   value  Einstellungen v1 oder v2 (null = Standard der discKind); das Feld `convert` (an/aus) wird unverändert durchgereicht
-//   target Name des Rechners für Fähigkeiten (''/dieser = lokal)         files  Beispieldateien für die Vorhersage ([{path}] oder [{size,dur,w,h,fps,audio}])
-//   mode   'full' (Karten + Anpassen + Vorhersage) | 'compact' (Karten-Reihe, „Anpassen“ klappt auf) | 'side' (Seitenleiste der Bibliothek)
-//   onChange(cfg): vollständige v2-Einstellung ohne die alten Spiegelfelder; Rückgabe: {get(), set(value), refresh(), destroy()}
+//   value  settings v1 or v2 (null = default for discKind); the field `convert` (on/off) is passed through unchanged
+//   target name of the machine for capabilities (''/this one = local)         files  sample files for the prediction ([{path}] or [{size,dur,w,h,fps,audio}])
+//   mode   'full' (cards + adjust + prediction) | 'compact' (row of cards, "Adjust" expands) | 'side' (library side panel)
+//   onChange(cfg): complete v2 setting without the old mirror fields; returns: {get(), set(value), refresh(), destroy()}
 import { $, api, esc, toast } from './core.js';
 import { clone, crfOf, diffPaths, getPath, levelOf, loadMeta, capsFor, metaNow, presetById, qWord, reloadMeta, setPath, strip, unitOf } from './convert-meta.js';
 import { accordion, ctx } from './convert-sections.js';
@@ -21,7 +21,7 @@ class Editor {
     this.handlers = {click: e => this.click(e), input: e => this.input(e), change: e => this.change(e), keydown: e => this.key(e)};
     for(const [t, f] of Object.entries(this.handlers)) el.addEventListener(t, f);
     el.classList.toggle('ro', !!this.opts.readonly);
-    el.innerHTML = '<div class="cv"><p class="hint" style="margin:0">Lädt …</p></div>';
+    el.innerHTML = '<div class="cv"><p class="hint" style="margin:0">Loading …</p></div>';
     this.init(value);
   }
   async init(value){
@@ -30,41 +30,41 @@ class Editor {
       if(this.dead) return;
       let v = value;
       if(!v) v = clone((m.defaults[this.opts.discKind] || m.defaults.bluray).cfg), v.convert = false;
-      else if(!v.video) v = (await api('/api/convert/normalize', 'POST', {cfg: v})).cfg;    // alte fünf Felder: der Server migriert
+      else if(!v.video) v = (await api('/api/convert/normalize', 'POST', {cfg: v})).cfg;    // old five fields: the server migrates them
       this.cfg = strip(v); this.syncBase(); this.render(); this.pred.schedule(0);
-    }catch{ if(!this.dead) this.el.innerHTML = '<div class="cv"><p class="hint warn">Die Konvertierungs-Einstellungen konnten nicht geladen werden.</p></div>'; }
+    }catch{ if(!this.dead) this.el.innerHTML = '<div class="cv"><p class="hint warn">The conversion settings could not be loaded.</p></div>'; }
   }
   syncBase(){ const p = this.cfg && presetById(this.cfg.origin); this.base = p ? p.cfg : null; }
   emit(){ if(this.opts.onChange) this.opts.onChange(strip(this.cfg)); this.pred.schedule(); }
   change_(fn){ fn(); this.syncBase(); this.render(); this.emit(); }
 
-  // ---- Darstellung
+  // ---- Rendering
   cards(){
     const m = metaNow(), mini = this.opts.mode !== 'full', def = {};
     for(const [k, d] of Object.entries(m.defaults)) if(d.id) (def[d.id] ||= []).push(KIND_NAME[k] || k);
     const card = p => mini
       ? `<button type="button" class="cv-card ${p.id === this.cfg.origin ? 'sel' : ''}" data-preset="${esc(p.id)}" title="${esc(p.desc)}" aria-pressed="${p.id === this.cfg.origin}"><span class="ic">${ICONS[p.id] || '✎'}</span><strong>${esc(p.name)}</strong></button>`
       : `<button type="button" class="cv-card ${p.id === this.cfg.origin ? 'sel' : ''}" data-preset="${esc(p.id)}" aria-pressed="${p.id === this.cfg.origin}"><span class="ic">${ICONS[p.id] || '✎'}</span><strong>${esc(p.name)}</strong>
-        ${def[p.id] ? `<span class="tag">Standard ${esc(def[p.id].join(' · '))}</span>` : p.builtin ? '' : '<span class="tag">eigen</span>'}<p>${esc(p.desc)}</p><small>${esc(this.spec(p.cfg))}</small></button>`;
-    return `<div class="${mini ? 'cv-strip wrap' : 'cv-cards'}" role="group" aria-label="Preset wählen">${m.presets.map(card).join('')}</div>`;
+        ${def[p.id] ? `<span class="tag">Default ${esc(def[p.id].join(' · '))}</span>` : p.builtin ? '' : '<span class="tag">custom</span>'}<p>${esc(p.desc)}</p><small>${esc(this.spec(p.cfg))}</small></button>`;
+    return `<div class="${mini ? 'cv-strip wrap' : 'cv-cards'}" role="group" aria-label="Choose a preset">${m.presets.map(card).join('')}</div>`;
   }
   spec(c){ return `${c.video.codec === 'hw' ? c.video.hw : c.video.codec} ${c.video.bits}-bit · ${unitOf(c)} ${c.quality.crf}${c.video.speed ? ' · ' + c.video.speed : ''}`; }
   summary(){
     const c = this.cfg, p = presetById(c.origin), n = this.base ? diffPaths(c, this.base).length : 0, v = c.video, ch = new Set(this.base ? diffPaths(c, this.base) : []);
-    const q = c.quality, chips = [[`${v.codec === 'hw' ? v.hw : v.codec === 'copy' ? 'Video kopieren' : v.codec + ' ' + v.bits + '-bit'}`, ch.has('video.codec') || ch.has('video.bits')],
+    const q = c.quality, chips = [[`${v.codec === 'hw' ? v.hw : v.codec === 'copy' ? 'Copy video' : v.codec + ' ' + v.bits + '-bit'}`, ch.has('video.codec') || ch.has('video.bits')],
       ...(v.codec === 'copy' ? [] : [[q.mode === 'crf' ? `${unitOf(c)} ${q.crf}` : q.mode === 'size' ? `${q.size_gb} GB` : `${q.kbps} kb/s`, ch.has('quality.crf') || ch.has('quality.mode'), 'quality'], [v.speed || 'Hardware', ch.has('video.speed')],
-        [c.picture.scale === 'keep' ? 'Auflösung bleibt' : '≤ ' + c.picture.scale + 'p', ch.has('picture.scale')]]), [c.sound.mode === 'copy' ? 'Ton kopieren' : 'Ton ' + c.sound.mode.toUpperCase() + (c.sound.channels === 'stereo' ? ' Stereo' : ''), ch.has('sound.mode')]];
-    const save = this.naming ? `<span class="cv-inline"><input class="input" data-name placeholder="Name des Presets" maxlength="60" aria-label="Name des neuen Presets" autofocus><button type="button" class="primary" style="width:auto;padding:7px 12px" data-savenow>Speichern</button><button type="button" class="secondary" data-saveno>Abbrechen</button></span>`
-      : '<button type="button" class="secondary" data-saveas>Als Preset speichern …</button>';
-    return `<div class="cv-sum"><span class="name">${p ? esc(p.name) : 'Eigene Einstellung'}</span><div class="cv-chips">${chips.map(([t, g, k]) => `<span class="${g ? 'chg' : ''}" ${k ? `data-chip="${k}"` : ''}>${esc(t)}</span>`).join('')}</div><span class="grow"></span>
-      ${this.base ? (n ? `<span class="st warn">${n} Wert${n > 1 ? 'e' : ''} geändert</span><button type="button" class="cv-link" data-reset="all">zurück auf Preset</button>` : '<span class="st ok">wie Preset</span>') : ''}${this.opts.readonly ? '' : save}</div>`;
+        [c.picture.scale === 'keep' ? 'Resolution kept' : '≤ ' + c.picture.scale + 'p', ch.has('picture.scale')]]), [c.sound.mode === 'copy' ? 'Copy audio' : 'Audio ' + c.sound.mode.toUpperCase() + (c.sound.channels === 'stereo' ? ' stereo' : ''), ch.has('sound.mode')]];
+    const save = this.naming ? `<span class="cv-inline"><input class="input" data-name placeholder="Preset name" maxlength="60" aria-label="Name of the new preset" autofocus><button type="button" class="primary" style="width:auto;padding:7px 12px" data-savenow>Save</button><button type="button" class="secondary" data-saveno>Cancel</button></span>`
+      : '<button type="button" class="secondary" data-saveas>Save as preset …</button>';
+    return `<div class="cv-sum"><span class="name">${p ? esc(p.name) : 'Custom setting'}</span><div class="cv-chips">${chips.map(([t, g, k]) => `<span class="${g ? 'chg' : ''}" ${k ? `data-chip="${k}"` : ''}>${esc(t)}</span>`).join('')}</div><span class="grow"></span>
+      ${this.base ? (n ? `<span class="st warn">${n} value${n > 1 ? 's' : ''} changed</span><button type="button" class="cv-link" data-reset="all">back to preset</button>` : '<span class="st ok">as preset</span>') : ''}${this.opts.readonly ? '' : save}</div>`;
   }
   render(){
     if(this.dead || !this.cfg) return;
     const m = metaNow(), mode = this.opts.mode, caps = capsFor(this.opts.target), x = ctx(this.cfg, this.base, caps), one = this.opts.files.some(f => f.path);
     const adj = () => accordion(x, m, this.open, one);
     const body = mode === 'compact'
-      ? `<div class="cv-inline"><button type="button" class="secondary" data-compact aria-expanded="${this.compactOpen}">Anpassen ${this.compactOpen ? '▴' : '▾'}</button><span class="hint">Dateien werden direkt nach dem Rippen konvertiert; Rechner und Vorhersage stehen unter „Anpassen“.</span></div>${this.compactOpen ? adj() + predictHtml(false, false) : ''}`
+      ? `<div class="cv-inline"><button type="button" class="secondary" data-compact aria-expanded="${this.compactOpen}">Adjust ${this.compactOpen ? '▴' : '▾'}</button><span class="hint">Files are converted right after ripping; machine and prediction are under "Adjust".</span></div>${this.compactOpen ? adj() + predictHtml(false, false) : ''}`
       : `${adj()}${predictHtml(one, true)}`;
     const keep = [this.el.scrollTop, document.activeElement && document.activeElement.id];
     this.el.innerHTML = `<div class="cv"><div class="cv-in">${this.opts.noCards ? '' : this.cards()}${this.summary()}${body}</div></div>`;
@@ -72,7 +72,7 @@ class Editor {
     if(keep[1]) { const f = document.getElementById(keep[1]); if(f && this.el.contains(f)) f.focus({preventScroll: true}); }
   }
 
-  // ---- Bedienung
+  // ---- Interaction
   selectPreset(id){
     const p = presetById(id); if(!p) return;
     this.change_(() => { const keepConv = this.cfg.convert; this.cfg = {...strip(p.cfg), convert: keepConv, origin: p.id}; });
@@ -144,11 +144,11 @@ class Editor {
   }
   async savePreset(){
     const name = ($('[data-name]', this.el) || {}).value;
-    if(!name || !name.trim()){ toast('Bitte einen Namen eingeben.', true); return; }
+    if(!name || !name.trim()){ toast('Please enter a name.', true); return; }
     try{
       const p = await api('/api/convert/presets', 'POST', {name: name.trim(), cfg: strip(this.cfg)});
-      await reloadMeta(); this.naming = false; this.cfg.origin = p.id; this.syncBase(); this.render(); this.emit(); toast(`Preset „${p.name}“ gespeichert ✓`);
-    }catch{ /* api() zeigt den Fehler an */ }
+      await reloadMeta(); this.naming = false; this.cfg.origin = p.id; this.syncBase(); this.render(); this.emit(); toast(`Preset "${p.name}" saved ✓`);
+    }catch{ /* api() shows the error */ }
   }
   destroy(){
     this.dead = true; this.pred.destroy();

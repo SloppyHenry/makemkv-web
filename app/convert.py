@@ -1,4 +1,4 @@
-"""Konvertierung nach dem Rippen: Warteschlange, Worker, Abbrechen/Überspringen."""
+"""Conversion after ripping: queue, worker, cancel/skip."""
 import asyncio
 import json
 import os
@@ -28,13 +28,13 @@ ext.allow_proxy(r"conversions/\d+/cancel")
 
 
 def choose_segments(dur: float) -> tuple[int, str]:
-    """Entscheidet pro Konvertierung, ob (und in wie viele Segmente) geteilt wird – nach tatsächlich freien Kernen und freiem RAM.
-    Einstellung conv_segments: 0 = automatisch, 1 = nie teilen, >1 = fest."""
+    """Decides per conversion whether to split (and into how many segments) – based on the cores and RAM that are actually free.
+    Setting conv_segments: 0 = automatic, 1 = never split, >1 = fixed."""
     fixed = int(settings.get("conv_segments", 0))
     if dur < SEG_MIN_SECONDS:
-        return 1, "kurzer Titel"
+        return 1, "short title"
     if fixed >= 1:
-        return fixed, "fest eingestellt" if fixed > 1 else "Segmentierung aus"
+        return fixed, "fixed setting" if fixed > 1 else "segmentation off"
     cores = os.cpu_count() or 4
     try:
         free_cores = max(0.0, cores - os.getloadavg()[0])
@@ -45,19 +45,19 @@ def choose_segments(dur: float) -> tuple[int, str]:
             mem_gb = next(int(l.split()[1]) for l in f if l.startswith("MemAvailable")) / 1048576
     except (OSError, StopIteration, ValueError):
         mem_gb = 4.0
-    n = int(min(free_cores // 4, mem_gb // 2.5, 8))            # ~4 Kerne und ~2,5 GB RAM je Segment
-    reason = f"auto: {cores} Kerne, ca. {free_cores:.0f} frei, {mem_gb:.0f} GB RAM frei"
+    n = int(min(free_cores // 4, mem_gb // 2.5, 8))            # ~4 cores and ~2.5 GB RAM per segment
+    reason = f"auto: {cores} cores, about {free_cores:.0f} free, {mem_gb:.0f} GB RAM free"
     return (n, reason) if n >= 2 else (1, reason)
 
 
 def clean_convert(c: dict) -> dict:
-    """Prüft/ergänzt eine Konvertierungs-Konfiguration (kommt aus dem Browser, einer Sidecar-Datei oder von einem anderen Rechner).
-    Nimmt die alten fünf Felder (v1) und das neue Schema (v2) an und liefert immer ein vollständiges v2-Dict samt Spiegel der alten Felder."""
+    """Checks/completes a conversion configuration (comes from the browser, a sidecar file or another machine).
+    Accepts the old five fields (v1) and the new schema (v2) and always returns a complete v2 dict including mirrors of the old fields."""
     return clean_v2(c)
 
 
 class Unsupported(OSError):
-    """Diese Einstellung lässt sich auf diesem Rechner nicht ausführen (Encoder/Filter fehlt …): kein zweiter Versuch."""
+    """This setting cannot run on this machine (encoder/filter missing …): no second attempt."""
 
 
 _cv_seq = 0
@@ -101,13 +101,13 @@ async def convert_one(item: dict) -> Path:
     if item["status"] == "skipped":
         raise SkipConversion()
     if item.get("origin") == "library" and upload.staging_free() < item["size_in"]:
-        raise OSError(f"Zu wenig Platz im Zwischenspeicher für das Ergebnis ({fmt_bytes(upload.staging_free())} frei)")
-    nseg, why = choose_segments(dur) if item.get("attempt", 1) == 1 else (1, "zweiter Versuch")
+        raise OSError(f"Not enough space in the staging buffer for the result ({fmt_bytes(upload.staging_free())} free)")
+    nseg, why = choose_segments(dur) if item.get("attempt", 1) == 1 else (1, "second attempt")
     if nseg > 1 and not CODECS[codec]["segments"]:
-        nseg, why = 1, "Hardware-Encoder" if codec == "hw" else "ohne Neukodierung"
+        nseg, why = 1, "hardware encoder" if codec == "hw" else "no re-encoding"
     elif nseg > 1 and (two_pass(cfg) or changes_framecount(cfg, ctx)):
-        nseg, why = 1, "zwei Durchgänge" if two_pass(cfg) else "Telecine-Entfernung"
-    item["mode"] = (f"{nseg} Segmente parallel" if nseg > 1 else "ein Prozess") + f" ({why})"
+        nseg, why = 1, "two passes" if two_pass(cfg) else "telecine removal"
+    item["mode"] = (f"{nseg} segments in parallel" if nseg > 1 else "one process") + f" ({why})"
     item["meta"] = {"w": int(v.get("width") or 0), "h": int(v.get("height") or 0), "dur": dur, "nseg": nseg, "src_codec": v.get("codec_name", ""),
                     "fps": _fps(v), "summary": describe(cfg)}
     CONV_WORK.mkdir(parents=True, exist_ok=True)
@@ -120,11 +120,11 @@ async def convert_one(item: dict) -> Path:
     od = float(oi["format"]["duration"])
     if abs(od - dur) > max(2.0, dur * 0.01):
         out.unlink(missing_ok=True)
-        raise OSError(f"Ergebnis hat falsche Länge ({od:.0f}s statt {dur:.0f}s)")
+        raise OSError(f"Result has the wrong length ({od:.0f}s instead of {dur:.0f}s)")
     cnt = lambda pr, t: sum(1 for x in pr["streams"] if x["codec_type"] == t)      # noqa: E731
     if (cnt(info, "audio"), len(sub_streams(cfg, info))) != (cnt(oi, "audio"), cnt(oi, "subtitle")):
         out.unlink(missing_ok=True)
-        raise OSError("Anzahl der Audio-/Untertitelspuren weicht vom Original ab")
+        raise OSError("Number of audio/subtitle tracks differs from the original")
     return out
 
 
@@ -137,7 +137,7 @@ def _fps(v: dict) -> float:
 
 
 def release_original(item: dict):
-    """Original unverändert in die Übertragung geben (Konvertierung übersprungen/fehlgeschlagen) – nichts geht verloren."""
+    """Pass the original on to the transfer unchanged (conversion skipped/failed) – nothing gets lost."""
     src = Path(item["src"])
     if src.exists():
         rdir = READY / item["folder"]
@@ -145,7 +145,7 @@ def release_original(item: dict):
         final = unique_path(rdir / src.name)
         os.replace(src, final)
         handover = item.get("handover")
-        then = {**handover, "cfg": item["cfg"]} if handover else None     # nach der Übertragung beim anderen Rechner anmelden
+        then = {**handover, "cfg": item["cfg"]} if handover else None     # register with the other machine after the transfer
         upload.enqueue_upload(final, f"{item['folder']}/{final.name}", item["dev"], then_convert=then)
     src.with_name(src.name + ".json").unlink(missing_ok=True)
     try:
@@ -158,7 +158,7 @@ conv_running = 0
 
 
 def ensure_conv_workers():
-    """So viele Konvertierungs-Worker laufen lassen, wie in den Einstellungen steht (Gleichzeitige Dateien). Wird nach jedem Speichern aufgerufen."""
+    """Keep as many conversion workers running as the settings say (files at the same time). Called after every save."""
     global conv_running
     while conv_running < int(settings["conv_parallel"]):
         conv_running += 1
@@ -166,7 +166,7 @@ def ensure_conv_workers():
 
 
 async def convert_worker():
-    """Erster Worker (wird von main.py beim Start gestartet); weitere folgen über ensure_conv_workers()."""
+    """First worker (started by main.py on startup); more follow via ensure_conv_workers()."""
     global conv_running
     conv_running += 1
     ensure_conv_workers()
@@ -176,14 +176,14 @@ async def convert_worker():
 async def worker_loop():
     global conv_running
     while True:
-        if conv_running > int(settings["conv_parallel"]):      # Einstellung wurde verkleinert
+        if conv_running > int(settings["conv_parallel"]):      # the setting was reduced
             conv_running -= 1
             return
         item = await convert_queue.get()
         try:
             await process_item(item)
-        except Exception as e:  # noqa: BLE001      ein Fehler im Aufräumen darf den Worker nicht beenden
-            print(f"Konvertierung {item.get('name')}: {e!r}", flush=True)
+        except Exception as e:  # noqa: BLE001      an error while cleaning up must not end the worker
+            print(f"Conversion {item.get('name')}: {e!r}", flush=True)
             item["status"] = "error" if item["status"] not in ("done", "skipped", "cancelled") else item["status"]
             item["error"] = item.get("error") or str(e)[:300]
             broadcast()
@@ -193,7 +193,7 @@ async def process_item(item: dict):
     dr = drives.get(item["dev"])
     if item["status"] == "cancelled":
         return
-    while conv_state["paused"] and item["status"] == "queued":      # pausiert: nichts Neues starten
+    while conv_state["paused"] and item["status"] == "queued":      # paused: start nothing new
         await asyncio.sleep(1)
     if item["status"] == "cancelled":
         return
@@ -202,7 +202,7 @@ async def process_item(item: dict):
             try:
                 item["attempt"] = attempt
                 out = await convert_one(item)
-                if item.get("origin") == "library":          # Ergebnis ersetzt später das Original auf dem NAS
+                if item.get("origin") == "library":          # the result later replaces the original on the NAS
                     REPLACE_DIR.mkdir(parents=True, exist_ok=True)
                     dest_f = REPLACE_DIR / f"{item['id']}-{Path(item['rel']).name}"
                     os.replace(out, dest_f)
@@ -225,47 +225,47 @@ async def process_item(item: dict):
                 item.update(status="done", pct=1.0, eta=0, size_out=final.stat().st_size, t=time.time())
                 convert_stats.record(item)
                 if dr:
-                    dr.add_log(f"Konvertiert: {final.name} ({fmt_bytes(size_in)} → {fmt_bytes(item['size_out'])})", "ok")
+                    dr.add_log(f"Converted: {final.name} ({fmt_bytes(size_in)} → {fmt_bytes(item['size_out'])})", "ok")
                 upload.enqueue_upload(final, f"{item['folder']}/{final.name}", item["dev"])
                 break
             except SkipConversion:
                 break
-            except Unsupported as e:                                  # lässt sich hier nie ausführen: gleich aufgeben, kein zweiter Versuch
+            except Unsupported as e:                                  # can never run here: give up right away, no second attempt
                 item["error"] = str(e)[:400]
                 if dr:
-                    dr.add_log(f"Konvertierung von {item['name']} nicht möglich: {item['error']}", "error")
+                    dr.add_log(f"Conversion of {item['name']} not possible: {item['error']}", "error")
                 break
             except Exception as e:  # noqa: BLE001
                 item["error"] = str(e)[:400]
                 if dr:
-                    dr.add_log(f"Konvertierung von {item['name']} fehlgeschlagen: {item['error']}", "error")
+                    dr.add_log(f"Conversion of {item['name']} failed: {item['error']}", "error")
                 if attempt == 1:
                     item.update(status="queued", pct=0.0)
                     broadcast()
-    if item["status"] != "done" and item.get("cancel"):             # Abbrechen: Auftrag beenden, nichts weiterreichen
+    if item["status"] != "done" and item.get("cancel"):             # cancel: end the job, pass nothing on
         finalize_cancel(item)
         broadcast()
         return
     if item["status"] != "done":
         was_skipped = item["status"] == "skipped"
-        if item.get("origin") == "library":              # Original liegt unverändert auf dem NAS
+        if item.get("origin") == "library":              # the original stays unchanged on the NAS
             release_lock(item["lock"])
             item["status"] = "skipped" if was_skipped else "error"
             if not was_skipped:
-                item["error"] += " – Original bleibt unverändert"
+                item["error"] += " – original stays unchanged"
             broadcast()
             return
         release_original(item)
         item["status"] = "skipped" if was_skipped else "error"
         if not was_skipped:
-            item["error"] += " – Original wird unverändert übertragen"
+            item["error"] += " – original is transferred unchanged"
         if dr:
-            dr.add_log(f"{item['name']}: Original wird unverändert übertragen", "info")
+            dr.add_log(f"{item['name']}: original is transferred unchanged", "info")
     broadcast()
 
 
 def discard_staged(item: dict):
-    """Eine noch lokal zwischengespeicherte, gerippte Datei verwerfen (nur unterhalb des Konvertierungs-Ordners)."""
+    """Discard a ripped file that is still buffered locally (only below the conversion folder)."""
     src = Path(item["src"])
     if CONVERT.resolve() in src.resolve().parents:
         src.unlink(missing_ok=True)
@@ -280,21 +280,21 @@ def finalize_cancel(item: dict):
     if item["status"] == "cancelled":
         return
     if item.get("origin") == "library":
-        release_lock(item["lock"])                                       # Original bleibt unverändert auf dem NAS
+        release_lock(item["lock"])                                       # the original stays unchanged on the NAS
     else:
-        discard_staged(item)                                             # frisch gerippte Datei wird verworfen
+        discard_staged(item)                                             # the freshly ripped file is discarded
     item["status"] = "cancelled"
     item["t"] = time.time()
     dr = drives.get(item.get("dev", ""))
     if dr:
-        dr.add_log(f"{item['name']}: abgebrochen", "info")
+        dr.add_log(f"{item['name']}: cancelled", "info")
 
 
 def cancel_conversion(item: dict):
     item["cancel"] = True
-    if item["status"] == "queued":                                       # noch nicht gestartet: sofort erledigen
+    if item["status"] == "queued":                                       # not started yet: finish right away
         finalize_cancel(item)
-    else:                                                                # läuft: ffmpeg beenden, der Worker räumt auf
+    else:                                                                # running: stop ffmpeg, the worker cleans up
         skip_conversion(item)
 
 
@@ -305,7 +305,7 @@ def skip_conversion(item: dict):
         if proc.returncode is None:
             proc.terminate()
             if conv_state["paused"]:
-                signal_all([proc], signal.SIGCONT)      # ein angehaltener Prozess nimmt SIGTERM erst nach SIGCONT an
+                signal_all([proc], signal.SIGCONT)      # a stopped process only accepts SIGTERM after SIGCONT
 
 
 class PauseReq(BaseModel):
@@ -323,7 +323,7 @@ async def api_conv_pause(req: PauseReq):
 async def api_conv_cancel(cid: int):
     item = next((c for c in conversions if c["id"] == cid), None)
     if not item or item["status"] not in CV_ACTIVE:
-        raise HTTPException(404, "Keine laufende oder wartende Konvertierung")
+        raise HTTPException(404, "No running or waiting conversion")
     cancel_conversion(item)
     broadcast()
     return {"ok": True}
@@ -333,7 +333,7 @@ async def api_conv_cancel(cid: int):
 async def api_conv_skip(cid: int):
     item = next((c for c in conversions if c["id"] == cid), None)
     if not item or item["status"] not in CV_ACTIVE:
-        raise HTTPException(404, "Keine laufende oder wartende Konvertierung")
+        raise HTTPException(404, "No running or waiting conversion")
     skip_conversion(item)
     broadcast()
     return {"ok": True}

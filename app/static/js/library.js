@@ -1,5 +1,5 @@
-// Bibliothek (Ansicht „Bibliothek“): Filter links, Liste/Raster, Detailbereich, Auswahlleiste. Besitzer: PF.
-// Teile: library-model (Zustand, Filter), -render (HTML), -detail, -bar (Auswahlleiste/Konvertieren), -actions (Umbenennen …).
+// Library ("Library" view): filters on the left, list/grid, detail pane, selection bar. Owner: PF.
+// Parts: library-model (state, filters), -render (HTML), -detail, -bar (selection bar/convert), -actions (rename …).
 import { $ } from './core.js';
 import { jobsPanelHtml } from './jobs.js';
 import { getLibraryActions, isActive, on, onState, registerView } from './registry.js';
@@ -37,9 +37,9 @@ async function load(){
     if(L.cur && !paths.has(L.cur)) L.cur = '';
     if(!L.edit) draw('all');
     loadMedia(); refreshEst(0);
-  }catch{ /* Server nicht erreichbar: beim nächsten Takt erneut */ } finally{ loading = false; }
+  }catch{ /* server not reachable: try again on the next tick */ } finally{ loading = false; }
 }
-function schedule(){ if(timer) return; timer = setTimeout(() => { timer = null; if(isActive('bibliothek')) draw('rows'); }, 350); }
+function schedule(){ if(timer) return; timer = setTimeout(() => { timer = null; if(isActive('library')) draw('rows'); }, 350); }
 
 function draw(what = 'all'){
   if(!box || !L.loaded) return;
@@ -59,9 +59,9 @@ function draw(what = 'all'){
   list.className = L.view === 'grid' ? 'lib-grid' : 'lib-list';
   reconcile(list, items);
   list.querySelectorAll('[data-some="1"]').forEach(c => { c.indeterminate = true; });
-  const more = $('#libmore'); more.hidden = shown >= total || L.view === 'list' && shown < L.limit; more.textContent = `Weitere ${Math.min(200, total - shown)} anzeigen (${total - shown} übrig)`;
+  const more = $('#libmore'); more.hidden = shown >= total || L.view === 'list' && shown < L.limit; more.textContent = `Show ${Math.min(200, total - shown)} more (${total - shown} left)`;
   $('#libempty').hidden = total > 0 || !L.loaded;
-  $('#libempty').textContent = L.files.length ? 'Nichts passt zum Filter.' : 'Keine Videodateien im Ausgabeordner.';
+  $('#libempty').textContent = L.files.length ? 'Nothing matches the filter.' : 'No video files in the output folder.';
   if(what === 'all'){
     $('#libhead').innerHTML = headHtml();
     const fh = filterHtml(L.files); if($('#libfilter').dataset.h !== fh){ $('#libfilter').dataset.h = fh; $('#libfilter').innerHTML = fh; }
@@ -76,7 +76,7 @@ function draw(what = 'all'){
 setOnChanged(w => draw(w === 'bar' ? 'bar' : 'all'));
 setHooks(load, () => draw('all'));
 
-// ---- Aktionen anderer Pakete (registerLibraryAction): Datei, Auswahl, Ordner
+// ---- Actions of other packages (registerLibraryAction): file, selection, folder
 const runAct = (id, files, ctx) => { const a = getLibraryActions().find(x => x.id === id); if(a && files.length) a.run(files, ctx); };
 let lastClicked = '';
 function selectPath(p, on, range){
@@ -132,21 +132,21 @@ function onKey(e){
 const HTML = `<section class="panel lib" id="lib">
   <div class="lib-head" id="libhead"></div>
   <div class="lib-cols nodetail" id="libcols"><aside class="lib-filter" id="libfilter" aria-label="Filter"></aside>
-    <div class="lib-main"><div class="lib-tools"><button type="button" class="secondary lib-filterbtn" data-filt>☰ Filter</button><input class="input" id="libtext" placeholder="Filtern …" aria-label="Dateien filtern">
-      <div class="lib-view" role="group" aria-label="Darstellung"><button type="button" data-view="list">☰ Liste</button><button type="button" data-view="grid">▦ Raster</button></div><span style="flex:1"></span>
-      <button type="button" class="secondary" data-all title="Alle sichtbaren Originale auswählen">Alle „Original“ wählen</button><button type="button" class="secondary" data-reload>Aktualisieren</button></div>
+    <div class="lib-main"><div class="lib-tools"><button type="button" class="secondary lib-filterbtn" data-filt>☰ Filter</button><input class="input" id="libtext" placeholder="Filter …" aria-label="Filter files">
+      <div class="lib-view" role="group" aria-label="Layout"><button type="button" data-view="list">☰ List</button><button type="button" data-view="grid">▦ Grid</button></div><span style="flex:1"></span>
+      <button type="button" class="secondary" data-all title="Select all visible originals">Select all "Original"</button><button type="button" class="secondary" data-reload>Refresh</button></div>
       <div id="liblist" class="lib-list"></div><button type="button" class="secondary lib-more" id="libmore" hidden></button><div class="empty" id="libempty" hidden></div></div>
     <aside class="lib-detail" id="libdetail" hidden aria-live="polite"></aside><aside class="lib-sidecv" id="libside" hidden></aside></div>
-  <div class="lib-bar" id="libbar" hidden role="region" aria-label="Auswahl"></div></section>
+  <div class="lib-bar" id="libbar" hidden role="region" aria-label="Selection"></div></section>
   ${jobsPanelHtml('jobs2', false)}`;
 
-registerView({id: 'bibliothek', label: 'Bibliothek', icon: '▤', order: 20, mount(el){
+registerView({id: 'library', label: 'Library', icon: '▤', order: 20, mount(el){
   if(!el.dataset.built){
     el.dataset.built = '1'; el.innerHTML = HTML; box = $('#lib');
     box.addEventListener('click', onClick); box.addEventListener('change', onChange); box.addEventListener('input', onInput); box.addEventListener('keydown', onKey);
   }
   loadMeta().then(() => draw('all')).catch(() => {}); load();
 }, unmount(){ stopPlayer(); L.play = ''; }});
-setInterval(() => { if(isActive('bibliothek') && !L.edit) load(); }, 4000);
-on('files-changed', () => { if(isActive('bibliothek')) { clearEst(); load(); } });
-onState(() => { if(isActive('bibliothek')) schedule(); });
+setInterval(() => { if(isActive('library') && !L.edit) load(); }, 4000);
+on('files-changed', () => { if(isActive('library')) { clearEst(); load(); } });
+onState(() => { if(isActive('library')) schedule(); });

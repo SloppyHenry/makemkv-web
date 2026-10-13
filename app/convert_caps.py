@@ -1,8 +1,8 @@
-"""Fähigkeiten dieses Rechners (Encoder, Filter, Hardware) und die Prüfung, wer einen Auftrag ausführen darf.
+"""Capabilities of this machine (encoders, filters, hardware) and the check of who may run a job.
 
-Beim Start wird ffmpeg befragt (`-encoders`, `-filters`) und jeder Hardware-Encoder mit einem winzigen Probelauf getestet (Gerät vorhanden und
-funktionsfähig?). Das Ergebnis meldet `ext.register_capability` an: `encoders` (Liste) und `convert` (Schema, Codecs, Hardware, Filter, Tempo).
-Alte Rechner (ohne diese Felder) bekommen nur Aufträge, die sie genauso verstehen (Schema v1, siehe convert_schema.is_v1_compatible).
+On startup ffmpeg is queried (`-encoders`, `-filters`) and every hardware encoder is tested with a tiny trial run (device present and
+working?). The result is reported via `ext.register_capability`: `encoders` (list) and `convert` (schema, codecs, hardware, filters, speed).
+Old machines (without these fields) only get jobs they understand the same way (schema v1, see convert_schema.is_v1_compatible).
 """
 import asyncio
 import os
@@ -35,7 +35,7 @@ def _device_present(fam: str) -> bool:
 
 
 async def _hw_test(enc: str, ten: bool) -> bool:
-    """Ein paar Bilder mit dem Hardware-Encoder kodieren – nur was funktioniert, wird gemeldet."""
+    """Encode a few frames with the hardware encoder – only what works is reported."""
     fam = enc.split("_", 1)[1]
     fmt = "p010le" if ten else "nv12"
     pre = ["-vaapi_device", HW_DEVICE] if fam == "vaapi" else []
@@ -77,31 +77,31 @@ def public_caps(speed: dict | None = None) -> dict:
 
 
 def publish():
-    from app import convert_stats                          # erst zur Laufzeit (Stats importiert dieses Modul nicht)
+    from app import convert_stats                          # only at runtime (stats does not import this module)
     c = public_caps(convert_stats.speed_table())
     ext.register_capability("encoders", c["encoders"])
     ext.register_capability("convert", c["convert"])
 
 
 def unusable(cfg: dict, info: dict) -> str:
-    """Warum dieser Rechner den Auftrag nicht ausführen kann ('' = geht). Ohne abgeschlossene Prüfung wird nur auf das Offensichtliche geachtet."""
+    """Why this machine cannot run the job ('' = it can). Without a completed probe only the obvious is checked."""
     v, s = cfg["video"], cfg["sound"]
     if caps["probed"]:
         if v["codec"] in SW and SW[v["codec"]] not in caps["encoders"]:
-            return f"{CODECS[v['codec']]['label']} ist auf diesem Rechner nicht installiert"
+            return f"{CODECS[v['codec']]['label']} is not installed on this machine"
         if v["codec"] == "x264" and v["bits"] == 10 and not caps["x264_10"]:
-            return "x264 kann hier nur 8 Bit"
+            return "x264 only supports 8 bit here"
         if v["codec"] == "hw":
             if v["hw"] not in caps["hw"]:
-                return f"Hardware-Encoder {v['hw']} ist auf diesem Rechner nicht verfügbar"
+                return f"Hardware encoder {v['hw']} is not available on this machine"
             if v["bits"] == 10 and not v["hw"].startswith("h264_") and v["hw"] not in caps["hw10"]:
-                return f"{v['hw']} kann hier kein 10 Bit"
+                return f"{v['hw']} cannot do 10 bit here"
         need = {"opus": "libopus", "aac": "aac", "ac3": "ac3", "eac3": "eac3"}.get(s["mode"])
         if need and need not in caps["encoders"]:
-            return f"Tonformat {s['mode']} ist hier nicht verfügbar"
+            return f"Audio format {s['mode']} is not available here"
         miss = [f for f in _filters_needed(cfg, info) if f not in caps["filters"]]
         if miss:
-            return "Dem Rechner fehlt der ffmpeg-Filter " + ", ".join(miss)
+            return "The machine lacks the ffmpeg filter " + ", ".join(miss)
     return hdr_problem(cfg, info)
 
 
@@ -116,29 +116,29 @@ def _filters_needed(cfg: dict, info: dict) -> list[str]:
 
 
 def peer_ok(cfg: dict, peer: dict) -> tuple[bool, str]:
-    """Darf dieser andere Rechner den Auftrag bekommen? Alte Rechner nur mit Aufträgen, die sie wie bisher verstehen."""
+    """May this other machine get the job? Old machines only with jobs they understand as before."""
     if not peer.get("reachable"):
-        return False, "nicht erreichbar"
+        return False, "not reachable"
     legacy = peer.get("legacy") or not (peer.get("capabilities") or {})
     if is_v1_compatible(cfg):
-        return (True, "") if not legacy or peer.get("has_handover", True) else (False, "läuft noch mit einer Version ohne Übergabe")
+        return (True, "") if not legacy or peer.get("has_handover", True) else (False, "still runs a version without hand-over")
     c = (peer.get("capabilities") or {}).get("convert")
     if legacy or not isinstance(c, dict) or int(c.get("schema") or 0) < SCHEMA:
-        return False, "älterer Stand: versteht die neuen Konvertierungs-Einstellungen nicht (nur x265 mit den bisherigen Optionen)"
+        return False, "older version: does not understand the new conversion settings (only x265 with the previous options)"
     v = cfg["video"]
     if v["codec"] == "hw":
         if v["hw"] not in (c.get("hw") or []):
-            return False, f"meldet keinen Hardware-Encoder {v['hw']}"
+            return False, f"reports no hardware encoder {v['hw']}"
         if v["bits"] == 10 and not v["hw"].startswith("h264_") and v["hw"] not in (c.get("hw10") or []):
-            return False, f"{v['hw']} kann dort kein 10 Bit"
+            return False, f"{v['hw']} cannot do 10 bit there"
     elif v["codec"] not in (c.get("codecs") or []):
-        return False, f"{CODECS[v['codec']]['label']} ist dort nicht installiert"
+        return False, f"{CODECS[v['codec']]['label']} is not installed there"
     p, a = cfg["picture"], cfg["sound"]
     flt = set(c.get("filters") or [])
     miss = [f for f in {"auto": ["idet", "bwdif"], "on": ["bwdif"], "ivtc": ["fieldmatch", "yadif", "decimate"]}.get(p["deint"], [])
             + (["hqdn3d"] if p["denoise"] != "off" else []) + (["zscale", "tonemap"] if p["hdr"] == "tonemap" else []) if f not in flt]
     if miss:
-        return False, "dort fehlt der ffmpeg-Filter " + ", ".join(miss)
+        return False, "the ffmpeg filter is missing there: " + ", ".join(miss)
     if a["mode"] != "copy" and a["mode"] not in (c.get("audio") or []):
-        return False, f"Tonformat {a['mode']} dort nicht verfügbar"
+        return False, f"audio format {a['mode']} not available there"
     return True, ""

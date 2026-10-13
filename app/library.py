@@ -1,4 +1,4 @@
-"""Bibliothek: Dateien im Ziel erkennen, nachträglich konvertieren, umbenennen."""
+"""Library: detect files in the target, convert them after the fact, rename them."""
 import asyncio
 import json
 import os
@@ -88,7 +88,7 @@ def scan_library():
 class LibReq(BaseModel):
     paths: list[str] = []
     convert: dict = {}
-    takeover_from: str = ""          # Übergabe: Name der Instanz, die die Sperre gerade hält und abgibt
+    takeover_from: str = ""          # hand-over: name of the instance that currently holds the lock and gives it up
 
 
 @router.get("/api/library")
@@ -121,9 +121,9 @@ async def api_library():
         locked = None
         if lk and str(lk[1]) not in held_locks and time.time() - lk[0] < LOCK_TTL:
             try:
-                locked = json.loads(lk[1].read_text()).get("inst", "andere Instanz")
+                locked = json.loads(lk[1].read_text()).get("inst", "another instance")
             except (OSError, ValueError):
-                locked = "andere Instanz"
+                locked = "another instance"
         est = estimate(info, it["size"]) if info and info.get("dur") else None
         out.append({**it, "state": state, "info": info, "job": job, "locked": locked, "kind": kind_of(info) if info else "", "est": est,
                     "dev_err": (c or {}).get("err", "") if not fresh or not c.get("info") else ""})
@@ -142,10 +142,10 @@ async def api_library_convert(req: LibReq):
     for rel in req.paths[:300]:
         p = inside_out(rel)
         if not p.is_file():
-            skipped.append({"path": rel, "why": "nicht gefunden"})
+            skipped.append({"path": rel, "why": "not found"})
             continue
         if any(c.get("origin") == "library" and c["rel"] == rel and c["status"] in CV_ACTIVE for c in conversions):
-            skipped.append({"path": rel, "why": "bereits in der Warteschlange"})
+            skipped.append({"path": rel, "why": "already in the queue"})
             continue
         st = p.stat()
         c = lib_cache.get(rel)
@@ -155,7 +155,7 @@ async def api_library_convert(req: LibReq):
             try:
                 info = lib_info(await probe(p))
             except Exception as e:  # noqa: BLE001
-                skipped.append({"path": rel, "why": f"nicht lesbar: {str(e)[:80]}"})
+                skipped.append({"path": rel, "why": f"not readable: {str(e)[:80]}"})
                 continue
             lib_cache[rel] = {"size": st.st_size, "mtime": st.st_mtime, "info": info}
         if why := file_issue(cfg, info, rel):
@@ -163,7 +163,7 @@ async def api_library_convert(req: LibReq):
             continue
         owner = acquire_lock(p, req.takeover_from)
         if owner:
-            skipped.append({"path": rel, "why": f"wird gerade von „{owner}“ bearbeitet"})
+            skipped.append({"path": rel, "why": f"being processed by \"{owner}\""})
             continue
         conversions.append({"id": next_conversion_id(), "name": rel, "folder": str(Path(rel).parent), "src": str(p), "size_in": st.st_size, "size_out": 0,
                             "status": "queued", "pct": 0.0, "fps": 0.0, "speed": 0.0, "eta": 0, "error": "", "cfg": cfg, "dev": "",
@@ -190,27 +190,27 @@ def move_cache(old: str, new: str):
 async def api_lib_rename(req: RenameReq):
     src = inside_out(req.path)
     if not src.is_file():
-        raise HTTPException(404, "Datei nicht gefunden")
+        raise HTTPException(404, "File not found")
     name = valid_name(req.name)
     if Path(name).suffix.lower() != src.suffix.lower():
-        name += src.suffix                                   # Endung bleibt erhalten
+        name += src.suffix                                   # the extension is kept
     dst = src.with_name(name)
     base = Path(out_cache["dir"]).resolve()
     rel_old, rel_new = str(src.relative_to(base)), str(dst.relative_to(base))
     if dst == src:
         return {"ok": True, "path": rel_old}
     if why := busy_reason(rel_old, False, src):
-        raise HTTPException(409, f"Die Datei {why} und kann jetzt nicht umbenannt werden.")
+        raise HTTPException(409, f"The file {why} and cannot be renamed right now.")
     if fresh_lock_in(src, False):
-        raise HTTPException(409, "Die Datei ist von einer anderen Instanz gesperrt.")
+        raise HTTPException(409, "The file is locked by another instance.")
     if dst.exists():
-        raise HTTPException(409, f"„{name}“ gibt es in diesem Ordner schon.")
+        raise HTTPException(409, f"\"{name}\" already exists in this folder.")
     try:
         os.rename(src, dst)
     except PermissionError:
-        raise HTTPException(403, "Keine Berechtigung zum Umbenennen (Ordner gehört auf dem NAS einem anderen Benutzer).")
+        raise HTTPException(403, "No permission to rename (the folder belongs to another user on the NAS).")
     except OSError as e:
-        raise HTTPException(500, f"Umbenennen fehlgeschlagen: {e}")
+        raise HTTPException(500, f"Rename failed: {e}")
     move_cache(rel_old, rel_new)
     broadcast()
     return {"ok": True, "path": rel_new}
@@ -221,24 +221,24 @@ async def api_lib_rename_folder(req: RenameReq):
     src = inside_out(req.path)
     base = Path(out_cache["dir"]).resolve()
     if not src.is_dir() or src == base:
-        raise HTTPException(404, "Ordner nicht gefunden")
+        raise HTTPException(404, "Folder not found")
     name = valid_name(req.name)
     dst = src.with_name(name)
     rel_old, rel_new = str(src.relative_to(base)), str(dst.relative_to(base))
     if dst == src:
         return {"ok": True, "path": rel_old}
     if why := busy_reason(rel_old, True, src):
-        raise HTTPException(409, f"Im Ordner {why}; er kann jetzt nicht umbenannt werden.")
+        raise HTTPException(409, f"Something in the folder {why}; it cannot be renamed right now.")
     if fresh_lock_in(src, True):
-        raise HTTPException(409, "Im Ordner ist eine Datei von einer anderen Instanz gesperrt.")
+        raise HTTPException(409, "A file in the folder is locked by another instance.")
     if dst.exists():
-        raise HTTPException(409, f"„{name}“ gibt es hier schon.")
+        raise HTTPException(409, f"\"{name}\" already exists here.")
     try:
         os.rename(src, dst)
     except PermissionError:
-        raise HTTPException(403, "Keine Berechtigung zum Umbenennen (gehört auf dem NAS einem anderen Benutzer).")
+        raise HTTPException(403, "No permission to rename (it belongs to another user on the NAS).")
     except OSError as e:
-        raise HTTPException(500, f"Umbenennen fehlgeschlagen: {e}")
+        raise HTTPException(500, f"Rename failed: {e}")
     move_cache(rel_old, rel_new)
     broadcast()
     return {"ok": True, "path": rel_new}

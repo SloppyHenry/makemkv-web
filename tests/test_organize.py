@@ -1,4 +1,4 @@
-"""Tests für Plan, Einsortieren und Rückgängig (app/media/plan.py, organize.py) – nur in temporären Ordnern."""
+"""Tests for plan, sorting and undo (app/media/plan.py, organize.py) – only in temporary folders."""
 import asyncio
 import json
 import os
@@ -19,19 +19,19 @@ class OrganizeBase(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         t = Path(self.tmp.name)
         self.out, self.lib = t / "out", t / "lib"
-        for d in (self.out, self.lib / "Filme", self.lib / "Serien", t / "data"):
+        for d in (self.out, self.lib / "Movies", self.lib / "Series", t / "data"):
             d.mkdir(parents=True)
         self.d = self.out / "The Walking Dead - Disc 1"
         self.d.mkdir()
         for i in range(1, 4):
-            (self.d / f"The Walking Dead - Disc 1 - Titel {i:02d}.mkv").write_bytes(b"x" * (100 + i))
-        (self.d / "The Walking Dead - Disc 1 - Titel 06.mkv").write_bytes(b"p" * 500)
+            (self.d / f"The Walking Dead - Disc 1 - Title {i:02d}.mkv").write_bytes(b"x" * (100 + i))
+        (self.d / "The Walking Dead - Disc 1 - Title 06.mkv").write_bytes(b"p" * 500)
         self.old_out, self.old_data, self.old_set = files.out_dir, store.DATA, state.settings.get("media")
         files.out_dir = lambda: (self.out, False)
         store.DATA = t / "data"
         store.reset_memory()
         os.environ["MEDIA_ROOT"] = str(self.lib)
-        self.set(movies_dir=str(self.lib / "Filme"), series_dir=str(self.lib / "Serien"))
+        self.set(movies_dir=str(self.lib / "Movies"), series_dir=str(self.lib / "Series"))
         self.addCleanup(self.restore)
 
     def restore(self):
@@ -46,9 +46,9 @@ class OrganizeBase(unittest.TestCase):
         state.settings["media"] = {**conf.DEFAULTS, **kw, **{k: v for k, v in (state.settings.get("media") or {}).items() if k not in kw and k in ("movies_dir", "series_dir")}}
 
     def req(self, **kw):
-        base = "The Walking Dead - Disc 1/The Walking Dead - Disc 1 - Titel "
+        base = "The Walking Dead - Disc 1/The Walking Dead - Disc 1 - Title "
         r = {"kind": "series", "title": "The Walking Dead", "year": 2010, "tmdb": 1402, "imdb": "tt1520211", "poster": "/twd.jpg", "season": 1, "disc": 1,
-             "items": [{"path": f"{base}{i:02d}.mkv", "role": "episode", "season": 1, "episodes": [i], "name": f"Folge {i}"} for i in (1, 2, 3)]
+             "items": [{"path": f"{base}{i:02d}.mkv", "role": "episode", "season": 1, "episodes": [i], "name": f"Episode {i}"} for i in (1, 2, 3)]
                       + [{"path": f"{base}06.mkv", "role": "skip", "why": "Play-All"}], "decisions": {}}
         r.update(kw)
         return r
@@ -75,15 +75,15 @@ class PlanTest(OrganizeBase):
     def test_episode_names_and_no_tags(self):
         self.set(episode_names=True, id_tags=False)
         p = planner.build_plan(self.req())
-        self.assertEqual(p["rows"][1]["dst"], "The Walking Dead (2010)/Season 01/The Walking Dead S01E02 - Folge 2.mkv")
+        self.assertEqual(p["rows"][1]["dst"], "The Walking Dead (2010)/Season 01/The Walking Dead S01E02 - Episode 2.mkv")
 
     def test_conflict_and_rename(self):
-        dst = self.lib / "Serien/The Walking Dead (2010) [tmdbid-1402]/Season 01"
+        dst = self.lib / "Series/The Walking Dead (2010) [tmdbid-1402]/Season 01"
         dst.mkdir(parents=True)
-        (dst / "The Walking Dead S01E03.mkv").write_bytes(b"alt")
+        (dst / "The Walking Dead S01E03.mkv").write_bytes(b"old")
         p = planner.build_plan(self.req())
         self.assertEqual([r["status"] for r in p["rows"]], ["move", "move", "conflict", "skip"])
-        self.assertIn("Existiert schon", p["rows"][2]["why"])
+        self.assertIn("Already exists", p["rows"][2]["why"])
         self.assertFalse(p["new_dirs"])
         p = planner.build_plan(self.req(decisions={self.req()["items"][2]["path"]: "rename"}))
         self.assertEqual(p["rows"][2]["status"], "move")
@@ -108,10 +108,10 @@ class PlanTest(OrganizeBase):
         self.addCleanup(state.conversions.clear)
         p = planner.build_plan(r)
         self.assertEqual(p["rows"][1]["status"], "locked")
-        self.assertIn("konvertiert", p["rows"][1]["why"])
+        self.assertIn("converted", p["rows"][1]["why"])
 
     def test_missing_and_escape(self):
-        r = self.req(items=[{"path": "gibts/nicht.mkv", "role": "episode", "season": 1, "episodes": [1]}, {"path": "../../etc/passwd", "role": "episode", "season": 1, "episodes": [2]}])
+        r = self.req(items=[{"path": "does/not-exist.mkv", "role": "episode", "season": 1, "episodes": [1]}, {"path": "../../etc/passwd", "role": "episode", "season": 1, "episodes": [2]}])
         p = planner.build_plan(r)
         self.assertEqual([x["status"] for x in p["rows"]], ["missing", "error"])
         self.assertFalse(p["ok"])
@@ -119,7 +119,7 @@ class PlanTest(OrganizeBase):
     def test_unchanged_naming(self):
         self.set(naming="unveraendert")
         p = planner.build_plan(self.req())
-        self.assertEqual(p["rows"][0]["dst"], "The Walking Dead - Disc 1/The Walking Dead - Disc 1 - Titel 01.mkv")
+        self.assertEqual(p["rows"][0]["dst"], "The Walking Dead - Disc 1/The Walking Dead - Disc 1 - Title 01.mkv")
 
     def test_movie_with_extra(self):
         (self.out / "film.mkv").write_bytes(b"f")
@@ -148,46 +148,46 @@ class RunTest(OrganizeBase):
             return oid, op
         oid, op = run(main())
         self.assertEqual(op["status"], "done", op)
-        root = self.lib / "Serien/The Walking Dead (2010) [tmdbid-1402]/Season 01"
+        root = self.lib / "Series/The Walking Dead (2010) [tmdbid-1402]/Season 01"
         self.assertEqual(sorted(p.name for p in root.iterdir()), [f"The Walking Dead S01E0{i}.mkv" for i in (1, 2, 3)])
         self.assertEqual((root / "The Walking Dead S01E02.mkv").read_bytes(), b"x" * 102)
-        self.assertFalse((self.d / "The Walking Dead - Disc 1 - Titel 01.mkv").exists())
-        self.assertTrue(self.d.exists())                                  # Play-All liegt noch darin
+        self.assertFalse((self.d / "The Walking Dead - Disc 1 - Title 01.mkv").exists())
+        self.assertTrue(self.d.exists())                                  # the play-all is still in it
         self.assertEqual(series.next_episode(series.key("The Walking Dead", 2010, 1402), 1, 2), 4)
         i = info.info_for(str(root / "The Walking Dead S01E02.mkv"))
-        self.assertEqual((i["source"], i["title"], i["season"], i["episode"], i["episode_name"]), ("tool", "The Walking Dead", 1, 2, "Folge 2"))
+        self.assertEqual((i["source"], i["title"], i["season"], i["episode"], i["episode_name"]), ("tool", "The Walking Dead", 1, 2, "Episode 2"))
         h = organize.history()
         self.assertEqual(len(h), 1)
         self.assertEqual(organize.last_undoable()["id"], oid)
         res = organize.undo(oid)
         self.assertTrue(res["ok"])
-        self.assertTrue((self.d / "The Walking Dead - Disc 1 - Titel 01.mkv").exists())
-        self.assertFalse((self.lib / "Serien/The Walking Dead (2010) [tmdbid-1402]").exists())     # neue Ordner entfernt
+        self.assertTrue((self.d / "The Walking Dead - Disc 1 - Title 01.mkv").exists())
+        self.assertFalse((self.lib / "Series/The Walking Dead (2010) [tmdbid-1402]").exists())     # new folders removed
         self.assertIsNone(series.next_episode(series.key("The Walking Dead", 2010, 1402), 1, 2))
         self.assertIsNone(organize.last_undoable())
         with self.assertRaises(planner.PlanError):
             organize.undo(oid)
 
     def test_move_everything_removes_empty_source_and_undo_recreates(self):
-        (self.d / "The Walking Dead - Disc 1 - Titel 06.mkv").unlink()
+        (self.d / "The Walking Dead - Disc 1 - Title 06.mkv").unlink()
         oid, op = run(self.go(self.req()))
         self.assertEqual(op["status"], "done")
         self.assertFalse(self.d.exists())
         self.assertTrue(self.out.exists())
         self.assertTrue(organize.undo(oid)["ok"])
-        self.assertTrue((self.d / "The Walking Dead - Disc 1 - Titel 03.mkv").exists())
+        self.assertTrue((self.d / "The Walking Dead - Disc 1 - Title 03.mkv").exists())
 
     def test_copy_keeps_original_and_undo_removes_copy(self):
         self.set(action="kopieren")
         oid, op = run(self.go(self.req()))
         self.assertEqual(op["status"], "done")
-        self.assertTrue((self.d / "The Walking Dead - Disc 1 - Titel 01.mkv").exists())
-        dst = self.lib / "Serien/The Walking Dead (2010) [tmdbid-1402]/Season 01/The Walking Dead S01E01.mkv"
+        self.assertTrue((self.d / "The Walking Dead - Disc 1 - Title 01.mkv").exists())
+        dst = self.lib / "Series/The Walking Dead (2010) [tmdbid-1402]/Season 01/The Walking Dead S01E01.mkv"
         self.assertEqual(dst.stat().st_size, 101)
-        self.assertEqual([p.name for p in dst.parent.iterdir() if p.name.startswith(".")], [])    # keine Teildateien
+        self.assertEqual([p.name for p in dst.parent.iterdir() if p.name.startswith(".")], [])    # no partial files
         self.assertTrue(organize.undo(oid)["ok"])
         self.assertFalse(dst.exists())
-        self.assertTrue((self.d / "The Walking Dead - Disc 1 - Titel 01.mkv").exists())
+        self.assertTrue((self.d / "The Walking Dead - Disc 1 - Title 01.mkv").exists())
 
     def test_cross_device_copy_path(self):
         orig = moves.same_device
@@ -196,18 +196,18 @@ class RunTest(OrganizeBase):
         oid, op = run(self.go(self.req()))
         self.assertEqual(op["status"], "done")
         self.assertEqual({r.get("how") for r in op["rows"] if r["status"] == "done"}, {"copy"})
-        self.assertFalse((self.d / "The Walking Dead - Disc 1 - Titel 01.mkv").exists())
+        self.assertFalse((self.d / "The Walking Dead - Disc 1 - Title 01.mkv").exists())
         self.assertTrue(organize.undo(oid)["ok"])
-        self.assertEqual((self.d / "The Walking Dead - Disc 1 - Titel 02.mkv").read_bytes(), b"x" * 102)
+        self.assertEqual((self.d / "The Walking Dead - Disc 1 - Title 02.mkv").read_bytes(), b"x" * 102)
 
     def test_never_overwrites(self):
-        dst = self.lib / "Serien/The Walking Dead (2010) [tmdbid-1402]/Season 01"
+        dst = self.lib / "Series/The Walking Dead (2010) [tmdbid-1402]/Season 01"
         dst.mkdir(parents=True)
-        (dst / "The Walking Dead S01E02.mkv").write_bytes(b"alt")
+        (dst / "The Walking Dead S01E02.mkv").write_bytes(b"old")
         oid, op = run(self.go(self.req()))
         self.assertEqual(op["status"], "done")
-        self.assertEqual((dst / "The Walking Dead S01E02.mkv").read_bytes(), b"alt")
-        self.assertTrue((self.d / "The Walking Dead - Disc 1 - Titel 02.mkv").exists())     # blieb liegen
+        self.assertEqual((dst / "The Walking Dead S01E02.mkv").read_bytes(), b"old")
+        self.assertTrue((self.d / "The Walking Dead - Disc 1 - Title 02.mkv").exists())     # stayed where it was
         self.assertEqual(len(organize.history()[-1]["rows"]), 2)
 
     def test_nothing_to_do(self):
@@ -218,11 +218,11 @@ class RunTest(OrganizeBase):
             run(organize.start(r))
 
     def test_sidecar_follows_file(self):
-        rel = "The Walking Dead - Disc 1/The Walking Dead - Disc 1 - Titel 01.mkv"
+        rel = "The Walking Dead - Disc 1/The Walking Dead - Disc 1 - Title 01.mkv"
         store.remember_rip({"disc": {"name": "TWD", "volume": "V", "titles": [{"id": 0, "duration": 2600}]}, "title": {"id": 0, "duration": 2600}, "rel": rel})
         self.assertEqual(store.sidecar(rel)["disc"]["name"], "TWD")
         oid, op = run(self.go(self.req()))
-        new = str((self.lib / "Serien/The Walking Dead (2010) [tmdbid-1402]/Season 01/The Walking Dead S01E01.mkv").resolve())
+        new = str((self.lib / "Series/The Walking Dead (2010) [tmdbid-1402]/Season 01/The Walking Dead S01E01.mkv").resolve())
         self.assertIsNone(store.sidecar(rel))
         self.assertIsNotNone(store.sidecar(new))
         organize.undo(oid)
@@ -243,28 +243,28 @@ class SeriesTest(unittest.TestCase):
         old = series.remember(k, 1, 1, 1, 5)
         self.assertIsNone(old)
         self.assertEqual(series.next_episode(k, 1, 2), 6)
-        self.assertEqual(series.next_episode(k, 1, 1), 6)                  # Rest derselben Disc
+        self.assertEqual(series.next_episode(k, 1, 1), 6)                  # rest of the same disc
         self.assertIsNone(series.next_episode(k, 2, 1))
         series.remember(k, 1, 3, 11, 15)
-        self.assertIsNone(series.next_episode(k, 1, 2))                    # Disc 2 kommt nach Disc 3: unbekannt
+        self.assertIsNone(series.next_episode(k, 1, 2))                    # disc 2 comes after disc 3: unknown
         series.restore(k, 1, None)
         self.assertIsNone(series.next_episode(k, 1, 1))
 
     def test_key_without_tmdb(self):
-        self.assertEqual(series.key(" Serie ", 2020, None), "serie|2020")
+        self.assertEqual(series.key(" Show ", 2020, None), "show|2020")
 
 
 class InfoTest(unittest.TestCase):
     def test_from_name(self):
         i = info.info_for("Film (2021) [imdbid-tt1234567]/Film (2021) [imdbid-tt1234567].mkv")
         self.assertEqual((i["known"], i["source"], i["kind"], i["imdb"]), (True, "name", "movie", "tt1234567"))
-        self.assertEqual(info.info_for("Irgendwas/datei.mkv"), {"path": "Irgendwas/datei.mkv", "known": False})
+        self.assertEqual(info.info_for("Something/file.mkv"), {"path": "Something/file.mkv", "known": False})
 
     def test_bulk_endpoint_omits_unknown(self):
         from app.media import api
-        r = api.infos(api.InfoReq(paths=["Film (2021)/Film (2021).mkv", "Irgendwas/datei.mkv", "Serie (2020)/Season 01/Serie S01E02.mkv"]))
-        self.assertEqual(sorted(r), ["Film (2021)/Film (2021).mkv", "Serie (2020)/Season 01/Serie S01E02.mkv"])
-        self.assertEqual((r["Film (2021)/Film (2021).mkv"]["kind"], r["Serie (2020)/Season 01/Serie S01E02.mkv"]["episode"]), ("movie", 2))
+        r = api.infos(api.InfoReq(paths=["Film (2021)/Film (2021).mkv", "Something/file.mkv", "Show (2020)/Season 01/Show S01E02.mkv"]))
+        self.assertEqual(sorted(r), ["Film (2021)/Film (2021).mkv", "Show (2020)/Season 01/Show S01E02.mkv"])
+        self.assertEqual((r["Film (2021)/Film (2021).mkv"]["kind"], r["Show (2020)/Season 01/Show S01E02.mkv"]["episode"]), ("movie", 2))
         self.assertNotIn("path", r["Film (2021)/Film (2021).mkv"])
 
 

@@ -1,4 +1,4 @@
-"""Laufzeitstatus, Benachrichtigung der Browser und die Statusmeldung (/api/state, /api/events)."""
+"""Runtime state, notifying the browsers and the state report (/api/state, /api/events)."""
 import asyncio
 import copy
 import json
@@ -15,7 +15,7 @@ from app.config import DEFAULTS, INSTANCE, OUT_FALLBACK, OUT_PREFERRED, STAGING
 router = APIRouter()
 
 settings = copy.deepcopy(DEFAULTS)
-drives: dict = {}                        # Gerätepfad -> app.drives.Drive
+drives: dict = {}                        # device path -> app.drives.Drive
 hidden_drives: set[str] = set()
 clients: set[asyncio.Queue] = set()
 beta = {"key": "", "fetched": 0, "error": ""}
@@ -28,7 +28,7 @@ ACTIVE = ("queued", "copying", "retry")
 conversions: list[dict] = []
 convert_queue: asyncio.Queue = asyncio.Queue()
 conv_procs: dict[int, list] = {}
-conv_state = {"paused": False}      # Konvertierung angehalten (ffmpeg per SIGSTOP, Warteschlange wartet)
+conv_state = {"paused": False}      # conversion paused (ffmpeg via SIGSTOP, the queue waits)
 CV_ACTIVE = ("queued", "running")
 
 peers_state: dict[str, dict] = {}
@@ -50,13 +50,13 @@ def capacity() -> dict:
 
 
 def work_pending() -> bool:
-    """Läuft hier noch Arbeit (Rip, Konvertierung, Übertragung)? Wenn nicht, darf der Rechner heruntergefahren werden."""
+    """Is there still work running here (rip, conversion, transfer)? If not, the machine may be shut down."""
     return (any(d.job for d in drives.values()) or any(c["status"] in CV_ACTIVE for c in conversions)
             or any(u["status"] in ACTIVE for u in uploads))
 
 
 def public_settings() -> dict:
-    """Einstellungen für Browser und andere Rechner: geheime Felder der Erweiterungs-Namensräume sind ausgeblendet."""
+    """Settings for browsers and other machines: secret fields of the extension namespaces are hidden."""
     out = dict(settings)
     for ns, spec in ext.settings_ns.items():
         if isinstance(out.get(ns), dict) and spec["secret"]:
@@ -84,7 +84,7 @@ def snapshot():
         "capabilities": ext.capabilities,
         "now": time.time(),
     }
-    for key, fn in ext.snapshot_fns.items():          # Erweiterungen: ein Fehler darf die Statusmeldung nicht zerstören
+    for key, fn in ext.snapshot_fns.items():          # extensions: an error must not break the state report
         try:
             snap[key] = fn()
         except Exception as e:  # noqa: BLE001

@@ -1,7 +1,7 @@
-"""Erkennen, was ein Titel/Ordner ist: Film oder Serie, Titel, Jahr, Staffel, Disc – samt Play-All-Titeln.
+"""Detect what a title/folder is: movie or series, title, year, season, disc – including play-all titles.
 
-Reine Funktionen ohne Dateizugriff und Netzwerk. Eingabe sind Dateien mit Laufzeit (aus der Bibliothek bzw. der Begleitdatei beim Rippen);
-das Ergebnis enthält die Trefferwahrscheinlichkeit (0–1) und die Gründe als lesbare Sätze.
+Pure functions without file access and network. Input are files with a runtime (from the library or the companion file when ripping);
+the result contains the match probability (0–1) and the reasons as readable sentences.
 """
 import re
 from datetime import date
@@ -9,8 +9,8 @@ from statistics import median
 
 from app.media.naming import split_name
 
-EP_MIN, EP_MAX = 15 * 60, 80 * 60          # Länge einer Serienfolge (Sekunden)
-MOVIE_MIN = 70 * 60                        # ab hier ist es ein Hauptfilm
+EP_MIN, EP_MAX = 15 * 60, 80 * 60          # length of a series episode (seconds)
+MOVIE_MIN = 70 * 60                        # from here on it is a main feature
 NOISE = re.compile(r"\b(2160p|1080p|1080i|720p|576p|480p|uhd|bluray|blu-ray|bdrip|brrip|dvdrip|dvd|remux|x264|x265|h264|h265|hevc|avc|ac3|dts|"
                    r"german|deutsch|multi|proper|extended|remastered|disc ?image|bd|hdr)\b", re.I)
 _YEAR = re.compile(r"[\(\[]?\b((?:19|20)\d{2})\b[\)\]]?")
@@ -20,8 +20,8 @@ _TITLENO = re.compile(r"(?:titel|title|track|t)[ _.-]*0*(\d{1,3})$", re.I)
 
 
 def analyze_name(raw: str) -> dict:
-    """Aus Disc-Name, Volume-Label, Ordner- oder Dateinamen Titel, Jahr, Staffel und Disc-Nummer lesen
-    („WALKING_DEAD_S1_D1“ -> Walking Dead, S1, D1)."""
+    """Read title, year, season and disc number from a disc name, volume label, folder or file name
+    ("WALKING_DEAD_S1_D1" -> Walking Dead, S1, D1). German words (Staffel, Titel …) are understood as well."""
     s = re.sub(r"\.(mkv|mp4|m4v|avi|iso|m2ts)$", "", raw.strip(), flags=re.I)
     s = s.replace("_", " ")
     if " " not in s:
@@ -33,9 +33,9 @@ def analyze_name(raw: str) -> dict:
         s = s[:m.start()]
     ym = None
     for m in _YEAR.finditer(s):
-        if int(m.group(1)) <= date.today().year + 1:   # „Blade Runner 2049“: kein Erscheinungsjahr
+        if int(m.group(1)) <= date.today().year + 1:   # "Blade Runner 2049": not a release year
             ym = m
-    if ym and ym.start() > 0:                          # Jahr nur, wenn davor ein Titel steht („2012“ allein ist der Titel)
+    if ym and ym.start() > 0:                          # a year only if a title comes before it ("2012" alone is the title)
         out["year"] = int(ym.group(1))
         s = s[:ym.start()] + " " + s[ym.end():]
     sm = _SEASON.search(s)
@@ -56,7 +56,7 @@ def analyze_name(raw: str) -> dict:
 
 
 def find_playall(durs: list[float]) -> dict[int, list[int]]:
-    """Index eines Play-All-Titels -> Indizes der Titel, deren Laufzeiten sich zu seiner Laufzeit addieren (fortlaufende Reihe, ≥ 2)."""
+    """Index of a play-all title -> indexes of the titles whose runtimes add up to its runtime (consecutive run, ≥ 2)."""
     res: dict[int, list[int]] = {}
     for i, d in enumerate(durs):
         if d < 25 * 60:
@@ -83,18 +83,18 @@ def _fmt(sec: float) -> str:
 
 
 def _sources(files: list[dict]) -> list[tuple[str, str]]:
-    """Namensquellen in der Reihenfolge ihrer Verlässlichkeit: Disc-Name, Volume-Label, Ordner, Dateiname."""
+    """Name sources in order of reliability: disc name, volume label, folder, file name."""
     out = []
     for f in files:
         d = f.get("disc") or {}
         if d.get("name"):
-            out.append(("Disc-Name", d["name"]))
+            out.append(("Disc name", d["name"]))
         if d.get("volume"):
-            out.append(("Disc-Label", d["volume"]))
+            out.append(("Disc label", d["volume"]))
     parts = files[0]["path"].split("/")
     if len(parts) > 1:
-        out.append(("Ordnername", parts[-2]))
-    out.append(("Dateiname", parts[-1]))
+        out.append(("Folder name", parts[-2]))
+    out.append(("File name", parts[-1]))
     seen, uniq = set(), []
     for k, v in out:
         if v not in seen:
@@ -104,8 +104,8 @@ def _sources(files: list[dict]) -> list[tuple[str, str]]:
 
 
 def detect(files: list[dict]) -> dict:
-    """files: [{path, dur, size, disc?: {name, volume, titles:[{id, duration}]}, title_id?}] (alle zu einem Medium).
-    Ergebnis: {kind: movie|series|unknown, title, year, season, disc, confidence, reasons, items:[{path, dur, role, order, playall_of?}]}."""
+    """files: [{path, dur, size, disc?: {name, volume, titles:[{id, duration}]}, title_id?}] (all belonging to one medium).
+    Result: {kind: movie|series|unknown, title, year, season, disc, confidence, reasons, items:[{path, dur, role, order, playall_of?}]}."""
     if not files:
         return {"kind": "unknown", "title": "", "year": None, "season": None, "disc": None, "confidence": 0.0, "reasons": [], "items": []}
     for f in files:
@@ -113,7 +113,7 @@ def detect(files: list[dict]) -> dict:
         f["_no"] = f.get("title_id") if f.get("title_id") is not None else a["title_no"]
     files = sorted(files, key=lambda f: (f["_no"] is None, f["_no"] or 0, f["path"].lower()))
     reasons, conf = [], 0.0
-    # Namen: erste Quelle mit brauchbarem Titel; Staffel/Disc/Jahr aus allen Quellen
+    # names: the first source with a usable title; season/disc/year from all sources
     info = {"title": "", "year": None, "season": None, "disc": None}
     title_src = ""
     for src, raw in _sources(files):
@@ -125,9 +125,9 @@ def detect(files: list[dict]) -> dict:
                 info[k] = a[k]
     if not info["title"] and files[0]["path"]:
         info["title"] = split_name(files[0]["path"].split("/")[-1].rsplit(".", 1)[0])["title"]
-    if title_src in ("Disc-Name", "Disc-Label", "Ordnername"):
+    if title_src in ("Disc name", "Disc label", "Folder name"):
         conf += 0.1
-    # Laufzeiten, Play-All
+    # runtimes, play-all
     durs = [float(f.get("dur") or 0) for f in files]
     disc = next((f["disc"] for f in files if f.get("disc") and f["disc"].get("titles")), None)
     playall: dict[int, list[int]] = {}
@@ -145,7 +145,7 @@ def detect(files: list[dict]) -> dict:
     for k in playall:
         items[k]["role"] = "playall"
         items[k]["playall_of"] = playall[k]
-        reasons.append(f"Play-All erkannt ({_fmt(durs[k])}, Summe mehrerer Titel)")
+        reasons.append(f"Play-all detected ({_fmt(durs[k])}, sum of several titles)")
     rest = [k for k in range(len(files)) if k not in playall and durs[k] > 0]
     eps = [k for k in rest if EP_MIN <= durs[k] <= EP_MAX]
     med = median(durs[k] for k in eps) if eps else 0
@@ -155,10 +155,10 @@ def detect(files: list[dict]) -> dict:
     if len(cluster) >= 2 or (len(cluster) == 1 and (info["season"] or info["disc"]) and not (longest is not None and durs[longest] >= MOVIE_MIN)):
         kind = "series"
         conf += 0.35 + (0.1 if len(cluster) >= 4 else 0) + (0.1 if len(cluster) < 2 else 0.05)
-        reasons.insert(0, f"{len(cluster)} Titel à {int(min(durs[k] for k in cluster) // 60)}–{int(max(durs[k] for k in cluster) // 60)} min (Serienfolgen)")
+        reasons.insert(0, f"{len(cluster)} titles of {int(min(durs[k] for k in cluster) // 60)}–{int(max(durs[k] for k in cluster) // 60)} min (series episodes)")
         if info["season"] or info["disc"]:
             conf += 0.15
-            reasons.append("Staffel/Disc im Namen" + (f" (Staffel {info['season']})" if info["season"] else "") + (f" (Disc {info['disc']})" if info["disc"] else ""))
+            reasons.append("Season/disc in the name" + (f" (season {info['season']})" if info["season"] else "") + (f" (disc {info['disc']})" if info["disc"] else ""))
         if playall:
             conf += 0.1
         for k in rest:
@@ -169,20 +169,20 @@ def detect(files: list[dict]) -> dict:
     elif longest is not None and durs[longest] >= MOVIE_MIN:
         kind = "movie"
         conf += 0.5
-        reasons.insert(0, f"Haupttitel von {_fmt(durs[longest])}")
+        reasons.insert(0, f"Main title of {_fmt(durs[longest])}")
         if info["year"]:
             conf += 0.2
-            reasons.append(f"Jahr {info['year']} im Namen")
+            reasons.append(f"Year {info['year']} in the name")
         big = [k for k in rest if durs[k] >= MOVIE_MIN]
         if len(big) > 1:
             conf -= 0.25
-            reasons.append(f"{len(big)} lange Titel – mehrere Filme oder Fassungen?")
+            reasons.append(f"{len(big)} long titles – several movies or versions?")
         for k in rest:
             items[k]["role"] = "movie" if k == longest else ("extra" if durs[k] < MOVIE_MIN else "movie")
         if any(items[k]["role"] == "extra" for k in rest):
-            reasons.append("kürzere Titel gelten als Extras")
+            reasons.append("shorter titles count as extras")
             conf += 0.03
-    elif len(files) and not rest:                                   # keine Laufzeiten bekannt: nur der Name
+    elif len(files) and not rest:                                   # no runtimes known: only the name
         has_ep = bool(re.search(r"[Ss]\d{1,2}[ ._-]?[Ee]\d{1,3}", files[0]["path"]))
         kind = "series" if (has_ep or info["season"]) else "unknown"
         conf += 0.25 if kind == "series" else 0.0
@@ -192,7 +192,7 @@ def detect(files: list[dict]) -> dict:
         for k in rest:
             items[k]["role"] = "extra"
     if title_src:
-        reasons.append(f"{title_src} „{dict(_sources(files))[title_src]}“")
+        reasons.append(f"{title_src} \"{dict(_sources(files))[title_src]}\"")
     if disc:
         conf += 0.05
     for it in items:
@@ -203,9 +203,9 @@ def detect(files: list[dict]) -> dict:
 
 
 def assign_episodes(items: list[dict], season: int, start: int, tmdb_eps: list[dict] | None = None) -> list[dict]:
-    """Staffel/Episode je Episoden-Titel vorschlagen: fortlaufend ab `start`. Mit TMDB-Folgen (`[{n, name, runtime}]`) kommen Namen und der
-    Laufzeit-Abgleich dazu; ein Titel, der etwa so lang ist wie zwei aufeinanderfolgende Folgen, wird als Doppelfolge gezählt.
-    Rückgabe: je Item mit Rolle „episode“ {path, season, episodes, name, runtime, delta}; `delta` in Minuten (None = unbekannt)."""
+    """Suggest season/episode per episode title: consecutively from `start`. With TMDB episodes (`[{n, name, runtime}]`) names and
+    runtime matching are added; a title that is about as long as two consecutive episodes is counted as a double episode.
+    Returns: per item with the role "episode" {path, season, episodes, name, runtime, delta}; `delta` in minutes (None = unknown)."""
     by_n = {e["n"]: e for e in (tmdb_eps or [])}
     out, n = [], start
     for it in items:

@@ -1,12 +1,12 @@
-"""ffmpeg-Argumente aus Konvertierungs-Einstellungen (Schema v2, siehe convert_schema.py): Filter, Video je Codec, Ton, Untertitel, Durchgänge.
+"""ffmpeg arguments from conversion settings (schema v2, see convert_schema.py): filters, video per codec, audio, subtitles, passes.
 
-Alles hier sind reine Funktionen (kein Prozessstart), damit sie ohne ffmpeg getestet werden können.
-`ctx` bündelt, was erst beim Konvertieren feststeht:
-  info   Ergebnis von ffprobe (Quelle)          crop   "crop=w:h:x:y" oder None (automatisch erkannt)
-  scan   "progressive" | "interlaced" | "telecine" (für Deinterlace „automatisch“)
-  hdr    {"master": "...", "cll": "...", "dovi": bool} aus den Bilddaten der Quelle
-  pools  Rechenkerne für diesen Prozess (0 = Encoder entscheidet)      dur  Länge der Quelle in Sekunden
-  kbps   Ziel-Videobitrate bei Zielgröße/Bitrate (0 = Qualitätsmodus)  passes (1 oder 2)  passlog  Pfad der Zwei-Durchgang-Datei
+Everything here is a pure function (no process start), so that it can be tested without ffmpeg.
+`ctx` bundles what is only known at conversion time:
+  info   ffprobe result (source)          crop   "crop=w:h:x:y" or None (detected automatically)
+  scan   "progressive" | "interlaced" | "telecine" (for deinterlace "automatic")
+  hdr    {"master": "...", "cll": "...", "dovi": bool} from the source's frame data
+  pools  cores for this process (0 = the encoder decides)      dur  length of the source in seconds
+  kbps   target video bitrate for target size/bitrate (0 = quality mode)  passes (1 or 2)  passlog  path of the two-pass file
 """
 import os
 import shlex
@@ -16,7 +16,7 @@ from app.convert_schema import describe
 
 HW_DEVICE = os.environ.get("HW_DEVICE", "/dev/dri/renderD128")
 HDR_TRANSFERS = ("smpte2084", "arib-std-b67")
-HQDN3D = {"light": "hqdn3d=2:1:2:3", "medium": "hqdn3d=3:2:2:3"}        # Stufen wie bei HandBrake (Weak/Medium)
+HQDN3D = {"light": "hqdn3d=2:1:2:3", "medium": "hqdn3d=3:2:2:3"}        # levels as in HandBrake (weak/medium)
 TONEMAP = ("zscale=t=linear:npl=100,format=gbrpf32le,zscale=p=bt709,tonemap=tonemap=hable:desat=0,"
            "zscale=t=bt709:m=bt709:r=tv")
 SAMPLE_INFO = {"streams": [{"codec_type": "video", "codec_name": "h264", "width": 1920, "height": 1080, "r_frame_rate": "24000/1001"},
@@ -24,7 +24,7 @@ SAMPLE_INFO = {"streams": [{"codec_type": "video", "codec_name": "h264", "width"
 
 
 def mark(cfg: dict) -> str:
-    """Kennzeichnung im Container: Diese Datei wurde von Spindle konvertiert (die Bibliothek zeigt sie dann als „konvertiert“)."""
+    """Marker in the container: this file was converted by Spindle (the library then shows it as "converted")."""
     return "MKW_CONVERTED=" + describe(cfg)[:150]
 
 
@@ -45,18 +45,18 @@ def hdr_kept(cfg: dict, info: dict) -> bool:
 
 
 def hdr_problem(cfg: dict, info: dict) -> str:
-    """Warum diese Einstellung für HDR-Material nicht geeignet ist ('' = in Ordnung)."""
+    """Why this setting is not suitable for HDR material ('' = fine)."""
     v = cfg["video"]
     if not is_hdr(info) or cfg["picture"]["hdr"] != "keep" or v["codec"] == "copy":
         return ""
     if v["codec"] in ("x264", "svtav1") or (v["codec"] == "hw" and not v["hw"].startswith("hevc_")):
-        return "HDR geht bei diesem Codec verloren – HEVC wählen oder HDR nach SDR umrechnen"
+        return "HDR is lost with this codec – choose HEVC or convert HDR to SDR"
     if v["bits"] != 10:
-        return "HDR braucht 10 Bit"
+        return "HDR needs 10 bit"
     return ""
 
 
-# ---------------------------------------------------------------- Bildfilter
+# ---------------------------------------------------------------- picture filters
 def deint_filter(cfg: dict, ctx: dict) -> str:
     d = cfg["picture"]["deint"]
     scan = ctx.get("scan", "progressive")
@@ -72,7 +72,7 @@ def changes_framecount(cfg: dict, ctx: dict) -> bool:
 
 
 def filter_chain(cfg: dict, ctx: dict, last: str = "") -> list[str]:
-    """Filter in dieser Reihenfolge: Zeilensprung, Zuschneiden, Entrauschen, Skalieren, HDR→SDR, Formatwandlung für Hardware."""
+    """Filters in this order: interlacing, crop, denoise, scale, HDR→SDR, format conversion for hardware."""
     p, v, info = cfg["picture"], cfg["video"], ctx["info"]
     f = [deint_filter(cfg, ctx)]
     if p["crop"] == "manual":
@@ -81,7 +81,7 @@ def filter_chain(cfg: dict, ctx: dict, last: str = "") -> list[str]:
         f.append(ctx["crop"])
     f.append(HQDN3D.get(p["denoise"], ""))
     if p["scale"] != "keep":
-        f.append(f"scale=w=-2:h=min(ih\\,{p['scale']}):flags=lanczos")        # nie hochskalieren
+        f.append(f"scale=w=-2:h=min(ih\\,{p['scale']}):flags=lanczos")        # never upscale
     if p["hdr"] == "tonemap" and is_hdr(info):
         f.append(TONEMAP)
     fam = hw_family(cfg)
@@ -114,7 +114,7 @@ def _rate(ctx: dict) -> list[str]:
 def x265_args(cfg: dict, ctx: dict) -> list[str]:
     v, q = cfg["video"], cfg["quality"]
     a = ["-c:v", "libx265", "-preset", v["speed"]] + (_rate(ctx) if ctx.get("kbps") else ["-crf", str(q["crf"])]) + ["-pix_fmt", pix_fmt(cfg)]
-    if v["tune"] in ("grain", "animation"):          # film/stillimage: x265 kennt dazu keinen Tune -> keiner gesetzt
+    if v["tune"] in ("grain", "animation"):          # film/stillimage: x265 has no such tune -> none set
         a += ["-tune", v["tune"]]
     params = ["log-level=error"] + ([f"pools={ctx['pools']}"] if ctx.get("pools") else [])
     if hdr_kept(cfg, ctx["info"]) and cfg["video"]["codec"] == "x265":
@@ -146,7 +146,7 @@ def svtav1_args(cfg: dict, ctx: dict) -> list[str]:
     a = ["-c:v", "libsvtav1", "-preset", v["speed"]] + (_rate(ctx) if ctx.get("kbps") else ["-crf", str(q["crf"])]) + ["-pix_fmt", pix_fmt(cfg)]
     params = ["tune=0"] + ([f"lp={ctx['pools']}"] if ctx.get("pools") else [])
     if v["tune"] == "grain":
-        params.append("film-grain=8")             # Korn wird beim Abspielen nachgebildet statt Bits dafür auszugeben
+        params.append("film-grain=8")             # grain is synthesized on playback instead of spending bits on it
     if v["extra"]:
         params.append(v["extra"])
     return a + ["-svtav1-params", ":".join(params)]
@@ -156,7 +156,7 @@ NVENC_OPTS = {"preset", "tune", "profile", "tier", "multipass", "rc-lookahead", 
 
 
 def nvenc_extra(extra: str) -> list[str]:
-    """Freie NVENC-Parameter „preset=p7:tune=hq:bf=4“ als ffmpeg-Optionen; nur bekannte Schlüssel, ein eigenes preset ersetzt den Grundwert p5."""
+    """Free NVENC parameters "preset=p7:tune=hq:bf=4" as ffmpeg options; only known keys, a custom preset replaces the base value p5."""
     a = []
     for kv in extra.split(":") if extra else []:
         k, _, val = kv.partition("=")
@@ -177,7 +177,7 @@ def hw_args(cfg: dict, ctx: dict) -> list[str]:
         a += ["-global_quality", str(q), "-preset", "slow"]
     elif fam == "nvenc":
         a += ["-rc", "vbr", "-cq", str(q), "-b:v", "0"]
-    else:                                         # videotoolbox: 0..100, höher = besser
+    else:                                         # videotoolbox: 0..100, higher = better
         a += ["-q:v", str(max(1, min(100, round(85 - (q - 16) * 2.5))))]
     if fam == "nvenc":
         more = nvenc_extra(cfg["video"]["extra"])
@@ -191,7 +191,7 @@ def hw_args(cfg: dict, ctx: dict) -> list[str]:
 
 
 def global_args(cfg: dict) -> list[str]:
-    """Vor „-i“: Hardware-Gerät anlegen."""
+    """Before "-i": create the hardware device."""
     return ["-vaapi_device", HW_DEVICE] if hw_family(cfg) == "vaapi" else []
 
 
@@ -202,7 +202,7 @@ def video_args(cfg: dict, ctx: dict) -> list[str]:
     return {"x265": x265_args, "x264": x264_args, "svtav1": svtav1_args, "hw": hw_args}[c](cfg, ctx)
 
 
-# ---------------------------------------------------------------- Ton
+# ---------------------------------------------------------------- audio
 def audio_args(cfg: dict, info: dict) -> list[str]:
     snd = cfg["sound"]
     auds = [x for x in info["streams"] if x["codec_type"] == "audio"]
@@ -213,7 +213,7 @@ def audio_args(cfg: dict, info: dict) -> list[str]:
     for i, st in enumerate(auds):
         src = int(st.get("channels") or 2)
         ch = {"keep": src, "51": min(src, 6), "stereo": min(src, 2)}[snd["channels"]]
-        ch = min(ch, 8 if mode == "opus" else 6)             # AAC/AC3/E-AC3 im ffmpeg bis 5.1, Opus bis 7.1
+        ch = min(ch, 8 if mode == "opus" else 6)             # AAC/AC3/E-AC3 in ffmpeg up to 5.1, Opus up to 7.1
         if ch != src:
             a += [f"-ac:a:{i}", str(ch)]
         kb = snd["kbps"]
@@ -231,9 +231,9 @@ def audio_args(cfg: dict, info: dict) -> list[str]:
     return a
 
 
-# ---------------------------------------------------------------- Untertitel
+# ---------------------------------------------------------------- subtitles
 def sub_streams(cfg: dict, info: dict) -> list[int]:
-    """Nummern (innerhalb der Untertitelspuren) der Spuren, die behalten werden."""
+    """Indexes (within the subtitle tracks) of the tracks that are kept."""
     subs = [x for x in info["streams"] if x["codec_type"] == "subtitle"]
     s = cfg["subs"]
     if s["mode"] == "none":
@@ -255,9 +255,9 @@ def sub_maps(cfg: dict, info: dict, input_no: int = 0) -> list[str]:
     return out
 
 
-# ---------------------------------------------------------------- Zielgröße / Bitrate
+# ---------------------------------------------------------------- target size / bitrate
 def target_kbps(cfg: dict, info: dict, dur: float) -> int:
-    """Videobitrate (kb/s) für den Modus „Zielgröße“ bzw. „Bitrate“; 0 im Qualitätsmodus."""
+    """Video bitrate (kb/s) for the "target size" or "bitrate" mode; 0 in quality mode."""
     q = cfg["quality"]
     if q["mode"] == "bitrate":
         return q["kbps"]
@@ -276,9 +276,9 @@ def two_pass(cfg: dict) -> bool:
     return cfg["video"]["codec"] in ("x265", "x264") and cfg["quality"]["mode"] != "crf"
 
 
-# ---------------------------------------------------------------- Gesamtbefehl
+# ---------------------------------------------------------------- complete command
 def ffmpeg_args(src, out, cfg: dict, ctx: dict, pass_no: int = 0) -> list[str]:
-    """Befehl für einen Prozess (ganzer Film). pass_no 1 = nur Analyse (Ton/Untertitel aus, Ausgabe verworfen), 2 = Ergebnis, 0 = ein Durchgang."""
+    """Command for one process (whole movie). pass_no 1 = analysis only (audio/subtitles off, output discarded), 2 = result, 0 = single pass."""
     info, v = ctx["info"], cfg["video"]
     c = {**ctx, "pass_no": pass_no, "passes": two_pass(cfg)}
     a = ["ffmpeg", "-hide_banner", "-nostdin", "-y"] + global_args(cfg) + ["-i", str(src), "-map", "0:v:0"]
@@ -296,7 +296,7 @@ def ffmpeg_args(src, out, cfg: dict, ctx: dict, pass_no: int = 0) -> list[str]:
 
 
 def segment_args(src, part, cfg: dict, ctx: dict, seek: list[str], rate: str) -> list[str]:
-    """Befehl für ein Zeitsegment (nur Bild, Ton/Untertitel kommen beim Zusammensetzen vom Original)."""
+    """Command for a time segment (picture only, audio/subtitles come from the original when joining)."""
     fl = filter_chain(cfg, ctx, "setpts=PTS-STARTPTS")
     return ["ffmpeg", "-hide_banner", "-nostdin", "-y"] + seek + ["-i", str(src), "-map", "0:v:0", "-an", "-sn", "-dn", "-vf", ",".join(fl)] \
         + video_args(cfg, ctx) + ["-r", rate, "-fps_mode", "cfr", "-progress", "pipe:1", "-nostats", str(part)]
@@ -308,13 +308,13 @@ def mux_args(list_file, src, out, cfg: dict, info: dict) -> list[str]:
 
 
 def command_preview(cfg: dict, info: dict | None = None, ctx_extra: dict | None = None) -> str:
-    """Lesbarer Befehl für die Anzeige im Editor („Experten“). Automatisch Ermitteltes (Zuschneiden, Zeilensprung) steht als Platzhalter."""
+    """Readable command for display in the editor ("Expert"). Automatically determined values (crop, interlacing) are shown as placeholders."""
     info = info or SAMPLE_INFO
     dur = float(info["format"].get("duration") or 0)
     ctx = {"info": info, "crop": "crop=1920:800:0:140" if cfg["picture"]["crop"] == "auto" else None, "scan": "interlaced",
            "hdr": {}, "pools": 0, "kbps": target_kbps(cfg, info, dur), "passlog": "/tmp/ffpass", **(ctx_extra or {})}
     passes = [1, 2] if two_pass(cfg) else [0]
-    return "\n".join(" ".join(shlex.quote(x) for x in ffmpeg_args("Eingang.mkv", "Ausgang.mkv", cfg, ctx, p)) for p in passes)
+    return "\n".join(" ".join(shlex.quote(x) for x in ffmpeg_args("input.mkv", "output.mkv", cfg, ctx, p)) for p in passes)
 
 
 __all__ = ["ffmpeg_args", "segment_args", "mux_args", "command_preview", "X265_PRESETS"]

@@ -1,16 +1,16 @@
-// Interner Player: Überlagerung (openPlayer) und eingebettet (mountPlayer), Anmeldung als primäre Bibliotheks-Aktion „Abspielen“.
-// Markup und Stile 1:1 nach docs/mockups/paket-d.html (css/player.css); Steuerung in player-engine.js, Markup in player-ui.js.
+// Built-in player: overlay (openPlayer) and embedded (mountPlayer), registration as the primary library action "Play".
+// Markup and styles 1:1 after docs/mockups/paket-d.html (css/player.css); control in player-engine.js, markup in player-ui.js.
 import { esc, setHtml } from './core.js';
 import { Engine, prefs } from './player-engine.js';
 import { MODE_PILL, chaptersHtml, fmtT, ic, injectSprite, menuHtml, metaLine, notesHtml, playerHtml, windowHtml } from './player-ui.js';
 import { registerLibraryAction } from './registry.js';
 
 const PLAYABLE = /\.(mkv|mp4|m4v|mov|webm|m2ts|ts|mpe?g|avi|wmv)$/i;
-const FAIL_TITLE = {409: 'Im Moment nicht möglich', 415: 'Nicht abspielbar', 404: 'Datei nicht gefunden'};
+const FAIL_TITLE = {409: 'Not possible right now', 415: 'Not playable', 404: 'File not found'};
 let overlay = null;
 
 class View {
-  /** host: Element, in dem das Klick-Handling läuft (Überlagerung: das Fenster, eingebettet: der Player selbst) */
+  /** host: element that handles the clicks (overlay: the window, embedded: the player itself) */
   constructor(host, {alone}){
     this.host = host; this.alone = alone; this.root = host.classList.contains('player') ? host : host.querySelector('.player');
     this.q = s => this.root.querySelector(s); this.dismissed = new Set(); this.menu = ''; this.drag = null; this.shown = {};
@@ -33,7 +33,7 @@ class View {
   open(path, start){ this.e.open(path, start); }
   destroy(){ this.e.destroy(); document.removeEventListener('pointerdown', this.onDocDown); clearTimeout(this.idle); }
 
-  // ---------------------------------------------------------------- Darstellung
+  // ---------------------------------------------------------------- Rendering
   paint(kind){
     const e = this.e, info = e.info, v = e.v, dur = e.duration();
     if(kind === 'info' || kind === 'subs' || kind === 'state') this.paintStatic(kind);
@@ -42,17 +42,17 @@ class View {
     const wt = this.q('.player-waittext'); if(wt.textContent !== e.wait) wt.textContent = e.wait;
     const playing = state === 'playing' || (state === 'loading' && e.want);
     const pb = this.root.querySelector('.player-row [data-a=toggle]'), want = playing ? 'pause' : 'play';
-    if(pb.dataset.i !== want){ pb.dataset.i = want; pb.innerHTML = ic(want); pb.setAttribute('aria-label', playing ? 'Pause' : 'Wiedergabe'); }
+    if(pb.dataset.i !== want){ pb.dataset.i = want; pb.innerHTML = ic(want); pb.setAttribute('aria-label', playing ? 'Pause' : 'Play'); }
     const t = this.drag != null ? this.drag * dur : e.time();
     const track = this.q('.player-track');
     track.style.setProperty('--p', dur ? Math.min(1, t / dur) : 0); track.style.setProperty('--b', dur ? Math.min(1, e.bufferedEnd() / dur) : 0);
     const tt = `<b>${fmtT(t)}</b> / ${fmtT(dur)}`; setHtml(this.q('.player-time'), tt);
-    this.seekEl.setAttribute('aria-valuenow', Math.round(t)); this.seekEl.setAttribute('aria-valuemax', Math.round(dur)); this.seekEl.setAttribute('aria-valuetext', `${fmtT(t)} von ${fmtT(dur)}`);
+    this.seekEl.setAttribute('aria-valuenow', Math.round(t)); this.seekEl.setAttribute('aria-valuemax', Math.round(dur)); this.seekEl.setAttribute('aria-valuetext', `${fmtT(t)} of ${fmtT(dur)}`);
     const cue = e.sub >= 0 && info ? e.cueNow() : '';
     if(this.shown.cue !== cue){ this.shown.cue = cue; const s = this.q('.player-subs'); s.textContent = ''; if(cue){ const sp = document.createElement('span'); sp.textContent = cue; s.append(sp); } }
     const vol = this.q('.player-vol input'), mu = v.muted || v.volume === 0, val = mu ? 0 : Math.round(v.volume * 100);
     if(+vol.value !== val) vol.value = val;
-    const mb = this.q('[data-a=mute]'), mi = mu ? 'mute' : 'vol'; if(mb.dataset.i !== mi){ mb.dataset.i = mi; mb.innerHTML = ic(mi); mb.setAttribute('aria-label', mu ? 'Ton an' : 'Ton aus'); }
+    const mb = this.q('[data-a=mute]'), mi = mu ? 'mute' : 'vol'; if(mb.dataset.i !== mi){ mb.dataset.i = mi; mb.innerHTML = ic(mi); mb.setAttribute('aria-label', mu ? 'Unmute' : 'Mute'); }
     const full = this.isFull(), fb = this.q('[data-a=full]'), fi = full ? 'unfull' : 'full'; if(fb.dataset.i !== fi){ fb.dataset.i = fi; fb.innerHTML = ic(fi); }
     this.q('[data-a="m:tracks"]').classList.toggle('on', e.sub >= 0 || this.menu === 'tracks');
     this.q('[data-a="m:mode"]').classList.toggle('on', this.menu === 'mode');
@@ -76,7 +76,7 @@ class View {
     const f = this.q('.player-fail');
     if(e.state === 'error' && e.err){
       const st = e.err.status;
-      setHtml(f, `<b>${esc(FAIL_TITLE[st] || 'Wiedergabe nicht möglich')}</b>${esc(e.err.text)}<br>${[404, 415].includes(st) ? '' : '<button type="button" class="secondary" data-a="retry">Erneut versuchen</button> '}${e.path ? `<a class="secondary" href="/api/download?path=${encodeURIComponent(e.path)}">Datei herunterladen</a>` : ''}`);
+      setHtml(f, `<b>${esc(FAIL_TITLE[st] || 'Playback not possible')}</b>${esc(e.err.text)}<br>${[404, 415].includes(st) ? '' : '<button type="button" class="secondary" data-a="retry">Try again</button> '}${e.path ? `<a class="secondary" href="/api/download?path=${encodeURIComponent(e.path)}">Download file</a>` : ''}`);
     } else if(f.dataset.h) setHtml(f, '');
     if(this.menu && kind !== 'state') this.renderMenu();
   }
@@ -97,15 +97,15 @@ class View {
   notes(){
     const e = this.e, info = e.info, n = []; if(!info) return n;
     const p = e.plan || info.plan, reasons = p.reasons || [], busy = info.busy || {};
-    if(info.locked) n.push({id: 'lock', k: 'warn', t: `<b>Diese Datei ${esc(info.locked.reason)}</b>${info.locked.by ? ` (Rechner ${esc(info.locked.by)})` : ''}. Du kannst sie ansehen; sie kann sich dabei noch ändern oder verschwinden.`});
-    if(p.mode === 'transcode') n.push({id: 'tr', k: 'warn', t: `<b>Wird umgewandelt</b> – ${esc(reasons.join(' '))} Das braucht Rechenleistung dieses Rechners.${busy.busy ? ` Gerade läuft ${busy.rip ? 'ein Rip' : busy.convert ? 'eine Konvertierung' : 'eine Übertragung'}: ffmpeg nutzt nur wenig Leistung mit niedrigster Priorität, die Wiedergabe kann ruckeln.` : ''}`});
-    else if(p.mode === 'remux') n.push({id: 'rx', t: `<b>Remux:</b> Das Video wird unverändert durchgereicht. ${esc(reasons.filter(r => r.startsWith('Ton')).join(' '))} Springen im nicht Gepufferten startet kurz neu.`});
-    if(e.subLoading) n.push({id: 'sl', t: 'Untertitel werden geladen … (bei großen Dateien am Netzlaufwerk kann das etwas dauern)'});
+    if(info.locked) n.push({id: 'lock', k: 'warn', t: `<b>This file ${esc(info.locked.reason)}</b>${info.locked.by ? ` (machine ${esc(info.locked.by)})` : ''}. You can watch it; it may still change or disappear meanwhile.`});
+    if(p.mode === 'transcode') n.push({id: 'tr', k: 'warn', t: `<b>Being transcoded</b> – ${esc(reasons.join(' '))} That takes computing power on this machine.${busy.busy ? ` ${busy.rip ? 'A rip' : busy.convert ? 'A conversion' : 'A transfer'} is running right now: ffmpeg uses only little power at the lowest priority, playback may stutter.` : ''}`});
+    else if(p.mode === 'remux') n.push({id: 'rx', t: `<b>Remux:</b> the video is passed through unchanged. ${esc(reasons.filter(r => r.startsWith('Audio')).join(' '))} Seeking outside the buffer restarts briefly.`});
+    if(e.subLoading) n.push({id: 'sl', t: 'Loading subtitles … (this can take a while for large files on a network drive)'});
     if(e.subErr) n.push({id: 'se', k: 'warn', t: esc(e.subErr)});
     return n.filter(x => !this.dismissed.has(x.id));
   }
 
-  // ---------------------------------------------------------------- Menüs
+  // ---------------------------------------------------------------- Menus
   renderMenu(){
     this.root.querySelectorAll('.player-menu').forEach(m => m.remove());
     if(!this.menu || !this.e.info) return;
@@ -114,12 +114,12 @@ class View {
   openMenu(k){ this.menu = this.menu === k ? '' : k; this.renderMenu(); this.paint('menu'); }
   closeMenu(){ if(!this.menu) return false; this.menu = ''; this.renderMenu(); this.paint('menu'); return true; }
 
-  // ---------------------------------------------------------------- Bedienung
+  // ---------------------------------------------------------------- Interaction
   isFull(){ return (document.fullscreenElement || document.webkitFullscreenElement) === this.root; }
   toggleFull(){
     if(this.isFull()){ (document.exitFullscreen || document.webkitExitFullscreen).call(document); return; }
     const r = this.root, f = r.requestFullscreen || r.webkitRequestFullscreen;
-    if(f) Promise.resolve(f.call(r)).catch(() => {}); else if(this.e.v.webkitEnterFullscreen) this.e.v.webkitEnterFullscreen();     // iPhone: nur das Video
+    if(f) Promise.resolve(f.call(r)).catch(() => {}); else if(this.e.v.webkitEnterFullscreen) this.e.v.webkitEnterFullscreen();     // iPhone: only the video
   }
   wake(){ this.root.classList.remove('idle'); clearTimeout(this.idle); if(this.isFull()) this.idle = setTimeout(() => { if(this.e.state === 'playing') this.root.classList.add('idle'); }, 3000); }
   click(ev){
@@ -155,7 +155,7 @@ class View {
     const f = this.frac(ev), e = this.e; if(!e.info) return;
     if(this.drag != null){ this.drag = f; this.paint('tick'); }
     const t = f * e.duration(), ch = e.info.chapters.filter(c => c.start <= t).pop(), tip = this.q('.player-tip');
-    tip.style.setProperty('--x', f); tip.innerHTML = `${fmtT(t)}${ch ? `<small>${esc(ch.title || 'Kapitel ' + (e.info.chapters.indexOf(ch) + 1))}</small>` : ''}`;
+    tip.style.setProperty('--x', f); tip.innerHTML = `${fmtT(t)}${ch ? `<small>${esc(ch.title || 'Chapter ' + (e.info.chapters.indexOf(ch) + 1))}</small>` : ''}`;
   }
   seekUp(ev){ if(this.drag == null) return; const f = this.frac(ev); this.drag = null; this.seekEl.classList.remove('drag'); this.e.seek(f * this.e.duration()); }
   key(ev){
@@ -182,7 +182,7 @@ class View {
   }
 }
 
-// ------------------------------------------------------------------ öffentliche Funktionen
+// ------------------------------------------------------------------ public functions
 export function openPlayer(path, {start = 0} = {}){
   injectSprite(); closePlayer();
   const prev = document.activeElement;
@@ -203,7 +203,7 @@ export function openPlayer(path, {start = 0} = {}){
 }
 export function closePlayer(){ if(overlay){ const o = overlay; overlay = null; o.destroy(); } }
 
-/** Player in ein Element einbetten (Detailbereich der Bibliothek). Rückgabe: {destroy(), engine}. */
+/** Embed the player in an element (library detail pane). Returns: {destroy(), engine}. */
 export function mountPlayer(el, path, {start = 0} = {}){
   injectSprite(); el.classList.add('player-embed'); el.innerHTML = playerHtml(true);
   const view = new View(el.querySelector('.player'), {alone: true});
@@ -211,6 +211,6 @@ export function mountPlayer(el, path, {start = 0} = {}){
   return {engine: view.e, destroy(){ view.destroy(); el.innerHTML = ''; }};
 }
 
-registerLibraryAction({id: 'play', label: 'Abspielen', icon: '▶', primary: true, when: fs => fs.length === 1 && PLAYABLE.test(fs[0].path), run: fs => openPlayer(fs[0].path)});
+registerLibraryAction({id: 'play', label: 'Play', icon: '▶', primary: true, when: fs => fs.length === 1 && PLAYABLE.test(fs[0].path), run: fs => openPlayer(fs[0].path)});
 export const playable = path => PLAYABLE.test(path);
 window.addEventListener('beforeunload', () => overlay && overlay.view.e.beacon());

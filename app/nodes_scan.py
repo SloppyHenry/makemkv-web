@@ -1,17 +1,17 @@
-"""Rechner im Netz finden: aktiver Scan (TCP + GET /api/discovery/hello).
+"""Finding machines on the network: active scan (TCP + GET /api/discovery/hello).
 
-Warum kein mDNS: Multicast/Broadcast kommen im Standard-Bridge-Netz von Docker nicht in den Container; mDNS bräuchte
-`network_mode: host` (Port-Zuordnung und Firewall ändern sich, Sache von PZ) und eine zusätzliche Abhängigkeit. Der Scan
-funktioniert in jedem Netz, in dem der Container ausgehende Verbindungen darf.
+Why no mDNS: multicast/broadcast does not reach the container in Docker's standard bridge network; mDNS would need
+`network_mode: host` (port mapping and firewall change, a matter for PZ) and an additional dependency. The scan
+works in every network in which the container may make outgoing connections.
 
-Welche Adressen geprüft werden (Reihenfolge der Quellen):
-  1. Umgebungsvariable NODES_SCAN_TARGETS (nur Entwicklung/Test, ersetzt alles andere), z. B. „127.0.0.1:8820-8822“
-  2. das /24-Netz der Adresse, unter der der Browser diese Seite aufgerufen hat (im Docker die LAN-Adresse des Hosts)
-  3. die /24-Netze bereits eingetragener Rechner
-  4. Einstellung `nodes.scan_nets` (CIDR-Liste)
-  5. nur wenn nichts davon ein Netz ergibt: die Netze der eigenen Schnittstellen
-Ports: 8780, der Port der aufgerufenen Seite und NODES_SCAN_PORTS.
-Ein Rechner antwortet nur, wenn bei ihm „auffindbar“ eingeschaltet ist; sonst 404.
+Which addresses are checked (order of the sources):
+  1. environment variable NODES_SCAN_TARGETS (development/testing only, replaces everything else), e.g. "127.0.0.1:8820-8822"
+  2. the /24 network of the address the browser used to open this page (in Docker the host's LAN address)
+  3. the /24 networks of machines already in the list
+  4. setting `nodes.scan_nets` (CIDR list)
+  5. only if none of that yields a network: the networks of the own interfaces
+Ports: 8780, the port of the opened page and NODES_SCAN_PORTS.
+A machine only answers if "discoverable" is switched on there; otherwise 404.
 """
 import asyncio
 import ipaddress
@@ -34,19 +34,19 @@ CONCURRENCY = 96
 scan: dict = {"running": False, "done": 0, "total": 0, "found": [], "started": 0, "finished": 0, "nets": [], "error": "", "cancel": False}
 
 
-APP_NAMES = ("spindle", "makemkv-web")   # „makemkv-web“: Rechner, die noch unter dem alten Namen laufen
+APP_NAMES = ("spindle", "makemkv-web")   # "makemkv-web": machines still running under the old name
 
 
 @router.get("/hello")
 def hello():
-    """Antwort auf die Suche. Nur im Verbund und nur, wenn „auffindbar“ an ist; sonst tut der Rechner, als gäbe es das nicht."""
+    """Answer to the search. Only in cluster mode and only if "discoverable" is on; otherwise the machine pretends this does not exist."""
     if not (store.active() and store.cfg()["discoverable"]):
         raise HTTPException(404, "Not found")
     return {"app": "spindle", "id": store.self_id(), "name": store.self_name(), "instance": INSTANCE, "version": VERSION, "features": FEATURES,
             "cores": os.cpu_count() or 1, "mem": store.mem_total(), "pairing": True}
 
 
-# ---------- Ziele bestimmen
+# ---------- determining targets
 def _ports(spec: str) -> list[int]:
     out: list[int] = []
     for part in spec.split("+"):
@@ -57,7 +57,7 @@ def _ports(spec: str) -> list[int]:
 
 
 def env_targets(raw: str) -> list[tuple[str, int]]:
-    """NODES_SCAN_TARGETS: Einträge durch Komma, je „host“, „host:port“, „host:port-port“ oder „a.b.c.d/24[:port]“."""
+    """NODES_SCAN_TARGETS: entries separated by commas, each "host", "host:port", "host:port-port" or "a.b.c.d/24[:port]"."""
     out: list[tuple[str, int]] = []
     for item in re.split(r"[,\s]+", raw.strip()):
         if not item:
@@ -102,7 +102,7 @@ def targets(request_host: str = "", request_port: int = 0) -> tuple[list[tuple[s
     raw = os.environ.get("NODES_SCAN_TARGETS", "")
     if raw.strip():
         t = env_targets(raw)
-        return t, [f"{len(t)} Adressen (NODES_SCAN_TARGETS)"]
+        return t, [f"{len(t)} addresses (NODES_SCAN_TARGETS)"]
     nets: list = []
     n = _net24(request_host)
     if n:
@@ -123,7 +123,7 @@ def targets(request_host: str = "", request_port: int = 0) -> tuple[list[tuple[s
     return out[:MAX_HOSTS * 2], [str(n) for n in uniq]
 
 
-# ---------- Prüfen
+# ---------- checking
 async def probe(host: str, port: int, sem: asyncio.Semaphore):
     async with sem:
         w = None
@@ -134,7 +134,7 @@ async def probe(host: str, port: int, sem: asyncio.Semaphore):
             raw = b""
             async def _all():
                 nonlocal raw
-                while len(raw) < 65536:           # Kopf und Inhalt kommen oft in getrennten Stücken
+                while len(raw) < 65536:           # header and body often arrive in separate chunks
                     chunk = await r.read(8192)
                     if not chunk:
                         break
@@ -190,7 +190,7 @@ def snapshot() -> dict:
 @router.post("/scan")
 async def api_scan(request: Request):
     if not store.active():
-        raise HTTPException(409, "Im eigenständigen Betrieb gibt es keine Suche.")
+        raise HTTPException(409, "In standalone mode there is no search.")
     if not scan["running"]:
         host = (request.headers.get("host") or "").rsplit(":", 1)
         port = int(host[1]) if len(host) == 2 and host[1].isdigit() else 0
@@ -211,7 +211,7 @@ def api_scan_state():
 
 
 async def auto_search():
-    """Optional (nodes.auto_search): alle 10 Minuten leise suchen; Funde werden nur angezeigt, nie automatisch verbunden."""
+    """Optional (nodes.auto_search): search quietly every 10 minutes; finds are only shown, never connected automatically."""
     await asyncio.sleep(30)
     while True:
         if store.active() and store.cfg()["auto_search"] and not scan["running"]:

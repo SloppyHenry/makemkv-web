@@ -1,11 +1,11 @@
-"""Winzige UDF-Abbilder für Tests: UDF 1.02 (nur physische Partition, File Entries) oder 2.50 (Metadaten-Partition, Extended File Entries).
+"""Tiny UDF images for tests: UDF 1.02 (physical partition only, file entries) or 2.50 (metadata partition, extended file entries).
 
-files: {"BDMV/STREAM/00000.m2ts": 123456 (nur Größe, kein Inhalt) | b"…" (Inhalt)}. Verzeichnisse entstehen aus den Pfaden.
+files: {"BDMV/STREAM/00000.m2ts": 123456 (size only, no content) | b"…" (content)}. Directories are created from the paths.
 """
 import struct
 
 B = 2048
-PART_START, META_LBN, DATA_LBN = 300, 10, 200      # Partition ab Block 300; Metadaten ab Partitionsblock 10; Dateiinhalte ab 200
+PART_START, META_LBN, DATA_LBN = 300, 10, 200      # partition from block 300; metadata from partition block 10; file contents from 200
 
 
 def _tag(buf: bytearray, tag_id: int, loc: int):
@@ -47,10 +47,10 @@ def build(files: dict, version: str = "2.50") -> bytes:
         for p in parts[:-1]:
             node = node.setdefault(p, {})
         node[parts[-1]] = content
-    mref = 1 if meta else 0                        # Partitionsverweis für Verwaltungsdaten
-    mbase = 0 if meta else META_LBN                # erster Block der Verwaltungsdaten in dieser Partition
-    blocks: dict[int, bytes] = {}                  # absoluter Block -> Inhalt
-    nxt = {"meta": mbase + 2, "data": DATA_LBN}    # mbase: FSD, mbase+1: Wurzel-FE
+    mref = 1 if meta else 0                        # partition reference for management data
+    mbase = 0 if meta else META_LBN                # first block of the management data in this partition
+    blocks: dict[int, bytes] = {}                  # absolute block -> content
+    nxt = {"meta": mbase + 2, "data": DATA_LBN}    # mbase: FSD, mbase+1: root FE
 
     def mabs(lbn):
         return PART_START + (META_LBN + lbn if meta else lbn)
@@ -80,7 +80,7 @@ def build(files: dict, version: str = "2.50") -> bytes:
                 nxt["data"] += (len(sub) + B - 1) // B or 1
             else:
                 nxt["data"] += 1
-            ad = struct.pack("<IIH6x", min(size, 0x3FFFFFFF), dl, 0)          # long_ad in die physische Partition
+            ad = struct.pack("<IIH6x", min(size, 0x3FFFFFFF), dl, 0)          # long_ad into the physical partition
             blocks[mabs(lbn)] = bytes(_fe(meta, 5, size, ad, 1, lbn))
 
     put_dir(tree, mbase + 1, mbase + 1)
@@ -88,7 +88,7 @@ def build(files: dict, version: str = "2.50") -> bytes:
     struct.pack_into("<IIH", fsd, 400, B, mbase + 1, mref)
     _tag(fsd, 256, mbase)
     blocks[mabs(mbase)] = bytes(fsd)
-    if meta:                                        # Metadaten-Datei (und Spiegel) in der physischen Partition: ein Extent ab META_LBN
+    if meta:                                        # metadata file (and mirror) in the physical partition: one extent from META_LBN
         ln = (nxt["meta"] + 1) * B
         for lbn, ft in ((0, 250), (1, 251)):
             blocks[PART_START + lbn] = bytes(_fe(True, ft, ln, struct.pack("<II", ln, META_LBN), 0, lbn))

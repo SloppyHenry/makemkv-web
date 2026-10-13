@@ -1,4 +1,4 @@
-"""Rippen (MKV oder Disc-Backup) in den Zwischenspeicher."""
+"""Ripping (MKV or disc backup) into the staging buffer."""
 import asyncio
 import os
 import shutil
@@ -30,22 +30,22 @@ class RipReq(BaseModel):
     titles: list[RipTitle] = []
     folder: str = ""
     mode: str = "mkv"    # mkv | backup
-    convert: dict | None = None   # Konvertierung nach dem Rippen (nur mkv)
+    convert: dict | None = None   # conversion after ripping (mkv only)
 
 
 async def title_done(drive: Drive, title: dict, folder: str, final: Path, mode: str, converting: bool):
-    """Meldet einen fertig gerippten Titel an die Rip-Hooks (ext.register_rip_hook), z. B. für die Medienerkennung."""
+    """Reports a finished ripped title to the rip hooks (ext.register_rip_hook), e.g. for media detection."""
     if ext.rip_hooks:
         await ext.run_hooks(ext.rip_hooks, {"dev": drive.dev, "disc": drive.disc, "title": title, "rel": f"{folder}/{final.name}",
                                             "folder": folder, "file": str(final), "mode": mode, "converting": converting})
 
 
 async def wait_for_space(drive: Drive, job: dict, need: int):
-    """Wartet, bis im Zwischenspeicher Platz ist (laufende Übertragungen geben Platz frei)."""
+    """Waits until there is room in the staging buffer (running transfers free up space)."""
     while staging_free() < need:
         if not any(u["status"] in ACTIVE for u in uploads) and not any(c["status"] in CV_ACTIVE for c in conversions):
-            raise OSError(f"Zu wenig Platz im Zwischenspeicher ({STAGING}): {fmt_bytes(staging_free())} frei, {fmt_bytes(need)} nötig")
-        job.update(text="Warte auf Konvertierung/Übertragung (Platz im Zwischenspeicher) …", cur=0, total=0)
+            raise OSError(f"Not enough space in the staging buffer ({STAGING}): {fmt_bytes(staging_free())} free, {fmt_bytes(need)} needed")
+        job.update(text="Waiting for conversion/transfer (space in the staging buffer) …", cur=0, total=0)
         broadcast()
         if drive.cancel:
             return
@@ -60,7 +60,7 @@ async def do_rip(drive: Drive, req: RipReq, dest: Path):
     cfg = clean_convert(req.convert) if (req.convert and not backup and req.convert.get("convert")) else None
     folder = dest.name
     total_bytes = sum(by_id[t.id]["bytes"] for t in todo) or 1
-    job = {"kind": "backup" if backup else "rip", "text": "Starte …", "sub": "", "cur": 0, "total": 0,
+    job = {"kind": "backup" if backup else "rip", "text": "Starting …", "sub": "", "cur": 0, "total": 0,
            "overall": 0.0, "started": time.time(), "dest": str(dest), "index": 0, "count": 1 if backup else len(todo),
            "title": "", "done": [], "failed": 0, "bytes": total_bytes}
     drive.job = job
@@ -77,10 +77,10 @@ async def do_rip(drive: Drive, req: RipReq, dest: Path):
             bdir = work / folder
             bdir.mkdir()
             p = Parser(drive, job)
-            await run_makemkv(drive, ["info", "disc:9999"], p)      # Laufwerksliste -> disc:N (backup kennt kein dev:)
+            await run_makemkv(drive, ["info", "disc:9999"], p)      # drive list -> disc:N (backup does not know dev:)
             idx = p.disc_index
             if idx is None:
-                raise RuntimeError(f"Laufwerk {drive.dev} wurde von MakeMKV nicht gefunden")
+                raise RuntimeError(f"Drive {drive.dev} was not found by MakeMKV")
             drive.log.clear()
             drive.last_msg = ("", 0)
             p = Parser(drive, job)
@@ -94,7 +94,7 @@ async def do_rip(drive: Drive, req: RipReq, dest: Path):
                 os.replace(bdir, rd)
                 for e in sorted(rd.iterdir()):
                     enqueue_upload(e, f"{folder}/{e.name}", drive.dev)
-                job["done"].append({"name": folder + " (Disc-Backup)", "bytes": 0})
+                job["done"].append({"name": folder + " (disc backup)", "bytes": 0})
         else:
             done_bytes = 0
             for i, t in enumerate(todo):
@@ -106,7 +106,7 @@ async def do_rip(drive: Drive, req: RipReq, dest: Path):
                 if drive.cancel:
                     ok = False
                     break
-                job.update(index=i + 1, title=t.name or info["name"], cur=0, total=0, text=f"Titel {i+1}/{len(todo)}")
+                job.update(index=i + 1, title=t.name or info["name"], cur=0, total=0, text=f"Title {i+1}/{len(todo)}")
                 for x in work.glob("*.mkv"):
                     x.unlink(missing_ok=True)
                 p = Parser(drive, job)
@@ -126,8 +126,8 @@ async def do_rip(drive: Drive, req: RipReq, dest: Path):
                         break
                     for x in new:
                         x.unlink(missing_ok=True)
-                    drive.add_log("Laufwerk hat sich zurückgesetzt – warte und versuche den Titel erneut …", "error")
-                    job.update(text="Laufwerk wird neu verbunden …", cur=0, total=0)
+                    drive.add_log("Drive reset itself – waiting and trying the title again …", "error")
+                    job.update(text="Reconnecting drive …", cur=0, total=0)
                     broadcast()
                     if not await wait_ready(drive):
                         break
@@ -141,11 +141,11 @@ async def do_rip(drive: Drive, req: RipReq, dest: Path):
                     ok = False
                     for x in new:
                         x.unlink(missing_ok=True)
-                    drive.add_log(f"Titel {t.id} fehlgeschlagen (Exit-Code {rc})", "error")
+                    drive.add_log(f"Title {t.id} failed (exit code {rc})", "error")
                     continue
                 f = new[0]
                 want = safe_name(t.name, "") if t.name.strip() else ""
-                if cfg:                       # erst konvertieren, dann übertragen
+                if cfg:                       # convert first, then transfer
                     cdir = CONVERT / folder
                     cdir.mkdir(parents=True, exist_ok=True)
                     final = unique_path(cdir / ((want or f.stem) + ".mkv"))
@@ -153,28 +153,28 @@ async def do_rip(drive: Drive, req: RipReq, dest: Path):
                     done_bytes += info["bytes"]
                     job["overall"] = min(1.0, done_bytes / total_bytes)
                     job["done"].append({"name": final.name, "bytes": final.stat().st_size})
-                    drive.add_log(f"Fertig gerippt: {final.name} ({fmt_bytes(final.stat().st_size)}) – Konvertierung eingereiht", "ok")
+                    drive.add_log(f"Ripped: {final.name} ({fmt_bytes(final.stat().st_size)}) – conversion queued", "ok")
                     enqueue_convert(final, folder, cfg, drive.dev)
                     await title_done(drive, info, folder, final, "mkv", True)
                     continue
                 rdir = READY / folder
                 rdir.mkdir(parents=True, exist_ok=True)
                 final = unique_path(rdir / ((want or f.stem) + ".mkv"))
-                os.replace(f, final)          # fertig -> ab in die Warteschlange, Laufwerk liest schon den nächsten Titel
+                os.replace(f, final)          # done -> into the queue, the drive is already reading the next title
                 done_bytes += info["bytes"]
                 job["overall"] = min(1.0, done_bytes / total_bytes)
                 job["done"].append({"name": final.name, "bytes": final.stat().st_size})
-                drive.add_log(f"Fertig gerippt: {final.name} ({fmt_bytes(final.stat().st_size)}) – Übertragung läuft im Hintergrund", "ok")
+                drive.add_log(f"Ripped: {final.name} ({fmt_bytes(final.stat().st_size)}) – transfer running in the background", "ok")
                 enqueue_upload(final, f"{folder}/{final.name}", drive.dev)
                 await title_done(drive, info, folder, final, "mkv", False)
         if drive.cancel:
-            drive.error = "Abgebrochen"
+            drive.error = "Cancelled"
         elif not ok:
-            drive.error = "Es sind Fehler aufgetreten – siehe Protokoll"
+            drive.error = "Errors occurred – see the log"
         else:
-            drive.add_log("Alles fertig gerippt.", "ok")
+            drive.add_log("All titles ripped.", "ok")
     except Exception as e:  # noqa: BLE001
-        drive.error = f"Rip fehlgeschlagen: {e}"
+        drive.error = f"Rip failed: {e}"
         ok = False
     finally:
         was_cancel = drive.cancel
@@ -186,9 +186,9 @@ async def do_rip(drive: Drive, req: RipReq, dest: Path):
         await asyncio.sleep(1)
         try:
             tray(drive.dev, CDROM_EJECT)
-            drive.add_log("Disc ausgeworfen.", "ok")
+            drive.add_log("Disc ejected.", "ok")
         except OSError as e:
-            drive.add_log(f"Auswerfen fehlgeschlagen: {e}", "error")
+            drive.add_log(f"Eject failed: {e}", "error")
         broadcast()
 
 
@@ -199,26 +199,26 @@ async def track_overall(job, get):
 
 
 def prepare_rip(dr: Drive, req: RipReq) -> Path:
-    """Prüft Auftrag, Platz im Ziel und im Zwischenspeicher (HTTPException bei Fehler) und liefert den Zielordner."""
+    """Checks the job, space in the target and in the staging buffer (HTTPException on errors) and returns the target folder."""
     if dr.busy:
-        raise HTTPException(409, "Laufwerk ist beschäftigt")
+        raise HTTPException(409, "Drive is busy")
     if not dr.disc:
-        raise HTTPException(409, "Disc wurde noch nicht analysiert")
+        raise HTTPException(409, "Disc has not been analyzed yet")
     if req.mode not in ("mkv", "backup"):
-        raise HTTPException(400, "Unbekannter Modus")
+        raise HTTPException(400, "Unknown mode")
     if req.mode == "mkv" and not req.titles:
-        raise HTTPException(400, "Keine Titel gewählt")
+        raise HTTPException(400, "No titles selected")
     base, _ = out_dir()
     folder = safe_name(req.folder or dr.disc["name"] or dr.disc["volume"])
     dest = base / folder
     need = sum(t["bytes"] for t in dr.disc["titles"] if t["id"] in {x.id for x in req.titles}) if req.mode == "mkv" else 50 * 2**30
     if shutil.disk_usage(base).free < need * 1.02:
-        raise HTTPException(507, f"Zu wenig Speicherplatz in {base}")
+        raise HTTPException(507, f"Not enough storage space in {base}")
     biggest = max([t["bytes"] for t in dr.disc["titles"] if t["id"] in {x.id for x in req.titles}] or [0]) if req.mode == "mkv" else 55 * 2**30
     uploading = sum(max(0, u["size"] - u["copied"]) for u in uploads if u["status"] in ACTIVE)
     factor = 1.7 if (req.convert and req.convert.get('convert') and req.mode == 'mkv') else 1.05
     if staging_free() + uploading < biggest * factor:
-        raise HTTPException(507, f"Zu wenig Platz im Zwischenspeicher {STAGING}")
+        raise HTTPException(507, f"Not enough space in the staging buffer {STAGING}")
     return dest
 
 

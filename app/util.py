@@ -1,4 +1,4 @@
-"""Kleine, abhängigkeitsfreie Hilfsfunktionen."""
+"""Small, dependency-free helper functions."""
 import os
 import re
 from pathlib import Path
@@ -43,8 +43,8 @@ def tree_size(p: Path) -> int:
 
 
 def open_perms(p: Path, is_dir: bool):
-    """Neu angelegte Dateien/Ordner für alle Nutzer lesbar/schreibbar machen (NFS- und SMB-Clients teilen sich das NAS,
-    z. B. SMB-Gast `nobody` und NFS-Benutzer – sonst kann der jeweils andere sie nicht löschen)."""
+    """Make newly created files/folders readable/writable for all users (NFS and SMB clients share the NAS,
+    e.g. SMB guest `nobody` and NFS users – otherwise the other one cannot delete them)."""
     try:
         os.chmod(p, 0o777 if is_dir else 0o666)
     except OSError:
@@ -63,8 +63,8 @@ def mkdir_open(path: Path, base: Path):
 
 
 def valid_name(name: str) -> str:
-    """Neuer Datei-/Ordnername: nur ein Name (kein Pfad), nicht versteckt, keine Steuerzeichen."""
+    """New file/folder name: only a name (no path), not hidden, no control characters."""
     n = name.strip()
     if not n or n in (".", "..") or "/" in n or "\\" in n or n.startswith(".") or len(n) > 200 or re.search(r"[\x00-\x1f]", n):
-        raise HTTPException(400, "Ungültiger Name (kein Pfad, nicht leer, nicht mit Punkt beginnend, höchstens 200 Zeichen).")
+        raise HTTPException(400, "Invalid name (no path, not empty, not starting with a dot, at most 200 characters).")
     return n

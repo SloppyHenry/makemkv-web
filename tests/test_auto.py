@@ -1,4 +1,4 @@
-"""Tests für app/media/auto.py (Entscheidung, ob automatisch einsortiert werden darf)."""
+"""Tests for app/media/auto.py (decision whether sorting may happen automatically)."""
 import unittest
 
 from app.media import auto

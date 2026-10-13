@@ -4,7 +4,7 @@ Applies to all packages. Complements `AUFTRAG.md`; in case of conflict, `AUFTRAG
 
 ## 0. Conventions
 - **No file with more than 400 lines of code** (Python, JS, CSS, shell). If a module gets too big, split it sensibly (example: `convert.py` and `ffmpeg.py`). Run `wc -l` on the changed files before every commit.
-- The user interface and code comments are in German; documentation is in English. No npm, no bundler, no framework: native ES modules, FastAPI.
+- The user interface, code comments and documentation are in English. No npm, no bundler, no framework: native ES modules, FastAPI.
 - One module, one job. New functions go into new files of your own package; reach other packages' modules only through the extension points below.
 - Backend: `python -m py_compile` or `pyflakes` clean. Frontend: no errors in the browser console.
 
@@ -79,7 +79,7 @@ Useful existing helpers: `files.out_dir()`, `files.inside_out(rel)` (path escape
 ## 3. Frontend extension points (`import … from './registry.js'`)
 ```js
 registerView({id, label, icon, order, hash?, mount(el), unmount()})   // view; route #/<hash|id>; appears in the menu automatically
-registerPanel({view, slot, order, id, html})                           // field in a two-column view ('laufwerke'): slot 'left' | 'right' | 'bottom'
+registerPanel({view, slot, order, id, html})                           // field in a two-column view ('drives'): slot 'left' | 'right' | 'bottom'
 registerSettingsSection({id, label, order, render(el, settings), collect()})   // collect() returns {namespace: {...}}
 registerLibraryAction({id, label, icon, primary?, when(files), run(files)})    // file action in the library; primary = click on the file name
 onState(fn)                                                            // fn(S) on every status message
@@ -121,7 +121,7 @@ registerLibraryAction({id:'play', label:'Abspielen', icon:'▶', primary:true,
 | Package | Backend | Interface | Interface to the outside |
 |---|---|---|---|
 | PA UI polish | – | `jobs.js`, `jobs-list.js` (stable rows), `logs.js`, `drives.js`, `titles.js`, `css/jobs.css`, `css/titles.css` | title list embeds `mountConvertEditor(…, {mode:'compact'})` |
-| PB Navigation, settings | – | `nav.js`, `settings.js`, `settings-general.js`, `css/shell.css` | tabs from `getViews()`; settings `#/einstellungen/<section>` with save per section; events `route`, `settings:dirty` |
+| PB Navigation, settings | – | `nav.js`, `settings.js`, `settings-general.js`, `css/shell.css` | tabs from `getViews()`; settings `#/settings/<section>` with save per section; events `route`, `settings:dirty` |
 | PC Machines | `nodes*.py`, `cluster.py` | `nodes*.js`, `css/nodes.css` | `DATA/nodes.json`, token pairing, search in the /24, `peers[i].legacy/trust/version`; `cluster.cfg_for_peer(cfg, peer)` for hand-overs |
 | PD Player | `player.py`, `player_probe.py`, `player_stream.py` | `player*.js`, `css/player.css` | `/api/player/*`; `openPlayer(path)` (overlay), `mountPlayer(el, path, {compact})` (embedded); decision direct/remux/transcode, ffmpeg restart on seek (no HLS) |
 | PE Jellyfin filing | `app/media/*` | `media*.js`, `css/media.css` | `/api/media/*` (incl. `POST /api/media/infos`); library action "Einsortieren"; folder prefill from `OUTPUT_MOUNT` |

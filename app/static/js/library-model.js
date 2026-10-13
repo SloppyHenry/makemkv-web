@@ -1,10 +1,10 @@
-// Bibliothek: gemeinsamer Zustand, Einordnung der Dateien, Filter, Gruppen und kleine Formatierhelfer. Besitzer: PF.
+// Library: shared state, classification of the files, filters, groups and small formatting helpers. Owner: PF.
 import { S, baseName, hostName } from './core.js';
 
 export const L = {files: [], dir: '', probing: 0, instance: '', summary: null, loaded: false, media: {}, mediaAsked: new Set(), mediaOn: true, sel: new Set(), cur: '', q: 'all', kind: 'all', folder: '', node: '', text: '',
   view: 'list', limit: 200, edit: null, cvOpen: false, filtOpen: false, play: '', preset: 'auto', target: 'local', cfg: null, est: null};
-try{ L.view = localStorage.getItem('libView') === 'grid' ? 'grid' : 'list'; }catch{ /* ohne Speicher */ }
-export const setView = v => { L.view = v; try{ localStorage.setItem('libView', v); }catch{ /* ohne Speicher */ } };
+try{ L.view = localStorage.getItem('libView') === 'grid' ? 'grid' : 'list'; }catch{ /* no storage */ }
+export const setView = v => { L.view = v; try{ localStorage.setItem('libView', v); }catch{ /* no storage */ } };
 
 export const dirOf = p => p.includes('/') ? p.slice(0, p.lastIndexOf('/')) : '';
 export const topOf = p => p.includes('/') ? p.slice(0, p.indexOf('/')) : '';
@@ -18,11 +18,11 @@ export function audioName(a){
   return n + ch;
 }
 
-// Jobs und Fehler aus dem Live-Status (Aufträge dieses und anderer Rechner): Pfad -> {status, pct, host, id}
+// Jobs and errors from the live state (jobs of this and other machines): path -> {status, pct, host, id}
 export function liveJobs(){
   const m = new Map(), me = hostName();
   const add = (c, host) => { if(c.origin !== 'library') return; const k = c.name; if(c.status === 'queued' || c.status === 'running') m.set(k, {job: {status: c.status, pct: c.pct || 0, host: host === me ? '' : host, id: c.id, eta: c.eta, paused: c.paused, cancel: c.cancel}});
-    else if(c.status === 'error' && !m.has(k)) m.set(k, {err: c.error || 'Konvertierung fehlgeschlagen'}); };
+    else if(c.status === 'error' && !m.has(k)) m.set(k, {err: c.error || 'Conversion failed'}); };
   if(S){ (S.conversions || []).forEach(c => add(c, me)); (S.peers || []).forEach(p => p.reachable && (p.conversions || []).forEach(c => add(c, p.name))); }
   return m;
 }
@@ -41,7 +41,7 @@ export function decorate(files){
   for(const f of files){
     const lv = live.get(f.path);
     f.live = (lv && lv.job) || f.job || null;
-    f.errText = lv && lv.err ? lv.err : f.state === 'unknown' ? (f.dev_err || 'nicht lesbar') : '';
+    f.errText = lv && lv.err ? lv.err : f.state === 'unknown' ? (f.dev_err || 'not readable') : '';
     f.status = statusOf(f, live);
     f.m = L.media[f.path] || null;
   }
@@ -67,14 +67,14 @@ export const kindOf = f => (f.m && f.m.kind === 'movie' ? 'film' : f.m && f.m.ki
 export function groups(files){
   const m = new Map();
   for(const f of files){ const d = dirOf(f.path); if(!m.has(d)) m.set(d, []); m.get(d).push(f); }
-  m.forEach(v => v.sort((a, b) => baseName(a.path).localeCompare(baseName(b.path), 'de', {numeric: true})));
-  return [...m.entries()].sort((a, b) => a[0].localeCompare(b[0], 'de'));
+  m.forEach(v => v.sort((a, b) => baseName(a.path).localeCompare(baseName(b.path), 'en', {numeric: true})));
+  return [...m.entries()].sort((a, b) => a[0].localeCompare(b[0], 'en'));
 }
 export const saveOf = f => (f.est && !f.est.issue && f.status !== 'conv' ? Math.max(0, f.size - f.est.bytes) : 0);
 export const byPath = p => L.files.find(f => f.path === p);
 export const selectedFiles = () => L.files.filter(f => L.sel.has(f.path) && selectable(f));
 
-// Stabile Liste: nur geänderte Elemente werden ersetzt (Fokus, Auswahl, Maus und laufende Animationen bleiben)
+// Stable list: only changed elements are replaced (focus, selection, mouse and running animations stay)
 export function reconcile(box, items){
   const old = new Map([...box.children].map(el => [el.dataset.key, el]));
   let prev = null;
@@ -83,7 +83,7 @@ export function reconcile(box, items){
     if(!el || el._h !== it.html){
       const t = document.createElement('template'); t.innerHTML = it.html.trim();
       const n = t.content.firstElementChild; n._h = it.html;
-      n.querySelectorAll('.status-check.run').forEach(sp => { sp.style.animationDelay = -(Date.now() % 1000) + 'ms'; });       // Drehphase an die Uhr koppeln
+      n.querySelectorAll('.status-check.run').forEach(sp => { sp.style.animationDelay = -(Date.now() % 1000) + 'ms'; });       // tie the spin phase to the clock
       if(el) el.replaceWith(n);
       el = n;
     }

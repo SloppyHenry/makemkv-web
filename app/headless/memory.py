@@ -1,8 +1,8 @@
-"""Gedächtnis: Welche Titel wurden bei einer Disc von Hand gerippt? Beim nächsten Einlegen derselben Disc (auch an einem anderen
-Rechner im Verbund) wählt der Headless-Modus dieselben Titel mit denselben Namen und demselben Ordner.
+"""Memory: which titles of a disc were ripped by hand? The next time the same disc is inserted (also on another
+machine in the cluster) headless mode chooses the same titles with the same names and the same folder.
 
-Schlüssel sind Disc-ID und Inhalts-Hash (discid.py); Titel werden wie bei TheDiscDB über Laufzeit plus Playlist bzw. Größe
-wiedergefunden. Datei: DATA/headless-memory.json. Rips im Headless-Modus selbst werden nicht gemerkt.
+Keys are the disc ID and the content hash (discid.py); titles are found again like with TheDiscDB via runtime plus playlist or size.
+File: DATA/headless-memory.json. Rips in headless mode itself are not remembered.
 """
 import json
 import time
@@ -15,7 +15,7 @@ from app.state import peers_state
 
 FILE = DATA / "headless-memory.json"
 MAX_ENTRIES = 1000
-NEW_RIP_AFTER = 6 * 3600          # später gerippte Titel derselben Disc gelten als neue Auswahl
+NEW_RIP_AFTER = 6 * 3600          # titles of the same disc ripped later count as a new selection
 _entries: list[dict] = []
 _loaded = [False]
 
@@ -36,7 +36,7 @@ def _save():
         DATA.mkdir(parents=True, exist_ok=True)
         FILE.write_text(json.dumps({"entries": _entries[-MAX_ENTRIES:]}, ensure_ascii=False))
     except OSError as e:
-        print("headless: Gedächtnis nicht gespeichert:", e, flush=True)
+        print("headless: memory not saved:", e, flush=True)
 
 
 def find_local(disc_id: str, content_hash: str) -> dict | None:
@@ -55,7 +55,7 @@ def count() -> int:
 
 
 def record(ids: dict, disc: dict, title: dict, name: str, folder: str):
-    """Einen von Hand gerippten Titel merken (aus dem Rip-Hook)."""
+    """Remember a title ripped by hand (from the rip hook)."""
     if not (ids.get("disc_id") or ids.get("content_hash")):
         return
     e = find_local(ids.get("disc_id", ""), ids.get("content_hash", ""))
@@ -82,13 +82,13 @@ def forget(disc_id: str, content_hash: str) -> bool:
 
 
 async def lookup(ids: dict) -> tuple[dict | None, str]:
-    """Erst hier, dann bei den anderen Rechnern (Fähigkeit headless_memory). Rückgabe (Eintrag, wo gefunden)."""
+    """First here, then on the other machines (capability headless_memory). Returns (entry, where it was found)."""
     did, ch = ids.get("disc_id", ""), ids.get("content_hash", "")
     if not (did or ch):
         return None, ""
     e = find_local(did, ch)
     if e:
-        return e, "dieser Rechner"
+        return e, "this machine"
     from app import cluster
     for name, p in list(peers_state.items()):
         if not (p.get("reachable") and (p.get("capabilities") or {}).get("headless_memory")):
@@ -103,19 +103,19 @@ async def lookup(ids: dict) -> tuple[dict | None, str]:
 
 
 def match(entry: dict, disc: dict) -> dict:
-    """Gemerkte Titel in der aktuellen Disc wiederfinden. {ok, picks, names, folder, reason}."""
+    """Find the remembered titles on the current disc again. {ok, picks, names, folder, reason}."""
     bluray = "blu" in (disc.get("type") or entry.get("type") or "").lower()
     res = {"ok": False, "picks": [], "names": {}, "folder": entry.get("folder") or "", "reason": ""}
     used: set[int] = set()
     for it in entry.get("titles") or []:
         c = [i for i in discdb.candidates(it, disc["titles"], bluray) if i not in used]
         if len(c) != 1:
-            res["reason"] = f"gemerkter Titel „{it.get('name')}“ " + ("nicht gefunden" if not c else "nicht eindeutig")
+            res["reason"] = f"remembered title \"{it.get('name')}\" " + ("not found" if not c else "not unambiguous")
             return res
         used.add(c[0])
         res["picks"].append(c[0])
         res["names"][c[0]] = it.get("name") or ""
     res["ok"] = bool(res["picks"])
     if not res["ok"]:
-        res["reason"] = "gemerkte Auswahl ist leer"
+        res["reason"] = "the remembered selection is empty"
     return res

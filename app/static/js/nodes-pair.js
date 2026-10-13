@@ -1,5 +1,5 @@
-// Kopplung: Hinweisleiste und Bestätigungsdialog für Anfragen anderer Rechner (auf jeder Seite), Meldungen zu eigenen Anfragen,
-// Hinweis auf neu gefundene Rechner (Hintergrundsuche). Die Rechnerliste selbst steht in js/nodes.js.
+// Pairing: notice bar and confirmation dialog for requests from other machines (on every page), messages about our own requests,
+// notice about newly found machines (background search). The machine list itself is in js/nodes.js.
 import { $, S, api, delegate, esc, toast } from './core.js';
 import { onState } from './registry.js';
 import { hostOf } from './nodes-util.js';
@@ -21,32 +21,32 @@ const newFound = () => (S && S.settings.nodes && S.settings.nodes.auto_search &&
 function renderDialog(){
   const inc = incoming()[0];
   if(!inc){ if(dlg.open) dlg.close(); return; }
-  $('#nodePairBody').innerHTML = `<h3 id="nodePairTitle">„${esc(inc.name)}“ möchte sich verbinden</h3>
-    <dl><dt>Adresse</dt><dd>${esc(hostOf(inc.url))}</dd><dt>Version</dt><dd>${esc(inc.version || 'unbekannt')}</dd>
-    <dt>Anfrage</dt><dd>vor ${inc.age < 60 ? inc.age + ' Sekunden' : Math.round(inc.age / 60) + ' Min.'}</dd>
+  $('#nodePairBody').innerHTML = `<h3 id="nodePairTitle">"${esc(inc.name)}" wants to connect</h3>
+    <dl><dt>Address</dt><dd>${esc(hostOf(inc.url))}</dd><dt>Version</dt><dd>${esc(inc.version || 'unknown')}</dd>
+    <dt>Request</dt><dd>${inc.age < 60 ? inc.age + ' seconds' : Math.round(inc.age / 60) + ' min'} ago</dd>
     <dt>Code</dt><dd><span class="node-code" style="font-size:18px;padding:7px 11px">${esc(inc.code.replace(/^(\d{3})(\d{3})$/, '$1 $2'))}</span></dd></dl>
-    <p class="help" style="margin:0;font-size:12px">Prüfe, dass derselbe Code auf ${esc(inc.name)} steht. Nach dem Verbinden dürfen beide Rechner einander Konvertierungen übergeben, Laufwerke fernsteuern und Aufträge sehen. Entkoppeln geht jederzeit.</p>
-    <div class="rowend"><button type="button" class="secondary" data-pair="deny" data-rid="${esc(inc.rid)}">Ablehnen</button><button type="button" class="primary" style="width:auto" data-pair="accept" data-rid="${esc(inc.rid)}">Verbinden</button></div>`;
+    <p class="help" style="margin:0;font-size:12px">Check that the same code is shown on ${esc(inc.name)}. Once connected, both machines may hand conversions over to each other, control each other's drives remotely and see each other's jobs. You can unpair at any time.</p>
+    <div class="rowend"><button type="button" class="secondary" data-pair="deny" data-rid="${esc(inc.rid)}">Decline</button><button type="button" class="primary" style="width:auto" data-pair="accept" data-rid="${esc(inc.rid)}">Connect</button></div>`;
 }
 
 function renderBar(){
   const inc = incoming()[0], found = newFound();
   if(inc){
-    bar.innerHTML = `<span class="grow"><strong>${esc(inc.name)}</strong> möchte sich mit diesem Rechner verbinden.</span><button class="secondary" data-pair="open">Ansehen</button>`;
+    bar.innerHTML = `<span class="grow"><strong>${esc(inc.name)}</strong> wants to connect to this machine.</span><button class="secondary" data-pair="open">View</button>`;
     bar.hidden = false;
   }else if(found.length && dismissedFound !== found.map(f => f.id).join()){
-    bar.innerHTML = `<span class="grow">Neu im Netz gefunden: <strong>${esc(found.map(f => f.name).join(', '))}</strong></span><a class="secondary" href="#/einstellungen/nodes">Ansehen</a><button class="secondary" data-pair="dismiss" aria-label="Hinweis ausblenden">✕</button>`;
+    bar.innerHTML = `<span class="grow">Newly found on the network: <strong>${esc(found.map(f => f.name).join(', '))}</strong></span><a class="secondary" href="#/settings/nodes">View</a><button class="secondary" data-pair="dismiss" aria-label="Hide notice">✕</button>`;
     bar.hidden = false;
   }else bar.hidden = true;
 }
 
-// Meldungen zu eigenen Anfragen, sobald sich ihr Zustand ändert
+// Messages about our own requests as soon as their state changes
 function announce(){
   for(const o of mgr().pairing.outgoing){
     const was = seen[o.rid]; seen[o.rid] = o.status;
     if(!was || was === o.status || o.status === 'waiting') continue;
-    if(o.status === 'ok') toast(`Mit ${o.name} gekoppelt ✓`);
-    else if(o.status !== 'cancelled') toast(`${o.name}: ${o.error || 'Kopplung nicht zustande gekommen.'}`, true);
+    if(o.status === 'ok') toast(`Paired with ${o.name} ✓`);
+    else if(o.status !== 'cancelled') toast(`${o.name}: ${o.error || 'Pairing did not succeed.'}`, true);
   }
 }
 
@@ -57,7 +57,7 @@ delegate('[data-pair]', 'click', async (e, b) => {
   b.disabled = true;
   try{
     await api(`/api/nodes/pair-incoming/${b.dataset.rid}/${act}`);
-    if(act === 'accept') toast('Gekoppelt ✓');
+    if(act === 'accept') toast('Paired ✓');
     dlg.close();
   }catch{ b.disabled = false; }
 });

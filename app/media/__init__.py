@@ -1,8 +1,8 @@
-"""Paket PE: Jellyfin-Ablage – Erkennen, Metadaten (TMDB), Benennen nach Jellyfin-Schema, Einsortieren mit Vorschau und Rückgängig.
+"""Package PE: Jellyfin filing – detection, metadata (TMDB), naming after the Jellyfin scheme, sorting with preview and undo.
 
-Meldet sich beim Import über app.ext an (wird von main.py automatisch geladen):
-Router /api/media, Einstellungen `media` (Geheimnisfelder tmdb_key und jellyfin_key), Rip-Hook für die Begleitdatei (DATA/media/discs.json),
-Upload-Hook (echten Zielpfad nachtragen), Fähigkeit `media`, Statusfeld `media`.
+Registers on import via app.ext (loaded automatically by main.py):
+router /api/media, settings `media` (secret fields tmdb_key and jellyfin_key), rip hook for the companion file (DATA/media/discs.json),
+upload hook (record the actual target path), capability `media`, state field `media`.
 """
 from pathlib import Path
 
@@ -16,7 +16,7 @@ ext.register_capability("media", {"v": 1, "naming": ["jellyfin", "unveraendert"]
 
 
 def _on_upload(item: dict):
-    """Die Übertragung kann einen anderen Namen gewählt haben (`unique_path`): Begleitdaten unter dem echten Pfad ablegen."""
+    """The transfer may have chosen a different name (`unique_path`): store the companion data under the actual path."""
     dest = item.get("dest")
     if dest and item.get("name"):
         store.rekey_file(item["name"], organize.key_for(Path(dest)))

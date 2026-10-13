@@ -1,4 +1,4 @@
-/* Grundlagen: Farben, Formulare, Knöpfe, Tabellen, Plaketten, Dialog */
+/* Basics: colors, forms, buttons, tables, badges, dialog */
 :root{
   color-scheme:dark;--bg:#0b0e13;--panel:#111720;--panel2:#0e141d;--line:#253041;
   --text:#edf2fa;--muted:#91a0b6;--red:#f04452;--red2:#c92e3c;--green:#36c98b;--blue:#9cb8e8;--amber:#e0a23c;

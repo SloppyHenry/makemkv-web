@@ -1,4 +1,4 @@
-"""Auslieferung der Oberfläche: Gerüst (index.html) mit automatisch eingetragenen Stylesheets und Modulen."""
+"""Serving the interface: the skeleton (index.html) with automatically inserted stylesheets and modules."""
 import json
 from pathlib import Path
 
@@ -9,14 +9,14 @@ from fastapi.staticfiles import StaticFiles
 STATIC = Path(__file__).parent / "static"
 router = APIRouter()
 
-# Reihenfolge, in der sich die Kernmodule anmelden (bestimmt die Reihenfolge der onState-Aufrufe); alle weiteren folgen alphabetisch
+# Order in which the core modules register (determines the order of the onState calls); all others follow alphabetically
 JS_ORDER = ["drives", "titles", "files", "logs", "jobs", "handover", "library", "settings", "nav"]
 CSS_ORDER = ["base", "layout", "components", "shell", "jobs", "library"]
-NOT_MODULES = {"core", "registry", "app"}      # werden von den Modulen importiert bzw. von index.html geladen
+NOT_MODULES = {"core", "registry", "app"}      # imported by the modules or loaded by index.html
 
 
 class NoCacheStatic(StaticFiles):
-    """Browser prüfen bei jedem Laden per ETag nach – so mischt nach einem Update niemand alte und neue Module."""
+    """Browsers revalidate via ETag on every load – so after an update nobody mixes old and new modules."""
 
     async def get_response(self, path, scope):
         r = await super().get_response(path, scope)

@@ -1,4 +1,4 @@
-"""Einstellungen (Namensraum `media`), Wurzelordner für die Ordnerauswahl und Prüfung der Ablageordner."""
+"""Settings (namespace `media`), root folder for the folder selection and checks of the storage folders."""
 import os
 import re
 import shutil
@@ -11,19 +11,19 @@ from pydantic import BaseModel, field_validator
 from app import files, state
 from app.config import OUT_MOUNT
 
-# Vorbelegung: Ordner direkt im eingehängten Ziel (so heißt es im Container wirklich); angelegt wird nichts, geprüft nur auf Wunsch (check-dir)
-DEFAULTS = {"movies_dir": f"{OUT_MOUNT.rstrip('/')}/Filme", "series_dir": f"{OUT_MOUNT.rstrip('/')}/Serien",
-            "naming": "jellyfin", "action": "verschieben", "tmdb_key": "", "language": "de-DE",
+# Defaults: folders directly in the mounted target (that is what it is really called in the container); nothing is created, checked only on request (check-dir)
+DEFAULTS = {"movies_dir": f"{OUT_MOUNT.rstrip('/')}/Movies", "series_dir": f"{OUT_MOUNT.rstrip('/')}/Series",
+            "naming": "jellyfin", "action": "verschieben", "tmdb_key": "", "language": "en-US",
             "id_tags": True, "episode_names": False, "jellyfin_url": "", "jellyfin_key": "", "jellyfin_scan": False, "auto": False}
 
 
 class MediaSettings(BaseModel):
     movies_dir: str = DEFAULTS["movies_dir"]
     series_dir: str = DEFAULTS["series_dir"]
-    naming: Literal["jellyfin", "unveraendert"] = "jellyfin"
-    action: Literal["verschieben", "kopieren"] = "verschieben"
+    naming: Literal["jellyfin", "unveraendert"] = "jellyfin"          # stored values: "unveraendert" = unchanged
+    action: Literal["verschieben", "kopieren"] = "verschieben"         # stored values: "verschieben" = move, "kopieren" = copy
     tmdb_key: str = ""
-    language: str = "de-DE"
+    language: str = "en-US"
     id_tags: bool = True
     episode_names: bool = False
     jellyfin_url: str = ""
@@ -40,7 +40,7 @@ class MediaSettings(BaseModel):
     @classmethod
     def _abs(cls, v: str):
         if v and (not v.startswith("/") or ".." in v.split("/")):
-            raise ValueError("Pfad muss absolut sein und darf kein „..“ enthalten")
+            raise ValueError("The path must be absolute and must not contain \"..\"")
         return v.rstrip("/") if len(v) > 1 else v
 
     @field_validator("language")
@@ -48,7 +48,7 @@ class MediaSettings(BaseModel):
     def _lang(cls, v: str):
         v = v.strip()
         if not re.fullmatch(r"[a-z]{2}-[A-Z]{2}", v):
-            raise ValueError("Sprache im Format de-DE")
+            raise ValueError("Language in the format en-US")
         return v
 
     @field_validator("jellyfin_url")
@@ -56,17 +56,17 @@ class MediaSettings(BaseModel):
     def _url(cls, v: str):
         v = v.strip().rstrip("/")
         if v and not re.match(r"https?://[^\s/]+", v):
-            raise ValueError("Adresse muss mit http:// oder https:// beginnen")
+            raise ValueError("The address must start with http:// or https://")
         return v
 
 
 def cfg() -> dict:
-    """Aktuelle Einstellungen (mit Vorgaben aufgefüllt)."""
+    """Current settings (filled up with the defaults)."""
     return {**DEFAULTS, **(state.settings.get("media") or {})}
 
 
 def media_root() -> Path:
-    """Obergrenze für Ordnerauswahl und Ablage: das eingehängte NAS (`OUTPUT_MOUNT`), sonst der Ausgabeordner. `MEDIA_ROOT` überschreibt (Entwicklung)."""
+    """Upper limit for folder selection and filing: the mounted NAS (`OUTPUT_MOUNT`), otherwise the output folder. `MEDIA_ROOT` overrides it (development)."""
     env = os.environ.get("MEDIA_ROOT")
     if env:
         return Path(env).resolve()
@@ -79,14 +79,14 @@ def inside_root(path: str) -> Path:
     root = media_root()
     p = Path(path or str(root)).resolve()
     if p != root and root not in p.parents:
-        raise HTTPException(400, "Der Ordner muss innerhalb des eingehängten Ziels liegen.")
+        raise HTTPException(400, "The folder must be inside the mounted target.")
     return p
 
 
 def check_dir(path: str) -> dict:
-    """Ablageordner prüfen: liegt im Ziel, ist ein Ordner, ist beschreibbar. {ok, exists, writable, free, why}."""
+    """Check a storage folder: inside the target, is a folder, is writable. {ok, exists, writable, free, why}."""
     if not path:
-        return {"ok": False, "exists": False, "writable": False, "free": 0, "why": "nicht festgelegt"}
+        return {"ok": False, "exists": False, "writable": False, "free": 0, "why": "not set"}
     try:
         p = inside_root(path)
     except HTTPException as e:
@@ -94,8 +94,8 @@ def check_dir(path: str) -> dict:
     if not p.exists():
         parent = next((a for a in p.parents if a.exists()), None)
         ok = bool(parent and os.access(parent, os.W_OK))
-        return {"ok": ok, "exists": False, "writable": ok, "free": 0, "why": "Ordner existiert noch nicht, wird beim ersten Einsortieren angelegt" if ok else "nicht beschreibbar"}
+        return {"ok": ok, "exists": False, "writable": ok, "free": 0, "why": "folder does not exist yet, it is created on the first sort" if ok else "not writable"}
     if not p.is_dir():
-        return {"ok": False, "exists": True, "writable": False, "free": 0, "why": "ist kein Ordner"}
+        return {"ok": False, "exists": True, "writable": False, "free": 0, "why": "is not a folder"}
     w = os.access(p, os.W_OK)
-    return {"ok": w, "exists": True, "writable": w, "free": shutil.disk_usage(p).free, "why": "" if w else "nicht beschreibbar (Rechte auf dem NAS prüfen)"}
+    return {"ok": w, "exists": True, "writable": w, "free": shutil.disk_usage(p).free, "why": "" if w else "not writable (check the permissions on the NAS)"}

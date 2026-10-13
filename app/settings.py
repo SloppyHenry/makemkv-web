@@ -1,7 +1,7 @@
-"""Einstellungen laden, speichern und über die API ändern.
+"""Loading, saving and changing the settings via the API.
 
-Allgemeine Felder liegen flach in `settings` (Namensraum „general“). Erweiterungen melden einen eigenen Namensraum an
-(`ext.register_settings`) und liegen dann als verschachteltes Objekt darin: `settings["media"]["movies_dir"]`.
+General fields sit flat in `settings` (namespace "general"). Extensions register their own namespace
+(`ext.register_settings`) and then sit in it as a nested object: `settings["media"]["movies_dir"]`.
 """
 import asyncio
 import inspect
@@ -16,7 +16,7 @@ from app.convert import clean_convert, ensure_conv_workers
 from app.state import beta, broadcast, public_settings, settings
 
 router = APIRouter()
-_unknown: dict = {}      # Namensräume aus der Datei, deren Modul gerade nicht geladen ist (bleiben beim Speichern erhalten)
+_unknown: dict = {}      # namespaces from the file whose module is not loaded right now (kept when saving)
 
 
 def _ns_values(ns: str, saved) -> dict:
@@ -54,7 +54,7 @@ def save_settings():
 
 
 class SettingsReq(BaseModel):
-    """Namensraum „general“ (die heutigen flachen Felder)."""
+    """Namespace "general" (today's flat fields)."""
     minlength: int | None = None
     auto_scan: bool | None = None
     auto_eject: bool | None = None
@@ -108,7 +108,7 @@ async def api_settings_get():
 
 @router.post("/api/settings")
 async def api_settings(body: dict):
-    """Flache Felder (wie bisher) und/oder Namensräume: {"general": {...}, "media": {...}}."""
+    """Flat fields (as before) and/or namespaces: {"general": {...}, "media": {...}}."""
     apply_general({**body, **(body.get("general") if isinstance(body.get("general"), dict) else {})})
     for ns in ext.settings_ns:
         if isinstance(body.get(ns), dict):

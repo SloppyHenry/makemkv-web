@@ -1,4 +1,4 @@
-/* Feld „Headless-Modus“ (js/headless.js) */
+/* "Headless mode" panel (js/headless.js) */
 #hlPanel .panel-head{flex-wrap:wrap}
 .hl-note{padding:10px 16px 0;font-size:12px}
 .hl-list{display:grid;gap:8px;padding:10px 16px 14px;max-height:260px;overflow:auto}
@@ -20,9 +20,9 @@
 .hl-sub{font-size:11.5px;color:#c4d0e1;overflow-wrap:anywhere}
 .hl-why{font-size:11px;color:var(--muted);line-height:1.45;overflow-wrap:anywhere}
 .hl-why.err{color:var(--red)}
-/* Einstellungen */
+/* Settings */
 .hl-help{margin:0;line-height:1.5}.hl-help ol{margin:6px 0;padding-left:20px;display:grid;gap:3px}
-/* Dialog „An TheDiscDB melden“ (js/headless-contribute.js) */
+/* Dialog "Report to TheDiscDB" (js/headless-contribute.js) */
 .hlc-dlg{width:min(760px,96vw)}
 .hlc-dlg label{display:block;font-size:11px;color:var(--muted);margin-bottom:4px}
 .hlc-dlg input,.hlc-dlg select{width:100%;min-width:0;height:34px;background:#0c121a;color:var(--text);border:1px solid #2b3748;border-radius:7px;padding:0 9px}

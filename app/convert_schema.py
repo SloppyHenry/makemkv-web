@@ -1,15 +1,15 @@
-"""Konvertierungs-Einstellungen, Schema v2: Aufbau, Prüfung, Übernahme der alten fünf Felder (v1), Verträglichkeit mit alten Rechnern.
+"""Conversion settings, schema v2: structure, validation, adoption of the old five fields (v1), compatibility with old machines.
 
-v2 (verschachtelt, versioniert):
-  {"v": 2, "convert": bool, "origin": "<Preset-Kennung oder ''>",
-   "video":   {"codec": x265|x264|svtav1|hw|copy, "hw": "<Encoder bei codec=hw>", "bits": 8|10, "speed": "...", "tune": "...", "extra": "..."},
-   "quality": {"mode": crf|size|bitrate, "crf": <Zahl, je Codec eigene Skala>, "size_gb": <Zahl>, "kbps": <Zahl>},
+v2 (nested, versioned):
+  {"v": 2, "convert": bool, "origin": "<preset id or ''>",
+   "video":   {"codec": x265|x264|svtav1|hw|copy, "hw": "<encoder when codec=hw>", "bits": 8|10, "speed": "...", "tune": "...", "extra": "..."},
+   "quality": {"mode": crf|size|bitrate, "crf": <number, each codec has its own scale>, "size_gb": <number>, "kbps": <number>},
    "picture": {"scale": keep|1080|720|576|480, "crop": auto|off|manual, "crop_manual": "w:h:x:y", "deint": off|auto|on|ivtc,
                "denoise": off|light|medium, "hdr": keep|tonemap},
-   "sound":   {"mode": copy|aac|opus|ac3|eac3, "channels": keep|51|stereo, "kbps": 0 = automatisch},
-   "subs":    {"mode": all|forced|langs|none, "langs": "deu,eng"}}
-Zusätzlich liegen die alten Felder (rf, preset, tune, extra, audio; deshalb heißen die v2-Abschnitte „origin“ und „sound“) als Spiegel obenauf, damit alte Oberflächen und alte Rechner
-weiter etwas Sinnvolles lesen. Wer nur die alten Felder ändert, ändert damit auch die neuen (siehe `clean_convert`).
+   "sound":   {"mode": copy|aac|opus|ac3|eac3, "channels": keep|51|stereo, "kbps": 0 = automatic},
+   "subs":    {"mode": all|forced|langs|none, "langs": "eng,deu"}}
+In addition, the old fields (rf, preset, tune, extra, audio; that is why the v2 sections are called "origin" and "sound") sit on top as a mirror, so that old interfaces and old machines
+still read something sensible. Changing only the old fields also changes the new ones (see `clean_convert`).
 """
 import copy
 import re
@@ -18,16 +18,16 @@ from app.config import CONVERT_DEFAULT, X265_PRESETS
 
 SCHEMA = 2
 X264_PRESETS = X265_PRESETS
-SVT_SPEEDS = [str(i) for i in range(13, -1, -1)]          # 13 = schnell … 0 = langsam
+SVT_SPEEDS = [str(i) for i in range(13, -1, -1)]          # 13 = fast … 0 = slow
 TUNES = ("none", "film", "grain", "animation", "stillimage")
 HW_RE = re.compile(r"(h264|hevc|av1)_(vaapi|qsv|nvenc|videotoolbox)")
 EXTRA_RE = re.compile(r"[A-Za-z0-9_=:.,\-]*")
 LANGS_RE = re.compile(r"[a-z]{3}(,[a-z]{3})*")
 CROP_RE = re.compile(r"\d{1,5}:\d{1,5}:\d{1,5}:\d{1,5}")
 
-# Eigenschaften je Codec. q = (schlechteste, beste) Qualitätszahl (CRF/RF/QP): Auf dieser Strecke liegt der Regler „kleiner ← → besser“.
-# Die Skalen sind so gewählt, dass gleiche Reglerstellung ungefähr gleiche Wahrnehmung ergibt (siehe docs/agents/status-paket-f.md).
-# rel = relative Rechenzeit je Stufe (medium = 1), bpp = Bits je Pixel relativ zu x265 bei gleicher Wahrnehmung.
+# Properties per codec. q = (worst, best) quality number (CRF/RF/QP): the "smaller ← → better" slider spans this range.
+# The scales are chosen so that the same slider position gives roughly the same perceived quality (see docs/agents/status-paket-f.md).
+# rel = relative computing time per level (medium = 1), bpp = bits per pixel relative to x265 at the same perceived quality.
 CODECS = {
     "x265": {"label": "H.265 / HEVC (x265)", "encoder": "libx265", "unit": "RF", "q": (30, 14), "qlim": (8, 40), "speeds": list(X265_PRESETS),
              "speed_def": "slow", "rel": [.12, .2, .35, .5, .7, 1, 2.3, 5, 8], "bpp": 1.0, "hdr": True, "bits": (8, 10), "segments": True},
@@ -37,7 +37,7 @@ CODECS = {
                "speed_def": "6", "rel": [.04, .06, .1, .17, .3, .5, .8, 1.2, 2.2, 3.5, 6, 11, 25, 60], "bpp": 0.8, "hdr": False, "bits": (8, 10), "segments": True},
     "hw": {"label": "Hardware", "encoder": "", "unit": "QP", "q": (34, 16), "qlim": (8, 50), "speeds": [""], "speed_def": "", "rel": [.03],
            "bpp": 1.7, "hdr": True, "bits": (8, 10), "segments": False},
-    "copy": {"label": "Nur remuxen", "encoder": "", "unit": "", "q": (30, 14), "qlim": (8, 40), "speeds": [""], "speed_def": "", "rel": [0.01],
+    "copy": {"label": "Remux only", "encoder": "", "unit": "", "q": (30, 14), "qlim": (8, 40), "speeds": [""], "speed_def": "", "rel": [0.01],
              "bpp": 1.0, "hdr": True, "bits": (8, 10), "segments": False},
 }
 AUDIO_MODES = ("copy", "aac", "opus", "ac3", "eac3")
@@ -56,7 +56,7 @@ def default_v2() -> dict:
 
 
 def crf_to_level(codec: str, crf: float) -> float:
-    """Qualität 0..100 (0 = klein, 100 = beste) für eine Codec-Qualitätszahl."""
+    """Quality 0..100 (0 = small, 100 = best) for a codec quality number."""
     w, b = CODECS[codec if codec in CODECS else "x265"]["q"]
     return max(0.0, min(100.0, (w - float(crf)) / (w - b) * 100))
 
@@ -67,7 +67,7 @@ def level_to_crf(codec: str, level: float) -> int:
 
 
 def translate_quality(crf: float, src: str, dst: str) -> int:
-    """Gleiche Wahrnehmungsstufe in einem anderen Codec (z. B. beim Umschalten im Editor)."""
+    """The same perceived level in another codec (e.g. when switching in the editor)."""
     return level_to_crf(dst, crf_to_level(src, crf))
 
 
@@ -86,8 +86,8 @@ LEGACY_KEYS = ("rf", "preset", "tune", "extra", "audio")
 
 
 def _legacy_overlay(c: dict, d: dict) -> dict:
-    """Alte Felder (rf, preset, tune, extra, audio) anwenden, soweit sie vom Spiegel des v2-Standes abweichen
-    (so wirkt auch eine alte Oberfläche, die nur diese Felder kennt)."""
+    """Apply the old fields (rf, preset, tune, extra, audio) where they differ from the mirror of the v2 state
+    (so that an old interface that only knows these fields still has an effect)."""
     v, q, a = d["video"], d["quality"], d["sound"]
     m = legacy_mirror(d)
     x265 = v["codec"] == "x265"
@@ -106,7 +106,7 @@ def _legacy_overlay(c: dict, d: dict) -> dict:
 
 
 def clean_v2(c: dict) -> dict:
-    """Beliebige Eingabe (v1 mit fünf Feldern, v2, auch halb gefüllt) zu einem vollständigen, geprüften v2-Dict machen."""
+    """Turn any input (v1 with five fields, v2, even half filled) into a complete, validated v2 dict."""
     c = c if isinstance(c, dict) else {}
     d = default_v2()
     d["convert"] = bool(c.get("convert", d["convert"]))
@@ -162,7 +162,7 @@ def _fill_v2(c: dict, d: dict):
 
 
 def finish(d: dict) -> dict:
-    """Spiegel der alten Felder ergänzen."""
+    """Add the mirror of the old fields."""
     d.update(legacy_mirror(d))
     return d
 
@@ -178,7 +178,7 @@ def legacy_mirror(d: dict) -> dict:
 
 
 def is_v1_compatible(d: dict) -> bool:
-    """Kann ein alter Rechner (nur x265 mit fünf Feldern) diesen Auftrag genauso ausführen? Sonst darf er nicht dorthin."""
+    """Can an old machine (only x265 with five fields) run this job the same way? Otherwise it must not go there."""
     v, q, p, a, s = d["video"], d["quality"], d["picture"], d["sound"], d["subs"]
     return (v["codec"] == "x265" and v["bits"] == 10 and q["mode"] == "crf" and 14 <= q["crf"] <= 30
             and p == {"scale": "keep", "crop": "auto", "crop_manual": "", "deint": "off", "denoise": "off", "hdr": "keep"}
@@ -186,19 +186,19 @@ def is_v1_compatible(d: dict) -> bool:
 
 
 def to_v1(d: dict) -> dict:
-    """Die fünf alten Felder (für alte Rechner, nur sinnvoll wenn `is_v1_compatible`)."""
+    """The five old fields (for old machines, only meaningful if `is_v1_compatible`)."""
     return {"convert": bool(d.get("convert", True)), **{k: legacy_mirror(d)[k] for k in ("rf", "preset", "tune", "extra", "audio")}}
 
 
-AUDIO_NAMES = {"copy": "Ton kopieren", "aac": "AAC", "opus": "Opus", "ac3": "AC3", "eac3": "E-AC3"}
+AUDIO_NAMES = {"copy": "copy audio", "aac": "AAC", "opus": "Opus", "ac3": "AC3", "eac3": "E-AC3"}
 
 
 def describe(d: dict) -> str:
-    """Kurzbeschreibung für Protokoll und Oberfläche."""
+    """Short description for the log and the interface."""
     v, q, p, a = d["video"], d["quality"], d["picture"], d["sound"]
     cd = CODECS[v["codec"]]
     if v["codec"] == "copy":
-        vid = "Video kopieren"
+        vid = "copy video"
     else:
         name = v["hw"] if v["codec"] == "hw" else {"x265": "x265", "x264": "x264", "svtav1": "SVT-AV1"}[v["codec"]]
         qual = f"{cd['unit']} {q['crf']}" if q["mode"] == "crf" else (f"{q['size_gb']:g} GB" if q["mode"] == "size" else f"{q['kbps']} kb/s")
@@ -209,6 +209,6 @@ def describe(d: dict) -> str:
     if p["deint"] != "off":
         bits.append("Deinterlace " + p["deint"])
     if p["denoise"] != "off":
-        bits.append("Entrauschen " + p["denoise"])
-    bits.append(AUDIO_NAMES[a["mode"]] + (" Stereo" if a["channels"] == "stereo" and a["mode"] != "copy" else ""))
+        bits.append("denoise " + p["denoise"])
+    bits.append(AUDIO_NAMES[a["mode"]] + (" stereo" if a["channels"] == "stereo" and a["mode"] != "copy" else ""))
     return " · ".join(bits)

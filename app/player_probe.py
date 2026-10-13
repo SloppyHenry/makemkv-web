@@ -1,6 +1,6 @@
-"""Player: Pfadprüfung, ffprobe-Auswertung und die Entscheidung Direkt / Remux / Transkodieren.
+"""Player: path checks, ffprobe evaluation and the decision direct / remux / transcode.
 
-Reine Logik ohne Webanbindung (die Entscheidung `plan()` ist eine reine Funktion und lässt sich testen).
+Pure logic without a web layer (the decision `plan()` is a pure function and can be tested).
 """
 import asyncio
 import json
@@ -11,7 +11,7 @@ from fastapi import HTTPException
 
 from app.files import inside_out
 
-# Endungen, die der Player anfasst (ISO-Abbilder und Sperrdateien nicht)
+# extensions the player touches (not ISO images and lock files)
 VIDEO_EXT = (".mkv", ".mp4", ".m4v", ".mov", ".webm", ".m2ts", ".ts", ".mpg", ".mpeg", ".avi", ".wmv")
 MIME = {".mkv": "video/x-matroska", ".mp4": "video/mp4", ".m4v": "video/mp4", ".mov": "video/quicktime", ".webm": "video/webm"}
 TEXT_SUBS = ("subrip", "srt", "ass", "ssa", "mov_text", "webvtt", "text", "microdvd", "sami", "subviewer")
@@ -19,22 +19,22 @@ BITMAP_SUBS = ("hdmv_pgs_subtitle", "dvd_subtitle", "dvb_subtitle", "xsub")
 HDR_TRC = ("smpte2084", "arib-std-b67")
 
 PROBE_TIMEOUT = 40
-_cache: dict[tuple, tuple[float, dict]] = {}       # (Pfad, Größe, mtime) -> (Zeit, Auswertung)
+_cache: dict[tuple, tuple[float, dict]] = {}       # (path, size, mtime) -> (time, evaluation)
 
 
 def check_path(rel: str) -> Path:
-    """Datei im Ausgabeordner prüfen: kein Ausbruch (inside_out), nur Videoendungen, keine Punktdateien (Sperrdateien), nur Dateien."""
+    """Check a file in the output folder: no escape (inside_out), only video extensions, no dot files (lock files), only files."""
     if not rel or "\x00" in rel:
-        raise HTTPException(400, "Ungültiger Pfad")
-    p = inside_out(rel)                                   # Pfadausbruch -> 400 (löst auch Symlinks auf)
+        raise HTTPException(400, "Invalid path")
+    p = inside_out(rel)                                   # path escape -> 400 (also resolves symlinks)
     if any(part.startswith(".") for part in Path(rel).parts):
-        raise HTTPException(400, "Ungültiger Pfad")
+        raise HTTPException(400, "Invalid path")
     if p.suffix.lower() == ".iso":
-        raise HTTPException(415, ".iso-Abbilder lassen sich nicht abspielen. Rippe den Titel als MKV oder entpacke das Abbild.")
+        raise HTTPException(415, ".iso images cannot be played. Rip the title as MKV or extract the image.")
     if p.suffix.lower() not in VIDEO_EXT:
-        raise HTTPException(415, "Dieses Dateiformat lässt sich nicht abspielen.")
+        raise HTTPException(415, "This file format cannot be played.")
     if not p.is_file():
-        raise HTTPException(404, "Datei nicht gefunden")
+        raise HTTPException(404, "File not found")
     return p
 
 
@@ -46,9 +46,9 @@ async def run_ffprobe(p: Path) -> dict:
         out, err = await asyncio.wait_for(proc.communicate(), PROBE_TIMEOUT)
     except asyncio.TimeoutError:
         proc.kill()
-        raise HTTPException(504, "Die Datei ließ sich nicht rechtzeitig lesen (Netzlaufwerk langsam?).")
+        raise HTTPException(504, "The file could not be read in time (slow network drive?).")
     if proc.returncode:
-        raise HTTPException(422, "Datei nicht lesbar: " + err.decode(errors="replace")[-200:].strip())
+        raise HTTPException(422, "File not readable: " + err.decode(errors="replace")[-200:].strip())
     return json.loads(out)
 
 
@@ -68,7 +68,7 @@ def _fps(s: str) -> float:
 
 
 def summarize(pr: dict) -> dict:
-    """Aus der ffprobe-Ausgabe das machen, was Oberfläche und Entscheidung brauchen."""
+    """Turn the ffprobe output into what the interface and the decision need."""
     streams = pr.get("streams", [])
     fmt = pr.get("format", {})
     v = next((s for s in streams if s.get("codec_type") == "video" and not s.get("disposition", {}).get("attached_pic")), None)
@@ -97,7 +97,7 @@ def summarize(pr: dict) -> dict:
 
 
 async def probe_file(p: Path) -> dict:
-    """ffprobe mit kleinem Zwischenspeicher (Schlüssel: Pfad, Größe, Änderungszeit)."""
+    """ffprobe with a small cache (key: path, size, modification time)."""
     st = p.stat()
     key = (str(p), st.st_size, int(st.st_mtime))
     hit = _cache.get(key)
@@ -110,17 +110,17 @@ async def probe_file(p: Path) -> dict:
     return info
 
 
-# ---------------------------------------------------------------- Entscheidung
+# ---------------------------------------------------------------- decision
 
 def parse_caps(s) -> set[str]:
-    """Fähigkeiten des Browsers als Wortliste, z. B. "mkv,h264,hevc,hevc10,aac,opus"."""
+    """The browser's capabilities as a word list, e.g. "mkv,h264,hevc,hevc10,aac,opus"."""
     if isinstance(s, (list, tuple, set)):
         s = ",".join(map(str, s))
     return {x.strip().lower() for x in str(s or "").split(",") if x.strip()}
 
 
 def video_ok(v: dict, caps: set[str]) -> bool:
-    """Kann der Browser dieses Video (im MP4) abspielen?"""
+    """Can the browser play this video (in MP4)?"""
     c, bits = v["codec"], v["bits"]
     if c == "h264":
         return "h264" in caps and (bits == 8 or "h264_10" in caps)
@@ -135,7 +135,7 @@ AUDIO_COPY = {"aac": "aac", "mp3": "mp3", "opus": "opus", "flac": "flac", "vorbi
 
 
 def audio_ok(a: dict, caps: set[str], mp4: bool = True) -> bool:
-    """Kann der Browser diese Tonspur unverändert abspielen (AAC/MP3 immer, Opus/FLAC nur wenn gemeldet; AC3/DTS/TrueHD nie)?"""
+    """Can the browser play this audio track unchanged (AAC/MP3 always, Opus/FLAC only if reported; AC3/DTS/TrueHD never)?"""
     c = a["codec"]
     if c in ("aac", "mp3"):
         return a["channels"] <= 6
@@ -152,7 +152,7 @@ LANG_ALIAS = {"de": "deu", "ger": "deu", "en": "eng", "fr": "fra", "fre": "fra",
 
 
 def lang_list(s) -> list[str]:
-    """Spracheinstellung ("de, eng") als Liste dreibuchstabiger Codes in Rangfolge."""
+    """Language setting ("de, eng") as a list of three-letter codes in order of preference."""
     out = []
     for x in str(s or "").replace(";", ",").replace(" ", ",").split(","):
         x = x.strip().lower()
@@ -162,9 +162,9 @@ def lang_list(s) -> list[str]:
 
 
 def preferred_tracks(info: dict, audio_langs, sub_langs) -> tuple[int | None, int | None]:
-    """Voreinstellung für Ton und Untertitel: erste passende Sprache der Rangliste, sonst die Vorgabe der Datei
-    (Ton: als Standard markiert, sonst erste Spur; Untertitel: als Standard/erzwungen markierte Textspur, sonst keiner).
-    Untertitel sind nur Textspuren (Bildspuren werden nicht unterstützt); bei gleicher Sprache gewinnt die nicht erzwungene."""
+    """Default for audio and subtitles: the first matching language of the preference list, otherwise the file's default
+    (audio: marked as default, otherwise the first track; subtitles: text track marked as default/forced, otherwise none).
+    Subtitles are text tracks only (image tracks are not supported); with the same language the non-forced one wins."""
     ai = None
     if info["audio"]:
         for lg in lang_list(audio_langs):
@@ -188,7 +188,7 @@ def preferred_tracks(info: dict, audio_langs, sub_langs) -> tuple[int | None, in
 
 
 def pick_audio(info: dict, audio: int | None, pref: int | None = None) -> dict | None:
-    """Gewählte Tonspur (Ordnungszahl), sonst die bevorzugte (`pref`), sonst die als Standard markierte, sonst die erste."""
+    """The chosen audio track (ordinal), otherwise the preferred one (`pref`), otherwise the one marked default, otherwise the first."""
     a = info["audio"]
     if not a:
         return None
@@ -200,41 +200,41 @@ def pick_audio(info: dict, audio: int | None, pref: int | None = None) -> dict |
 
 def plan(info: dict, caps: set[str], audio: int | None = None, force: str = "auto", transcode_allowed: bool = True, ext: str = ".mkv",
          pref_audio: int | None = None) -> dict:
-    """Wie wird abgespielt? -> {mode: direct|remux|transcode, video: copy|x264, audio: copy|aac|none, reasons[], ok, error}.
-    Umgewandelt (x264) wird nur, wenn der Browser das Video nicht kann. `force`: auto | remux (kein direktes Abspielen).
-    `pref_audio`: bevorzugte Tonspur (Spracheinstellung); nur sie darf direkt abgespielt werden, andere Spuren gehen über Remux."""
+    """How is it played? -> {mode: direct|remux|transcode, video: copy|x264, audio: copy|aac|none, reasons[], ok, error}.
+    Transcoding (x264) only happens when the browser cannot play the video. `force`: auto | remux (no direct playback).
+    `pref_audio`: preferred audio track (language setting); only it may be played directly, other tracks go via remux."""
     v = info["video"]
     out = {"mode": "remux", "video": "copy", "audio": "none", "reasons": [], "ok": True, "error": ""}
     if not v:
-        return {**out, "ok": False, "error": "Die Datei enthält kein Video."}
+        return {**out, "ok": False, "error": "The file contains no video."}
     a = pick_audio(info, audio, pref_audio)
     default_a = pick_audio(info, None, pref_audio)
     reasons = out["reasons"]
     vok = video_ok(v, caps)
     if not vok:
-        reasons.append(f"Der Browser kann {_vname(v)} nicht abspielen.")
+        reasons.append(f"The browser cannot play {_vname(v)}.")
         if v["hdr"]:
-            reasons.append("HDR wird für die Wiedergabe auf SDR umgerechnet.")
+            reasons.append("HDR is converted to SDR for playback.")
     transcode = not vok
     if transcode and not transcode_allowed:
-        return {**out, "ok": False, "error": "Umwandeln ist in den Einstellungen ausgeschaltet; diese Datei lässt sich so nicht abspielen."}
+        return {**out, "ok": False, "error": "Transcoding is switched off in the settings; this file cannot be played that way."}
     out["video"] = "x264" if transcode else "copy"
-    # direkt: nur wenn der Browser Container, Video und die bevorzugte Tonspur kann und nichts umgewandelt werden muss
+    # direct: only if the browser can handle the container, the video and the preferred audio track and nothing has to be converted
     container_ok = ext in (".mp4", ".m4v", ".mov", ".webm") or (ext == ".mkv" and "mkv" in caps)
     if not transcode and force != "remux" and container_ok and (a is None or (audio_ok(a, caps) and a is default_a)):
         return {**out, "mode": "direct", "audio": "copy" if a else "none"}
     if a is None:
         out["audio"] = "none"
-    elif audio_ok(a, caps) and a["codec"] in ("aac", "mp3", "ac3", "eac3"):      # nur das geht unverändert in fragmentiertes MP4
+    elif audio_ok(a, caps) and a["codec"] in ("aac", "mp3", "ac3", "eac3"):      # only these go into fragmented MP4 unchanged
         out["audio"] = "copy"
     else:
         out["audio"] = "aac"
-        reasons.append(f"Ton ({_aname(a)}) wird in AAC umgewandelt.")
+        reasons.append(f"Audio ({_aname(a)}) is converted to AAC.")
     if transcode:
         out["mode"] = "transcode"
         return out
     if ext not in (".mp4", ".m4v", ".mov", ".webm") and not ("mkv" in caps and ext == ".mkv"):
-        reasons.append("Der Container wird neu verpackt (Remux).")
+        reasons.append("The container is repackaged (remux).")
     out["mode"] = "remux"
     return out
 

@@ -1,4 +1,4 @@
-"""Zwischenspeicher und Übertragung ins Ausgabeziel."""
+"""Staging buffer and transfer to the output target."""
 import asyncio
 import json
 import os
@@ -33,27 +33,27 @@ def enqueue_upload(src: Path, rel: str, dev: str = "", replace: bool = False, lo
 
 
 def copy_item(item: dict, base: Path, notify):
-    """Kopiert eine fertige Datei (oder einen Ordner) ins Ziel: erst als .part, dann umbenennen, Größe prüfen, Quelle löschen."""
+    """Copies a finished file (or folder) to the target: first as .part, then rename, check the size, delete the source."""
     src = Path(item["src"])
     target = base / item["name"]
     replace = bool(item.get("replace"))
-    if replace:                                       # Bibliothek: konvertierte Datei ersetzt das Original (nur wenn es unverändert ist)
+    if replace:                                       # library: the converted file replaces the original (only if it is unchanged)
         if not target.is_file():
-            raise OSError("Das Original ist nicht mehr vorhanden – Ergebnis bleibt im Zwischenspeicher")
+            raise OSError("The original no longer exists – the result stays in the staging buffer")
         if item.get("orig_size") and target.stat().st_size != item["orig_size"]:
-            raise OSError("Das Original wurde zwischenzeitlich verändert – es wird nicht ersetzt")
+            raise OSError("The original was changed in the meantime – it is not replaced")
     mkdir_open(target.parent, base)
     if src.is_file():
         if not replace:
             target = unique_path(target)
-        if os.stat(src).st_dev == os.stat(target.parent).st_dev:      # gleiches Dateisystem: nur umbenennen
+        if os.stat(src).st_dev == os.stat(target.parent).st_dev:      # same file system: just rename
             try:
                 os.replace(src, target)
                 open_perms(target, False)
                 item.update(copied=item["size"], dest=str(target))
                 return
             except OSError as e:
-                if e.errno != errno.EXDEV:                              # zwei Einhängungen desselben Dateisystems: dann kopieren
+                if e.errno != errno.EXDEV:                              # two mounts of the same file system: copy then
                     raise
         files = [(src, target)]
     else:
@@ -69,7 +69,7 @@ def copy_item(item: dict, base: Path, notify):
                 item["copied"] += len(chunk)
                 if time.monotonic() - last > 0.5:
                     last = time.monotonic()
-                    win.append((last, item["copied"]))          # gleitendes Fenster -> aktuelle Geschwindigkeit
+                    win.append((last, item["copied"]))          # sliding window -> current speed
                     dt = win[-1][0] - win[0][0]
                     if dt > 0:
                         item["speed"] = (win[-1][1] - win[0][1]) / dt
@@ -78,7 +78,7 @@ def copy_item(item: dict, base: Path, notify):
             fo.flush()
             os.fsync(fo.fileno())
         if part.stat().st_size != a.stat().st_size:
-            raise OSError(f"Größe von {b.name} stimmt nach dem Kopieren nicht")
+            raise OSError(f"Size of {b.name} does not match after copying")
         os.replace(part, b)
         open_perms(b, False)
     shutil.rmtree(src) if src.is_dir() else src.unlink()
@@ -107,7 +107,7 @@ async def upload_worker():
                 await asyncio.to_thread(copy_item, item, base, notify)
                 item.update(status="done", t=time.time(), speed=0.0, eta=0)
                 if dr:
-                    dr.add_log(f"Übertragen: {item['name']} ({fmt_bytes(item['size'])})", "ok")
+                    dr.add_log(f"Transferred: {item['name']} ({fmt_bytes(item['size'])})", "ok")
                 if item.get("lock"):
                     release_lock(item["lock"])
                 if item.get("then_convert"):
@@ -120,7 +120,7 @@ async def upload_worker():
                 if attempt == 5 and item.get("lock"):
                     release_lock(item["lock"])
                 if dr:
-                    dr.add_log(f"Übertragung von {item['name']} fehlgeschlagen: {e}", "error")
+                    dr.add_log(f"Transfer of {item['name']} failed: {e}", "error")
                 broadcast()
                 if attempt < 5:
                     await asyncio.sleep(30 * attempt)
@@ -128,11 +128,11 @@ async def upload_worker():
 
 
 def recover_staging():
-    """Beim Start: unfertige Arbeitsdateien verwerfen, fertige (noch nicht übertragene) erneut einreihen."""
+    """On startup: discard unfinished work files, queue finished (not yet transferred) ones again."""
     shutil.rmtree(WORK, ignore_errors=True)
     shutil.rmtree(CONV_WORK, ignore_errors=True)
     WORK.mkdir(parents=True, exist_ok=True)
-    if CONVERT.exists():                      # fertig gerippt, Konvertierung war noch offen
+    if CONVERT.exists():                      # ripped, conversion was still pending
         for folder in sorted(CONVERT.iterdir()):
             for f in sorted(folder.glob("*.mkv")) if folder.is_dir() else []:
                 side = f.with_name(f.name + ".json")

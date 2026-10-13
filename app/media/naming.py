@@ -1,11 +1,11 @@
-"""Benennung nach dem Jellyfin-Schema (reine Funktionen, ohne Dateizugriff).
+"""Naming after the Jellyfin scheme (pure functions, without file access).
 
-Regeln nach der Jellyfin-Dokumentation (Stand 2026-10, https://jellyfin.org/docs/general/server/media/movies/ und .../shows/):
-- Film: `Titel (Jahr) [imdbid-tt…]/Titel (Jahr) [imdbid-tt…].mkv`; weitere Fassungen mit Trenner und Name dahinter (`… - 1080p.mkv`);
-  Extras in Unterordnern (extras, behind the scenes, deleted scenes, featurettes, interviews, scenes, shorts, trailers …).
-- Serie: `Serie (Jahr) [tmdbid-…]/Season 01/Serie S01E01.mkv`; Doppelfolgen `S01E01-E02`; Episodenname darf dahinter stehen;
-  Specials in `Season 00`; „Season“ nie abkürzen, Zahl mit führender Null.
-- Unzulässig in Namen: < > : " / \\ | ? *  (hier ersetzt bzw. entfernt), kein Punkt oder Leerzeichen am Ende.
+Rules from the Jellyfin documentation (as of 2026-10, https://jellyfin.org/docs/general/server/media/movies/ and .../shows/):
+- Movie: `Title (Year) [imdbid-tt…]/Title (Year) [imdbid-tt…].mkv`; further versions with a separator and the name after it (`… - 1080p.mkv`);
+  extras in subfolders (extras, behind the scenes, deleted scenes, featurettes, interviews, scenes, shorts, trailers …).
+- Series: `Series (Year) [tmdbid-…]/Season 01/Series S01E01.mkv`; double episodes `S01E01-E02`; the episode name may follow;
+  specials in `Season 00`; never abbreviate "Season", number with a leading zero.
+- Not allowed in names: < > : " / \\ | ? *  (replaced or removed here), no dot or space at the end.
 """
 import re
 import unicodedata
@@ -15,10 +15,10 @@ VIDEO_EXT = (".mkv", ".mp4", ".m4v", ".avi", ".m2ts", ".iso")
 
 
 def clean_part(s: str, maxlen: int = 120) -> str:
-    """Einen Namensbestandteil dateisystemtauglich machen (Umlaute bleiben)."""
+    """Make a name part fit for the file system (umlauts and other letters stay)."""
     s = unicodedata.normalize("NFC", s or "")
     s = re.sub(r"[\x00-\x1f]", "", s)
-    s = re.sub(r"\s*:\s*", " - ", s)                 # „Star Trek: Voyager“ -> „Star Trek - Voyager“
+    s = re.sub(r"\s*:\s*", " - ", s)                 # "Star Trek: Voyager" -> "Star Trek - Voyager"
     s = s.replace('"', "'")
     s = re.sub(r"[?*<>]", "", s)
     s = re.sub(r"\s*[/\\|]\s*", " - ", s)
@@ -28,7 +28,7 @@ def clean_part(s: str, maxlen: int = 120) -> str:
 
 
 def id_tag(imdb: str | None = None, tmdb: int | str | None = None, prefer: str = "imdb") -> str:
-    """`[imdbid-tt0133093]` oder `[tmdbid-603]`; leer, wenn keine ID bekannt ist."""
+    """`[imdbid-tt0133093]` or `[tmdbid-603]`; empty if no ID is known."""
     imdb = (imdb or "").strip()
     imdb = imdb if re.fullmatch(r"tt\d{6,10}", imdb) else ""
     tmdb = str(tmdb or "").strip()
@@ -41,8 +41,8 @@ def id_tag(imdb: str | None = None, tmdb: int | str | None = None, prefer: str =
 
 
 def media_name(title: str, year: int | str | None = None, imdb=None, tmdb=None, tags: bool = True, prefer: str = "imdb") -> str:
-    """`Titel (Jahr) [imdbid-tt…]` – Jahr und ID nur, wenn bekannt (und die ID nur bei `tags`)."""
-    name = clean_part(title) or "Unbenannt"
+    """`Title (Year) [imdbid-tt…]` – year and ID only if known (and the ID only with `tags`)."""
+    name = clean_part(title) or "Untitled"
     if str(year or "").isdigit():
         name += f" ({int(year)})"
     tag = id_tag(imdb, tmdb, prefer) if tags else ""
@@ -50,8 +50,8 @@ def media_name(title: str, year: int | str | None = None, imdb=None, tmdb=None, 
 
 
 def movie_rel(title, year, ext, imdb=None, tmdb=None, tags=True, version: str = "", extra: str = "", extra_name: str = "") -> str:
-    """Relativer Pfad eines Films unterhalb des Filme-Ordners.
-    `version` (z. B. „1080p“, „Director's Cut“) hängt die Fassung an; `extra` (Name aus EXTRA_DIRS) legt die Datei in einen Extras-Unterordner."""
+    """Relative path of a movie below the movies folder.
+    `version` (e.g. "1080p", "Director's Cut") appends the version; `extra` (a name from EXTRA_DIRS) puts the file into an extras subfolder."""
     folder = media_name(title, year, imdb, tmdb, tags, "imdb")
     if extra:
         extra = extra if extra in EXTRA_DIRS else "extras"
@@ -65,12 +65,12 @@ def season_folder(season: int) -> str:
 
 
 def episode_code(season: int, episodes: list[int]) -> str:
-    """`S01E01` bzw. `S01E01-E02` für Doppelfolgen (fortlaufend)."""
+    """`S01E01` or `S01E01-E02` for double episodes (consecutive)."""
     eps = sorted(set(int(e) for e in episodes))
     if not eps or eps[0] < 0:
-        raise ValueError("keine Episode")
+        raise ValueError("no episode")
     if eps != list(range(eps[0], eps[-1] + 1)):
-        raise ValueError("Episoden einer Datei müssen fortlaufend sein")
+        raise ValueError("the episodes of one file must be consecutive")
     code = f"S{int(season):02d}E{eps[0]:02d}"
     return code + (f"-E{eps[-1]:02d}" if len(eps) > 1 else "")
 
@@ -80,8 +80,8 @@ def series_folder(title, year=None, imdb=None, tmdb=None, tags=True) -> str:
 
 
 def episode_rel(title, year, season: int, episodes: list[int], ext: str, imdb=None, tmdb=None, tags=True, ep_name: str = "") -> str:
-    """Relativer Pfad einer Episode unterhalb des Serien-Ordners: `Serie (Jahr) [tmdbid-…]/Season 01/Serie S01E01 - Name.mkv`."""
-    base = f"{clean_part(title) or 'Unbenannt'} {episode_code(season, episodes)}"
+    """Relative path of an episode below the series folder: `Series (Year) [tmdbid-…]/Season 01/Series S01E01 - Name.mkv`."""
+    base = f"{clean_part(title) or 'Untitled'} {episode_code(season, episodes)}"
     name = clean_part(ep_name, 100)
     if name:
         base += f" - {name}"
@@ -89,31 +89,31 @@ def episode_rel(title, year, season: int, episodes: list[int], ext: str, imdb=No
 
 
 def series_extra_rel(title, year, season: int, ext: str, imdb=None, tmdb=None, tags=True, extra: str = "extras", extra_name: str = "") -> str:
-    """Extras einer Serie (z. B. Play-All oder Bonusmaterial) im Serienordner."""
+    """Extras of a series (e.g. play-all or bonus material) in the series folder."""
     extra = extra if extra in EXTRA_DIRS else "extras"
     return f"{series_folder(title, year, imdb, tmdb, tags)}/{extra}/{clean_part(extra_name, 150) or 'Extra'}{ext}"
 
 
 def unique_variant(rel: str, n: int) -> str:
-    """Ausweichname bei Konflikt: `… S01E03.mkv` -> `… S01E03 - 2.mkv` (niemals überschreiben)."""
+    """Fallback name on a conflict: `… S01E03.mkv` -> `… S01E03 - 2.mkv` (never overwrite)."""
     stem, dot, ext = rel.rpartition(".")
     return f"{stem} - {n}.{ext}" if dot else f"{rel} - {n}"
 
 
-# ---- Rückwärts: Namen lesen (für `GET /api/media/info`, auch bei Dateien, die nicht über dieses Tool einsortiert wurden)
+# ---- backwards: reading names (for `GET /api/media/info`, also for files that were not sorted by this tool)
 _TAIL = re.compile(r"^(?P<title>.*?)(?:\s*\((?P<year>(?:19|20)\d{2})\))?(?:\s*\[(?P<idk>tmdbid|imdbid|tvdbid)-(?P<idv>[^\]]+)\])?$")
 _EPI = re.compile(r"[Ss](\d{1,2})[ ._-]?[Ee](\d{1,3})(?:[-–]?[Ee]?(\d{1,3}))?")
 
 
 def split_name(name: str) -> dict:
-    """`Titel (2017) [imdbid-tt1856101]` -> {title, year, tag, id}."""
+    """`Title (2017) [imdbid-tt1856101]` -> {title, year, tag, id}."""
     m = _TAIL.match(name.strip())
     d = m.groupdict() if m else {}
     return {"title": (d.get("title") or name).strip(), "year": int(d["year"]) if d.get("year") else None, "tag": d.get("idk") or "", "id": d.get("idv") or ""}
 
 
 def parse_path(rel: str) -> dict:
-    """Aus einem Pfad im Jellyfin-Aufbau Art, Titel, Jahr, Staffel und Episode lesen. Leeres Ergebnis, wenn nichts passt."""
+    """Read type, title, year, season and episode from a path in the Jellyfin layout. Empty result if nothing fits."""
     parts = [p for p in rel.split("/") if p]
     if not parts:
         return {}

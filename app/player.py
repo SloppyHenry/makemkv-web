@@ -1,8 +1,8 @@
-"""Interner Player: Probe, Wiedergabe-Entscheidung, Strom (Direkt/Remux/Transkodieren), Untertitel. Router unter /api/player.
+"""Built-in player: probe, playback decision, stream (direct/remux/transcode), subtitles. Router under /api/player.
 
-Ablauf: `POST /session` (oder `GET /probe` zum Anzeigen) -> die Oberfläche bekommt entweder die Adresse der Originaldatei (`/file`, HTTP-Range, direkt)
-oder die eines ffmpeg-Stroms (`/stream/{id}`, fragmentiertes MP4). Suchen = neue Sitzung mit anderem `start`.
-Konzept und Begründung: docs/agents/status-paket-d.md
+Flow: `POST /session` (or `GET /probe` for display) -> the interface gets either the address of the original file (`/file`, HTTP range, direct)
+or that of an ffmpeg stream (`/stream/{id}`, fragmented MP4). Seeking = a new session with a different `start`.
+Concept and reasoning: docs/agents/status-paket-d.md
 """
 import asyncio
 import json
@@ -22,18 +22,18 @@ router = APIRouter(prefix="/api/player")
 
 
 class PlayerSettings(BaseModel):
-    transcode: bool = True                                       # Umwandeln (Transkodieren) überhaupt erlauben (nur wenn der Browser das Video nicht kann)
-    max_height: int = Field(0, ge=0, le=2160)                    # höchste Auflösung beim Umwandeln; 0 = Original (nicht verkleinern)
-    crf: int = Field(24, ge=16, le=35)                           # x264-Qualität beim Umwandeln (kleiner = besser)
+    transcode: bool = True                                       # allow transcoding at all (only when the browser cannot play the video)
+    max_height: int = Field(0, ge=0, le=2160)                    # maximum resolution when transcoding; 0 = original (do not downscale)
+    crf: int = Field(24, ge=16, le=35)                           # x264 quality when transcoding (smaller = better)
     preset: Literal["ultrafast", "superfast", "veryfast", "faster", "fast"] = "veryfast"
-    audio_lang: str = Field("", max_length=60)                   # bevorzugte Tonsprache, z. B. "deu,eng"; leer = Vorgabe der Datei (dann "audio_langs" aus Allgemein)
-    sub_lang: str = Field("", max_length=60)                     # bevorzugte Untertitelsprache; leer = nur die in der Datei als Standard/erzwungen markierte Spur
+    audio_lang: str = Field("", max_length=60)                   # preferred audio language, e.g. "eng,deu"; empty = the file's default (then "audio_langs" from General)
+    sub_lang: str = Field("", max_length=60)                     # preferred subtitle language; empty = only the track marked default/forced in the file
 
     @field_validator("max_height")
     @classmethod
     def _height(cls, v):
         if v and v < 240:
-            raise ValueError("0 (Original) oder mindestens 240")
+            raise ValueError("0 (original) or at least 240")
         return v
 
 
@@ -48,7 +48,7 @@ def cfg() -> dict:
 
 
 def pref_langs() -> tuple[str, str]:
-    """Bevorzugte Sprachen: eigene Einstellung, beim Ton sonst die allgemeine Rip-Sprachliste als Voreinschlag."""
+    """Preferred languages: own setting, for audio otherwise the general rip language list as a suggestion."""
     c = cfg()
     return c["audio_lang"] or settings.get("audio_langs", ""), c["sub_lang"]
 
@@ -56,7 +56,7 @@ def pref_langs() -> tuple[str, str]:
 def _public_info(rel: str, p, info: dict, pl: dict, locked) -> dict:
     pref = preferred_tracks(info, *pref_langs())
     return {"path": rel, "name": p.name, "size": info["size"], "duration": info["duration"], "container": info["container"], "video": info["video"],
-            "audio": info["audio"], "subs": [{**x, "supported": x["kind"] == "text"} for x in info["subs"]],      # Bildspuren: nicht unterstützt
+            "audio": info["audio"], "subs": [{**x, "supported": x["kind"] == "text"} for x in info["subs"]],      # image tracks: not supported
             "preferred": {"audio": pref[0], "sub": pref[1]}, "chapters": info["chapters"], "plan": pl, "locked": locked, "busy": ps.busy_info(),
             "transcode_allowed": cfg()["transcode"], "limits": {"transcode_busy": any(s["plan"]["video"] == "x264" and ps.alive(s) for s in ps.sessions.values())}}
 
@@ -83,18 +83,18 @@ class ProbeReq(BaseModel):
 
 
 @router.post("/probe")
-async def api_probe_post(req: ProbeReq):            # für den Verbund-Proxy (POST)
+async def api_probe_post(req: ProbeReq):            # for the cluster proxy (POST)
     return await api_probe(req.path, req.caps, req.audio, req.force)
 
 
 class SessionReq(ProbeReq):
-    client: str = Field("", max_length=64)           # zufällige Kennung des Browser-Tabs (ein Strom je Tab)
+    client: str = Field("", max_length=64)           # random id of the browser tab (one stream per tab)
     start: float = Field(0, ge=0)
 
 
 @router.post("/session")
 async def api_session(req: SessionReq):
-    """Wiedergabe starten oder an anderer Stelle neu starten. Antwort: url, mode, start (tatsächlicher Beginn in s), duration, plan."""
+    """Start playback or restart it at another position. Response: url, mode, start (actual start in s), duration, plan."""
     p, info, pl = await _probe(req.path, req.caps, req.audio, req.force)
     if not pl["ok"]:
         raise HTTPException(422, pl["error"])
@@ -104,7 +104,7 @@ async def api_session(req: SessionReq):
         return {**base, "id": "", "url": "/api/player/file?path=" + _q(req.path), "start": 0.0, "native_seek": True}
     start = min(req.start, max(info["duration"] - 1, 0)) if info["duration"] else req.start
     if pl["video"] == "copy":
-        start = await ps.keyframe_before(p, start)         # bei Video-Kopie genau auf einen Keyframe starten (Bild und Ton bleiben gleich)
+        start = await ps.keyframe_before(p, start)         # with video copy start exactly on a keyframe (picture and audio stay in sync)
     tonemap = bool(ext.capabilities["player"].get("tonemap"))
     eff = pick_audio(info, req.audio, preferred_tracks(info, *pref_langs())[0])
     s = ps.new_session(req.client, req.path, p, start, info, pl, eff["i"] if eff else None, cfg(), tonemap)
@@ -119,14 +119,14 @@ def _q(path: str) -> str:
 async def api_stream(sid: str):
     s = ps.sessions.get(sid)
     if not s:
-        raise HTTPException(404, "Diese Wiedergabe ist abgelaufen. Bitte neu starten.")
+        raise HTTPException(404, "This playback has expired. Please start again.")
     first = await ps.start_process(s)
     return ps.StreamResponse(s, first)
 
 
 @router.get("/file")
 def api_file(path: str):
-    """Originaldatei mit HTTP-Range (nur für den Weg „direkt“). Gesperrte Dateien bleiben lesbar."""
+    """Original file with HTTP range (only for the "direct" path). Locked files stay readable."""
     p = check_path(path)
     return FileResponse(p, media_type=MIME.get(p.suffix.lower(), "application/octet-stream"), headers={"Cache-Control": "no-store"})
 
@@ -140,7 +140,7 @@ async def api_subtitle(path: str, index: int):
 
 @router.post("/stop")
 async def api_stop(request: Request):
-    """Wiedergabe dieses Browsers beenden. Auch per navigator.sendBeacon beim Schließen (Text-Body {"client": "…"})."""
+    """End this browser's playback. Also via navigator.sendBeacon on closing (text body {"client": "…"})."""
     try:
         client = str(json.loads((await request.body()) or b"{}").get("client", ""))
     except (ValueError, AttributeError):
@@ -154,10 +154,10 @@ def api_sessions():
     return ps.public_sessions()
 
 
-# ---------------------------------------------------------------- Fähigkeiten und Wächter
+# ---------------------------------------------------------------- capabilities and watchdog
 
 async def _detect():
-    """Einmal beim Start: Was kann das ffmpeg dieses Rechners? (landet in den Fähigkeiten, sichtbar im Verbund)"""
+    """Once on startup: what can this machine's ffmpeg do? (ends up in the capabilities, visible in the cluster)"""
     async def out(*a):
         pr = await asyncio.create_subprocess_exec("ffmpeg", "-hide_banner", *a, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL)
         return (await pr.communicate())[0].decode(errors="replace")

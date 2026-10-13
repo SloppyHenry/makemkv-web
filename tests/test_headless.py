@@ -1,4 +1,4 @@
-"""Tests für den Headless-Modus: UDF-Leser, Disc-Kennungen, TheDiscDB-Zuordnung, Titelwahl ohne Datenbank."""
+"""Tests for headless mode: UDF reader, disc identifiers, TheDiscDB assignment, title choice without a database."""
 import asyncio
 import hashlib
 import json
@@ -12,7 +12,7 @@ from tests.udf_build import build
 
 from app.headless import choose, discdb, discid, plan, udf
 
-# echte Einträge aus TheDiscDB (Dateigrößen aus dem Scan-Protokoll, Hash aus disc01.json)
+# real entries from TheDiscDB (file sizes from the scan log, hash from disc01.json)
 CLOVERFIELD = [(f"{n:05d}.m2ts", s) for n, s in [
     (0, 319488), (22, 22960128), (51, 26376192), (53, 26572800), (250, 2739793920), (800, 28558835712), (1007, 36249600), (1008, 36249600),
     (1009, 36249600), (1010, 106168320), (1011, 106168320), (1012, 233472), (1013, 301056), (1014, 301056), (1015, 331776), (1016, 288768),
@@ -43,7 +43,7 @@ class HashTest(unittest.TestCase):
         head = bytearray(4096)
         head[0x3F] = 2
         a, b, c = bytes(head), b"A" * 2048, b"B" * 2048
-        self.assertEqual(discid.dvd_disc_id(a, [b, c, b"nicht"]), hashlib.md5(a + b + c).hexdigest().upper())
+        self.assertEqual(discid.dvd_disc_id(a, [b, c, b"not"]), hashlib.md5(a + b + c).hexdigest().upper())
         self.assertEqual(discid.dvd_disc_id(a, [None, c]), hashlib.md5(a + c).hexdigest().upper())
 
 
@@ -125,7 +125,7 @@ class DiscDbTest(unittest.TestCase):
         disc = {"type": "Blu-ray disc", "titles": [T(0, 3030, 11.1, source="00201.mpls")]}
         m = discdb.match(SERIES_ENTRY, disc)
         self.assertFalse(m["ok"])
-        self.assertIn("nicht gefunden", m["reason"])
+        self.assertIn("not found", m["reason"])
 
     def test_movie_and_lookup_order(self):
         entry = {"format": "Blu-Ray", "media": {"title": "10 Cloverfield Lane", "year": 2016, "type": "Movie"},
@@ -140,7 +140,7 @@ class DiscDbTest(unittest.TestCase):
         discdb._cache.clear()
         with mock.patch.object(discdb, "_http_get", fake):
             e, via = asyncio.run(discdb.lookup("A" * 40, "B" * 32))
-        self.assertEqual((via, len(calls)), ("Inhalts-Hash", 2))
+        self.assertEqual((via, len(calls)), ("content hash", 2))
         m = discdb.match(e, {"type": "Blu-ray disc", "titles": [T(0, 6214, 28.5, source="00800.mpls"), T(1, 6214, 28.5, source="00801.mpls")]})
         self.assertEqual([p["id"] for p in m["picks"]], [0])
         self.assertEqual(plan.names_from_db(m), ("10 Cloverfield Lane (2016)", {0: "10 Cloverfield Lane (2016)"}))
@@ -159,7 +159,7 @@ class ChooseTest(unittest.TestCase):
 
     def test_kids_short_episodes_unsure_all(self):
         titles = [T(i, 660 + i * 5, 0.4) for i in range(8)]
-        d = choose.decide({"type": "DVD disc", "name": "KINDER", "titles": titles})
+        d = choose.decide({"type": "DVD disc", "name": "KIDS", "titles": titles})
         self.assertEqual((d["mode"], len(d["picks"])), ("unsure", 8))
 
     def test_long_episodes_unsure_all(self):
@@ -182,24 +182,24 @@ class ChooseTest(unittest.TestCase):
         self.assertEqual((d["mode"], d["picks"], d["dropped"]), ("movie", [0], [1]))
 
     def test_bluray_playall_by_segments(self):
-        """Vikings S1 D3: Titel 2 ist zufällig so lang wie 5+6, Play-All ist nur 7 (Segmente 800,801,802)."""
+        """Vikings S1 D3: title 2 happens to be as long as 5+6, the play-all is only 7 (segments 800,801,802)."""
         titles = [T(0, 1248, 2.7, segments="303"), T(1, 2630, 10.3, segments="800"), T(2, 2806, 11, segments="801"), T(3, 2700, 10.8, segments="802"),
                   T(4, 693, 1.5, segments="1421,1469,1429"), T(5, 1913, 4.2, segments="1435,1436,1437"), T(6, 8137, 32.2, segments="800,801,802"),
                   T(7, 1029, 2.3, segments="300"), T(8, 731, 1.6, segments="302"), T(9, 206, 0.5, segments="1464")]
         d = choose.decide({"type": "Blu-ray disc", "name": "Vikings – Season 1 – Disc 3", "titles": titles}, content_bytes=40e9)
         self.assertEqual((d["mode"], d["picks"], d["playall"]), ("series", [1, 2, 3], [6]))
-        sk = dict(plan.skips({"type": "Blu-ray disc", "titles": titles}, {"picks": d["picks"], "mode": "series", "source": "Struktur der Disc"}))
-        self.assertEqual((sk[7], sk[1]), ("Play-All, 136 min", "Extra, 21 min"))
+        sk = dict(plan.skips({"type": "Blu-ray disc", "titles": titles}, {"picks": d["picks"], "mode": "series", "source": "Disc structure"}))
+        self.assertEqual((sk[7], sk[1]), ("play-all, 136 min", "extra, 21 min"))
 
     def test_bonus_playall_next_to_movie(self):
-        """Jumanji (vierstein): Titel 5 (45 min) = Titel 3 + 4 ist ein Bonus-Play-All, kein Serien-Play-All – der Film (104 min) zählt."""
+        """Jumanji (vierstein): title 5 (45 min) = title 3 + 4 is a bonus play-all, not a series play-all – the movie (104 min) counts."""
         titles = [T(0, 300, 0.3, segments="10"), T(1, 6240, 30, segments="1,2,3"), T(2, 1380, 2, segments="20"), T(3, 1320, 2, segments="21"),
                   T(4, 2700, 4, segments="20,21"), T(5, 840, 1, segments="30"), T(6, 180, 0.2, segments="31"), T(13, 1200, 1.5, segments="40")]
         d = choose.decide({"type": "Blu-ray disc", "name": "Jumanji (1995) - Special Edition", "titles": titles}, content_bytes=40e9)
         self.assertEqual((d["mode"], d["picks"], d["playall"]), ("movie", [1], [4]))
 
     def test_two_movie_versions_with_bonus_playall(self):
-        """Sherlock Holmes 2 (vierstein): zwei gleich lange Fassungen (129 min) und ein Play-All aus 7 kurzen Extras (35 min)."""
+        """Sherlock Holmes 2 (vierstein): two versions of equal length (129 min) and a play-all of 7 short extras (35 min)."""
         clips = [T(i, 300, 0.4, segments=str(100 + i)) for i in range(26, 32)] + [T(7, 300, 0.4, segments="107")]
         titles = [T(0, 2100, 3, segments="107," + ",".join(str(100 + i) for i in range(26, 32))), T(1, 7740, 35, segments="1,2"),
                   T(2, 7745, 36, segments="1,3"), T(10, 1380, 2, segments="50"), T(16, 900, 1, segments="51")] + clips

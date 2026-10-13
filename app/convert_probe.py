@@ -1,7 +1,7 @@
-"""Probe: zwei kurze Ausschnitte (je 25 s) mit den gewählten Einstellungen kodieren, daraus Größe und Dauer genauer hochrechnen
-und je ein Standbild Vorher/Nachher liefern (für den Schieberegler im Editor).
+"""Test encode: encode two short excerpts (25 s each) with the chosen settings, extrapolate size and duration more precisely from them
+and return one before/after still each (for the slider in the editor).
 
-POST /api/convert/probe {path, cfg} startet (ein Auftrag zur Zeit, mit `nice`), GET /api/convert/probe/{id} liefert Fortschritt und Ergebnis.
+POST /api/convert/probe {path, cfg} starts it (one job at a time, with `nice`), GET /api/convert/probe/{id} returns progress and result.
 """
 import asyncio
 import base64
@@ -31,7 +31,7 @@ class ProbeReq(BaseModel):
 
 
 async def _frame(src, at: float) -> str:
-    """Standbild als data:-URL (JPEG, 960 px breit)."""
+    """Still image as a data: URL (JPEG, 960 px wide)."""
     p = await asyncio.create_subprocess_exec("ffmpeg", "-hide_banner", "-nostdin", "-loglevel", "error", "-ss", f"{at:.2f}", "-i", str(src), "-frames:v", "1", "-vf", "scale=960:-2",
                                              "-q:v", "4", "-f", "mjpeg", "-", stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL)
     out, _ = await p.communicate()
@@ -49,9 +49,9 @@ async def run(job: dict, src, cfg: dict):
         if why := convert_caps.unusable(cfg, info):
             raise ValueError(why)
         if cfg["video"]["codec"] == "copy":
-            raise ValueError("Beim reinen Remuxen gibt es nichts zu probieren.")
+            raise ValueError("There is nothing to test when only remuxing.")
         if dur < SLICE * 3:
-            raise ValueError("Die Datei ist zu kurz für eine Probe.")
+            raise ValueError("The file is too short for a test encode.")
         ctx = {"info": info, "dur": dur, "crop": None, "scan": "progressive", "hdr": {}, "pools": 0, "kbps": target_kbps(cfg, info, dur)}
         if cfg["picture"]["crop"] == "auto":
             ctx["crop"] = await detect_crop(src, dur, int(v["width"]), int(v["height"]))
@@ -62,14 +62,14 @@ async def run(job: dict, src, cfg: dict):
         num, den = (int(x) for x in v["r_frame_rate"].split("/"))
         sizes, secs, frames = 0, 0.0, []
         for n, pt in enumerate(POINTS):
-            job.update(pct=n / len(POINTS), text=f"Ausschnitt {n + 1} von {len(POINTS)} …")
+            job.update(pct=n / len(POINTS), text=f"Excerpt {n + 1} of {len(POINTS)} …")
             out, start = work / f"p{n}.mkv", dur * pt
             t0 = time.monotonic()
             proc = await spawn(segment_args(src, out, cfg, ctx, ["-ss", f"{start:.2f}", "-t", str(SLICE)], f"{num}/{den}"))
             job["proc"] = proc
             _, err = await proc.communicate()
             if proc.returncode != 0 or not out.exists():
-                raise ValueError(ffmpeg_errors.message("Die Probe-Kodierung ist fehlgeschlagen", err.decode(errors="replace").splitlines(), 2))
+                raise ValueError(ffmpeg_errors.message("The test encode failed", err.decode(errors="replace").splitlines(), 2))
             secs += time.monotonic() - t0
             sizes += out.stat().st_size
             if n == 0:
@@ -90,13 +90,13 @@ async def run(job: dict, src, cfg: dict):
 @router.post("/probe")
 async def api_probe(req: ProbeReq):
     if any(j["status"] == "running" for j in jobs.values()):
-        raise HTTPException(409, "Es läuft schon eine Probe.")
+        raise HTTPException(409, "A test encode is already running.")
     src = inside_out(req.path)
     if not src.is_file():
-        raise HTTPException(404, "Datei nicht gefunden")
+        raise HTTPException(404, "File not found")
     for k in sorted(jobs, key=lambda k: jobs[k]["t"])[:-8]:
         jobs.pop(k, None)
-    job = {"id": uuid.uuid4().hex[:10], "status": "running", "pct": 0.0, "text": "Starte …", "t": time.time()}
+    job = {"id": uuid.uuid4().hex[:10], "status": "running", "pct": 0.0, "text": "Starting …", "t": time.time()}
     jobs[job["id"]] = job
     asyncio.create_task(run(job, src, clean_v2({**req.cfg, "convert": True})))
     return {"id": job["id"]}
@@ -106,7 +106,7 @@ async def api_probe(req: ProbeReq):
 def api_probe_get(jid: str):
     j = jobs.get(jid)
     if not j:
-        raise HTTPException(404, "Unbekannte Probe")
+        raise HTTPException(404, "Unknown test encode")
     return {k: v for k, v in j.items() if k != "proc"}
 
 
@@ -114,9 +114,9 @@ def api_probe_get(jid: str):
 def api_probe_cancel(jid: str):
     j = jobs.get(jid)
     if not j or j["status"] != "running":
-        raise HTTPException(404, "Keine laufende Probe")
+        raise HTTPException(404, "No running test encode")
     proc = j.get("proc")
     if proc and proc.returncode is None:
         proc.terminate()
-    j.update(status="error", error="abgebrochen")
+    j.update(status="error", error="cancelled")
     return {"ok": True}

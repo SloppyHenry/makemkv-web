@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Attrappe für makemkvcon (nur Entwicklung, scripts/dev.sh stellt sie in den PATH).
+"""Fake makemkvcon (development only, scripts/dev.sh puts it into the PATH).
 
-Versteht die Aufrufe der App: `info dev:<Pfad>`, `info disc:9999` (Laufwerksliste), `mkv dev:<Pfad> <Titel> <Ordner>` und
-`backup --decrypt disc:<N> <Ordner>`. Die Disc stammt aus <DEV_DRIVE_DIR>/<Laufwerk>.json oder ist die Serien-Disc unten.
-Gerippt wird eine winzige Videodatei; der Fortschritt läuft in einigen Sekunden durch (DEV_RIP_SECONDS, Standard 8).
-Titel mit "fail": true scheitern beim Rippen; "source"/"segments" setzen die Attribute 16 und 26 (Playlist, Segmente).
+Understands the app's calls: `info dev:<path>`, `info disc:9999` (drive list), `mkv dev:<path> <title> <folder>` and
+`backup --decrypt disc:<N> <folder>`. The disc comes from <DEV_DRIVE_DIR>/<drive>.json or is the series disc below.
+A tiny video file is ripped; the progress runs through in a few seconds (DEV_RIP_SECONDS, default 8).
+Titles with "fail": true fail when ripping; "source"/"segments" set the attributes 16 and 26 (playlist, segments).
 """
 import json
 import os
@@ -15,7 +15,7 @@ from pathlib import Path
 
 DRIVES = Path(os.environ.get("DEV_DRIVE_DIR", "."))
 SECONDS = float(os.environ.get("DEV_RIP_SECONDS", "8"))
-EPISODES = [(2652, 7.1), (2620, 7.0), (2695, 7.2), (2601, 6.9), (2648, 7.1)]       # (Sekunden, GB)
+EPISODES = [(2652, 7.1), (2620, 7.0), (2695, 7.2), (2601, 6.9), (2648, 7.1)]       # (seconds, GB)
 
 
 def hms(s):
@@ -49,18 +49,18 @@ def drive_list():
         if p.suffix:
             continue
         if p.read_text().strip() == "ready":
-            out(f'DRV:{n},2,999,12,"BD-ROM Attrappe","{load_disc(str(p))["volume"]}","{p}"')
+            out(f'DRV:{n},2,999,12,"Fake BD-ROM","{load_disc(str(p))["volume"]}","{p}"')
         n += 1
 
 
 def info(dev):
     disc = load_disc(dev)
-    out('MSG:1005,0,1,"MakeMKV (Attrappe) gestartet","%1 gestartet","MakeMKV"')
-    out(f'DRV:0,2,999,12,"BD-ROM Attrappe","{disc["volume"]}","{dev}"')
+    out('MSG:1005,0,1,"MakeMKV (fake) started","%1 started","MakeMKV"')
+    out(f'DRV:0,2,999,12,"Fake BD-ROM","{disc["volume"]}","{dev}"')
     steps = 12
     for i in range(steps + 1):
         out(f'PRGV:{i * 100},{i * 100},{steps * 100}')
-        out('PRGT:3404,0,"Disc wird analysiert"')
+        out('PRGT:3404,0,"Analyzing disc"')
         time.sleep(0.25)
     out(f'TCOUNT:{len(disc["titles"])}')
     out(f'CINFO:1,6206,"{disc["type"]}"')
@@ -76,8 +76,8 @@ def info(dev):
         if ti.get("segments"):
             out(f'TINFO:{t},26,0,"{ti["segments"]}"')
         out(f'TINFO:{t},27,0,"{ti["name"]}_t{t:02d}.mkv"')
-        for s, (typ, codec, lang, code, extra) in enumerate([("Video", "MPEG-4 AVC", "", "", "1920x1080"), ("Audio", "DTS-HD MA", "Englisch", "eng", "5.1"),
-                                                             ("Audio", "AC3", "Deutsch", "deu", "5.1"), ("Subtitles", "PGS", "Deutsch", "deu", "")]):
+        for s, (typ, codec, lang, code, extra) in enumerate([("Video", "MPEG-4 AVC", "", "", "1920x1080"), ("Audio", "DTS-HD MA", "English", "eng", "5.1"),
+                                                             ("Audio", "AC3", "German", "deu", "5.1"), ("Subtitles", "PGS", "German", "deu", "")]):
             out(f'SINFO:{t},{s},1,0,"{typ}"')
             out(f'SINFO:{t},{s},6,0,"{codec}"')
             out(f'SINFO:{t},{s},28,0,"{code}"')
@@ -87,7 +87,7 @@ def info(dev):
                 out(f'SINFO:{t},{s},19,0,"{extra}"')
             if typ == "Audio":
                 out(f'SINFO:{t},{s},40,0,"{extra}"')
-    out(f'MSG:5011,0,1,"Operation erfolgreich abgeschlossen","%1","x"')
+    out(f'MSG:5011,0,1,"Operation successfully completed","%1","x"')
 
 
 def progress(text, secs):
@@ -101,26 +101,26 @@ def progress(text, secs):
 def mkv(dev, tid, folder):
     disc = load_disc(dev)
     t = disc["titles"][tid]
-    out(f'MSG:3007,0,0,"Titel {tid} wird gespeichert","%1","x"')
-    progress("Titel wird gespeichert", SECONDS)
-    if t.get("fail"):                     # Lesefehler nachstellen (Titel mit "fail": true in <Laufwerk>.json)
-        out('MSG:2003,0,3,"Fehler beim Lesen der Disc (Attrappe)","%1","x"')
+    out(f'MSG:3007,0,0,"Saving title {tid}","%1","x"')
+    progress("Saving title", SECONDS)
+    if t.get("fail"):                     # simulate a read error (titles with "fail": true in <drive>.json)
+        out('MSG:2003,0,3,"Error reading the disc (fake)","%1","x"')
         sys.exit(1)
     target = Path(folder) / f'{t["name"]}_t{tid:02d}.mkv'
     subprocess.run(["ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-f", "lavfi", "-i", "testsrc2=size=320x180:rate=10",
                     "-f", "lavfi", "-i", "sine=frequency=440", "-t", "3", "-c:v", "libx264", "-preset", "ultrafast", "-c:a", "aac",
                     "-metadata", f'title={t["name"]}', str(target)], check=True)
-    out('MSG:5036,0,1,"1 Titel gespeichert","%1 Titel gespeichert","1"')
+    out('MSG:5036,0,1,"1 titles saved","%1 titles saved","1"')
 
 
 def backup(folder):
-    out('MSG:3007,0,0,"Backup wird erstellt","%1","x"')
-    progress("Backup wird erstellt", SECONDS)
+    out('MSG:3007,0,0,"Creating backup","%1","x"')
+    progress("Creating backup", SECONDS)
     d = Path(folder) / "BDMV" / "STREAM"
     d.mkdir(parents=True, exist_ok=True)
     (d / "00000.m2ts").write_bytes(b"\0" * 2**20)
     (Path(folder) / "BDMV" / "index.bdmv").write_bytes(b"INDX0300")
-    out('MSG:5037,0,1,"Backup abgeschlossen","%1","x"')
+    out('MSG:5037,0,1,"Backup done","%1","x"')
 
 
 def main():
@@ -136,7 +136,7 @@ def main():
     elif cmd == "backup":
         backup(args[2])
     else:
-        print("Attrappe: unbekannter Aufruf", args, file=sys.stderr)
+        print("fake makemkvcon: unknown call", args, file=sys.stderr)
         return 2
     return 0
 

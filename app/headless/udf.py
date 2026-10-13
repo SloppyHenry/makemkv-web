@@ -1,9 +1,9 @@
-"""Kleiner Leser für das UDF-Dateisystem von DVD und Blu-ray: Verzeichnisse auflisten, Dateigrößen, kleine Dateien lesen.
+"""Small reader for the UDF file system of DVD and Blu-ray: list directories, file sizes, read small files.
 
-Liest direkt vom Gerät (ohne Einhängen, der Container darf das nicht) oder aus einer Abbilddatei. Das Dateisystem selbst ist auf
-kopiergeschützten Discs nicht verschlüsselt; gelesen werden nur Verwaltungsdaten und kleine Dateien (IFO, Unit_Key_RO.inf).
-Unterstützt UDF 1.02–2.60 mit Typ-1-Partition und (Blu-ray, UDF 2.50) Metadaten-Partition. Vorbild ist libudfread (VLC/libbluray):
-Verwaltungsdaten (File Entries, Verzeichnisse) liegen in der Partition des Verweises, Dateiinhalte immer in der physischen Partition.
+Reads directly from the device (without mounting, the container may not do that) or from an image file. The file system itself is
+not encrypted on copy-protected discs; only management data and small files (IFO, Unit_Key_RO.inf) are read.
+Supports UDF 1.02–2.60 with a type 1 partition and (Blu-ray, UDF 2.50) a metadata partition. Modeled on libudfread (VLC/libbluray):
+management data (file entries, directories) lives in the partition of the reference, file contents always in the physical partition.
 """
 import os
 import struct
@@ -22,8 +22,8 @@ class UdfError(Exception):
 class Entry:
     name: str
     is_dir: bool
-    ref: int        # Partitionsverweis (Index der Partition Map) der ICB
-    lba: int        # Block der ICB innerhalb dieser Partition
+    ref: int        # partition reference (index of the partition map) of the ICB
+    lba: int        # block of the ICB within this partition
 
 
 def _u16(b, o):
@@ -41,7 +41,7 @@ def _tag(b) -> int:
 
 
 def _dstring(raw: bytes) -> str:
-    """OSTA-CS0: erstes Byte 8 = 8 Bit je Zeichen, 16 = UTF-16BE."""
+    """OSTA-CS0: first byte 8 = 8 bits per character, 16 = UTF-16BE."""
     if not raw:
         return ""
     if raw[0] == 16:
@@ -54,22 +54,22 @@ class Udf:
         """read_blocks(lba, n) -> bytes (n * 2048)."""
         self._read = read_blocks
         self.phys_start = None
-        self.part_base: dict[int, int] = {}       # Partitionsverweis -> absoluter Startblock (Metadaten: Start der Metadaten-Datei)
+        self.part_base: dict[int, int] = {}       # partition reference -> absolute start block (metadata: start of the metadata file)
         self.mirror_base: dict[int, int] = {}
         self.phys_refs: set[int] = set()
         self._mount()
 
-    # ------------------------------------------------------------ Datenträger
+    # ------------------------------------------------------------ volume
     def _block(self, lba: int, n: int = 1) -> bytes:
         b = self._read(lba, n)
         if len(b) < n * BLOCK:
-            raise UdfError(f"Block {lba} nicht lesbar")
+            raise UdfError(f"Block {lba} not readable")
         return b
 
     def _mount(self):
         avdp = self._block(256)
         if _tag(avdp) != TAG_AVDP:
-            raise UdfError("kein UDF-Dateisystem (Anker an Block 256 fehlt)")
+            raise UdfError("not a UDF file system (anchor at block 256 missing)")
         length, loc = _u32(avdp, 16), _u32(avdp, 20)
         pd, lvd = None, None
         for i in range(max(1, min(length // BLOCK, 64))):
@@ -82,9 +82,9 @@ class Udf:
             elif t == TAG_TD:
                 break
         if pd is None or lvd is None:
-            raise UdfError("Partitions- oder Volume-Beschreibung fehlt")
+            raise UdfError("partition or volume descriptor missing")
         if _u32(lvd, 212) != BLOCK:
-            raise UdfError("unerwartete Blockgröße")
+            raise UdfError("unexpected block size")
         pd_number, self.phys_start = _u16(pd, 22), _u32(pd, 188)
         self._maps(lvd, pd_number)
         self.fsd_ref, self.fsd_lba = _u16(lvd, 256), _u32(lvd, 252)
@@ -106,12 +106,12 @@ class Udf:
                 ident = lvd[m + 5:m + 28].rstrip(b"\0 ")
                 if ident.startswith(b"*UDF Metadata Partition"):
                     meta.append((i, _u32(lvd, m + 40), _u32(lvd, m + 44)))
-                elif ident.startswith(b"*UDF Sparable Partition"):      # Datenträger mit Ersatzbereichen: wie physisch behandeln
+                elif ident.startswith(b"*UDF Sparable Partition"):      # media with spare areas: treat as physical
                     self.part_base[i] = self.phys_start
                     self.phys_refs.add(i)
             m += ln
         if not self.phys_refs:
-            raise UdfError("keine physische Partition")
+            raise UdfError("no physical partition")
         for ref, loc, mirror in meta:
             self._map_metadata(ref, loc, mirror)
 
@@ -133,12 +133,12 @@ class Udf:
         if ref not in self.part_base and ref in self.mirror_base:
             self.part_base[ref] = self.mirror_base.pop(ref)
         if ref not in self.part_base:
-            raise UdfError("Metadaten-Partition nicht lesbar")
+            raise UdfError("metadata partition not readable")
 
     def _meta_blocks(self, ref: int, lba: int, n: int = 1) -> bytes:
-        """Verwaltungsdaten lesen (bei Lesefehler aus der Spiegelkopie)."""
+        """Read management data (from the mirror copy on read errors)."""
         if ref not in self.part_base:
-            raise UdfError(f"unbekannte Partition {ref}")
+            raise UdfError(f"unknown partition {ref}")
         try:
             return self._block(self.part_base[ref] + lba, n)
         except (UdfError, OSError):
@@ -154,21 +154,21 @@ class Udf:
         elif tag == TAG_EFE:
             l_ea, l_ad, base = _u32(b, 208), _u32(b, 212), 216
         else:
-            raise UdfError(f"kein File Entry (Tag {tag})")
+            raise UdfError(f"not a file entry (tag {tag})")
         ftype, ad_type = b[27], _u16(b, 34) & 7
         size = struct.unpack_from("<Q", b, 56)[0]
         start = base + l_ea
         if start + l_ad > len(b):
-            raise UdfError("File Entry beschädigt")
+            raise UdfError("file entry damaged")
         if ad_type == 3:
             return {"type": ftype, "size": size, "inline": bytes(b[start:start + l_ad]), "ads": []}
         return {"type": ftype, "size": size, "inline": None, "ads": self._ads(b[start:start + l_ad], ad_type, ref)}
 
     def _ads(self, raw: bytes, ad_type: int, ref: int, depth: int = 0) -> list[tuple[int, int, int]]:
-        """Allocation Descriptors -> [(Partitionsverweis, Block, Länge in Bytes)]; Fortsetzungen werden nachgelesen."""
+        """Allocation descriptors -> [(partition reference, block, length in bytes)]; continuations are read as well."""
         out, step = [], {0: 8, 1: 16, 2: 20}.get(ad_type)
         if step is None:
-            raise UdfError(f"unbekannte Belegungsart {ad_type}")
+            raise UdfError(f"unknown allocation type {ad_type}")
         for o in range(0, len(raw) - step + 1, step):
             v = _u32(raw, o)
             length, kind = v & 0x3FFFFFFF, v >> 30
@@ -180,12 +180,12 @@ class Udf:
                 lba, pref = _u32(raw, o + 4), _u16(raw, o + 8)
             else:
                 lba, pref = _u32(raw, o + 12), _u16(raw, o + 16)
-            if kind == 3:                                   # weitere Descriptoren in einem eigenen Block
+            if kind == 3:                                   # more descriptors in a block of their own
                 if depth > 8:
-                    raise UdfError("zu viele Fortsetzungen")
+                    raise UdfError("too many continuations")
                 b = self._meta_blocks(pref, lba)
                 if _tag(b) != TAG_AED:
-                    raise UdfError("Fortsetzung der Belegung beschädigt")
+                    raise UdfError("continuation of the allocation damaged")
                 out += self._ads(b[24:24 + _u32(b, 20)], ad_type, ref, depth + 1)
                 break
             if kind == 0:
@@ -195,11 +195,11 @@ class Udf:
     def _fe(self, e: Entry) -> dict:
         return self._parse_fe(self._meta_blocks(e.ref, e.lba), e.ref)
 
-    # ------------------------------------------------------------ Verzeichnisse
+    # ------------------------------------------------------------ directories
     def root(self) -> Entry:
         fsd = self._meta_blocks(self.fsd_ref, self.fsd_lba)
         if _tag(fsd) != TAG_FSD:
-            raise UdfError("File Set Descriptor fehlt")
+            raise UdfError("file set descriptor missing")
         return Entry("", True, _u16(fsd, 400 + 8), _u32(fsd, 400 + 4))
 
     def _dir_bytes(self, fe: dict) -> bytes:
@@ -213,7 +213,7 @@ class Udf:
     def listdir(self, d: Entry) -> list[Entry]:
         fe = self._fe(d)
         if fe["type"] != FT_DIR:
-            raise UdfError(f"{d.name or '/'} ist kein Verzeichnis")
+            raise UdfError(f"{d.name or '/'} is not a directory")
         raw, o, out = self._dir_bytes(fe), 0, []
         while o + 38 <= len(raw):
             if _u16(raw, o) != TAG_FID:
@@ -221,13 +221,13 @@ class Udf:
             chars, l_fi, l_iu = raw[o + 18], raw[o + 19], _u16(raw, o + 36)
             icb_lba, icb_ref = _u32(raw, o + 24), _u16(raw, o + 28)
             name = _dstring(raw[o + 38 + l_iu:o + 38 + l_iu + l_fi])
-            if not chars & 0x0C and name:                   # nicht gelöscht, kein Elternverweis
+            if not chars & 0x0C and name:                   # not deleted, not a parent reference
                 out.append(Entry(name, bool(chars & 0x02), icb_ref, icb_lba))
             o += (38 + l_iu + l_fi + 3) & ~3
         return out
 
     def find(self, path: str) -> Entry | None:
-        """Pfad wie „BDMV/STREAM“ ohne Rücksicht auf Groß-/Kleinschreibung."""
+        """Path like "BDMV/STREAM", case-insensitive."""
         e = self.root()
         for part in [p for p in path.split("/") if p]:
             if not e.is_dir:
@@ -241,10 +241,10 @@ class Udf:
         return self._fe(e)["size"]
 
     def read(self, e: Entry, limit: int = 16 * 2**20) -> bytes:
-        """Kleine Datei lesen. Dateiinhalte liegen immer in der physischen Partition."""
+        """Read a small file. File contents always live in the physical partition."""
         fe = self._fe(e)
         if fe["size"] > limit:
-            raise UdfError(f"{e.name} ist zu groß ({fe['size']} Bytes)")
+            raise UdfError(f"{e.name} is too large ({fe['size']} bytes)")
         if fe["inline"] is not None:
             return fe["inline"][:fe["size"]]
         out = bytearray()
@@ -254,7 +254,7 @@ class Udf:
 
 
 def open_device(path: str):
-    """Gerät oder Abbild öffnen. Rückgabe (Udf, close)."""
+    """Open a device or an image. Returns (Udf, close)."""
     fd = os.open(path, os.O_RDONLY)
 
     def read_blocks(lba: int, n: int) -> bytes:

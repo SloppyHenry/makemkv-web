@@ -1,5 +1,5 @@
-// Meldet „files-changed“, wenn ein Rip endet oder eine Übertragung fertig wird; die Bibliothek u. a. laden dann neu.
-// (Die frühere Kachel „Fertige Dateien“ in Laufwerke ist entfallen – alle Dateien zeigt die Bibliothek.)
+// Emits "files-changed" when a rip ends or a transfer finishes; the library and others reload then.
+// (The former "Finished files" tile under Drives is gone – the library shows all files.)
 import { emit, onState } from './registry.js';
 
 const wasBusy = {};

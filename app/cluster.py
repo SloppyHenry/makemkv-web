@@ -1,7 +1,7 @@
-"""Verbund: andere Rechner abfragen, Aktionen weiterleiten, Konvertierungen übergeben.
+"""Cluster: poll other machines, forward actions, hand over conversions.
 
-Die Rechnerliste kommt aus app/nodes_store.py (DATA/nodes.json); jeder Rechner wird von einer eigenen Aufgabe abgefragt, damit
-ein ausgefallener Rechner die anderen nicht aufhält. Gekoppelte Rechner tragen bei jedem Aufruf das Token (`X-Node-Token`).
+The machine list comes from app/nodes_store.py (DATA/nodes.json); every machine is polled by its own task, so that
+a failed machine does not hold up the others. Paired machines carry the token on every call (`X-Node-Token`).
 """
 import asyncio
 import json
@@ -21,11 +21,11 @@ from app.state import CV_ACTIVE, broadcast, conversions, drives, peers_state
 
 router = APIRouter()
 PEER_POLL_S = 3.0
-WHOAMI_S = 30.0         # so oft prüft ein gekoppelter Rechner, ob die Gegenseite die Kopplung noch kennt
+WHOAMI_S = 30.0         # how often a paired machine checks whether the other side still knows the pairing
 
 
 def parse_peers(raw: str) -> dict[str, str]:
-    """Umgebungsvariable PEERS („name=http://host:8780,…“) – nur noch Vorbelegung der Rechnerliste (Migration)."""
+    """Environment variable PEERS ("name=http://host:8780,…") – only used to pre-fill the machine list (migration)."""
     out: dict[str, str] = {}
     for part in raw.split(","):
         name, _, url = part.strip().partition("=")
@@ -46,7 +46,7 @@ def _http_json(url: str, body: dict | None = None, timeout: float = 4.0, token: 
 
 
 def _peer_json(base_url: str, path: str, body: dict | None = None, timeout: float = 4.0):
-    """Aufruf eines Rechners der Liste (mit seinem Token, falls gekoppelt). `path` ohne /api/."""
+    """Call a machine from the list (with its token if paired). `path` without /api/."""
     return _http_json(f"{base_url}/api/{path}", body, timeout, store.token_for_url(base_url))
 
 
@@ -58,16 +58,16 @@ def _http_detail(e: urllib.error.HTTPError) -> str:
 
 
 async def peer_call(name: str, path: str, body: dict | None = None, timeout: float = 15.0):
-    """Für andere Module: `await cluster.peer_call("maintux", "library/convert", {...})`. Wirft HTTPException bei Fehlern."""
+    """For other modules: `await cluster.peer_call("maintux", "library/convert", {...})`. Raises HTTPException on errors."""
     n = store.by_name(name)
     if not n or not store.active():
-        raise HTTPException(404, f"Rechner {name} ist nicht in der Liste.")
+        raise HTTPException(404, f"Machine {name} is not in the list.")
     try:
         return await asyncio.to_thread(_http_json, f"{n['url']}/api/{path}", body if body is not None else {}, timeout, n["token"])
     except urllib.error.HTTPError as e:
         raise HTTPException(e.code, _http_detail(e))
     except Exception as e:  # noqa: BLE001
-        raise HTTPException(502, f"{name} antwortet nicht: {e}")
+        raise HTTPException(502, f"{name} does not respond: {e}")
 
 
 def _trust(n: dict, lost: bool) -> str:
@@ -87,10 +87,10 @@ def _entry(n: dict, d: dict, old: dict | None, lost: bool) -> dict:
             "instance": cap.get("instance", n["name"]), "cores": cap.get("cores", 0), "load": cap.get("load", 0), "conv_active": cap.get("conv_active", 0),
             "conv_paused": cap.get("conv_paused", False), "has_handover": bool(cap), "now": d.get("now", 0),
             "conversions": d.get("conversions", []), "uploads": d.get("uploads", []), "jobs": jobs,
-            "drives": d.get("drives", []), "output": d.get("output"),          # Laufwerke samt Disc/Titeln/Protokoll: für die Fernsteuerung
+            "drives": d.get("drives", []), "output": d.get("output"),          # drives including disc/titles/log: for remote control
             "capabilities": caps,
-            "headless": d.get("headless"),                                    # Headless-Modus des Rechners (Schalter, Protokoll)
-            # Paket C: Identität, Vertrauen, Version
+            "headless": d.get("headless"),                                    # the machine's headless mode (switch, log)
+            # package C: identity, trust, version
             "nid": n["nid"], "id": node.get("id") or n.get("id", ""), "trust": _trust(n, lost),
             "legacy": not caps.get("nodes"), "version": caps.get("version", ""), "mem": node.get("mem", 0), "started": node.get("started", 0),
             "last_seen": now, "online_since": (old or {}).get("online_since") if (old or {}).get("reachable") else now,
@@ -105,7 +105,7 @@ def _offline(n: dict, old: dict | None, lost: bool) -> dict:
 
 
 async def _whoami(n: dict):
-    """True/False: Gegenseite kennt unser Token (nicht); None: unklar (alter Rechner, Fehler)."""
+    """True/False: the other side knows (does not know) our token; None: unclear (old machine, error)."""
     try:
         r = await asyncio.to_thread(_http_json, n["url"] + "/api/nodes/whoami", None, 4.0, n["token"])
         return bool(r.get("paired"))
@@ -125,7 +125,7 @@ async def _poll_node(nid: str):
         old = peers_state.get(n["name"])
         if n.get("token") and time.time() - who_t > (WHOAMI_S if not misses else 6.0):
             who_t, w = time.time(), await _whoami(n)
-            if w is False:          # erst nach zwei Fehlschlägen: direkt nach dem Koppeln kennt die Gegenseite das Token evtl. noch nicht
+            if w is False:          # only after two failures: right after pairing the other side may not know the token yet
                 misses += 1
                 lost = misses >= 2
             elif w:
@@ -154,7 +154,7 @@ _running = False
 
 
 async def peer_prober():
-    """Überwacht die Rechnerliste und startet/beendet je Rechner eine Abfrage-Aufgabe. Läuft höchstens einmal."""
+    """Watches the machine list and starts/stops one polling task per machine. Runs at most once."""
     global _running
     if _running:
         return
@@ -176,10 +176,10 @@ async def peer_prober():
 
 
 def cfg_for_peer(cfg: dict, peer: dict | None) -> tuple[dict | None, str]:
-    """Einstellungen so, wie der andere Rechner sie versteht – oder (None, Grund), wenn er den Auftrag nicht ausführen kann.
-    Rechner mit altem Stand bekommen nur die fünf alten Felder (und nur, wenn sich der Auftrag so ausdrücken lässt)."""
+    """Settings the way the other machine understands them – or (None, reason) if it cannot run the job.
+    Machines with an old version only get the five old fields (and only if the job can be expressed that way)."""
     if not peer:
-        return None, "unbekannter Rechner"
+        return None, "unknown machine"
     ok_, why = convert_caps.peer_ok(cfg, peer)
     if not ok_:
         return None, why
@@ -188,7 +188,7 @@ def cfg_for_peer(cfg: dict, peer: dict | None) -> tuple[dict | None, str]:
 
 
 async def hand_to_peer_after_upload(item: dict, base: Path, dr):
-    """Übergabe einer frisch ins NAS übertragenen Datei: der andere Rechner konvertiert sie als Bibliotheks-Auftrag."""
+    """Hand-over of a file freshly transferred to the NAS: the other machine converts it as a library job."""
     t = item["then_convert"]
     try:
         rel = str(Path(item["dest"]).relative_to(base.resolve())) if item.get("dest") else item["name"]
@@ -197,30 +197,30 @@ async def hand_to_peer_after_upload(item: dict, base: Path, dr):
             raise RuntimeError(why)
         r = await asyncio.to_thread(_peer_json, t["url"], "library/convert", {"paths": [rel], "convert": cfg}, 15.0)
         ok_ = rel in r.get("started", [])
-        msg = f"Zur Konvertierung an {t['name']} übergeben: {rel}" if ok_ else f"{t['name']} hat {rel} nicht angenommen: {r.get('skipped')}"
+        msg = f"Handed over to {t['name']} for conversion: {rel}" if ok_ else f"{t['name']} did not accept {rel}: {r.get('skipped')}"
         if dr:
             dr.add_log(msg, "ok" if ok_ else "error")
         if not ok_:
             item["error"] = msg
     except Exception as e:  # noqa: BLE001
-        item["error"] = f"Übergabe an {t['name']} fehlgeschlagen: {e}"
+        item["error"] = f"Hand-over to {t['name']} failed: {e}"
         if dr:
-            dr.add_log(item["error"] + " – die Datei liegt unverändert im Ziel (Bibliothek → konvertieren).", "error")
+            dr.add_log(item["error"] + " – the file stays unchanged in the target (Library → convert).", "error")
 
 
-@router.post("/api/peer/{name}/{pfad:path}")
-async def api_peer_proxy(name: str, pfad: str, request: Request):
-    """Aktion auf einem anderen Rechner auslösen (der Browser spricht nur mit diesem Server)."""
+@router.post("/api/peer/{name}/{path:path}")
+async def api_peer_proxy(name: str, path: str, request: Request):
+    """Trigger an action on another machine (the browser only talks to this server)."""
     peer = peers_state.get(name)
     if not peer or not peer.get("reachable"):
-        raise HTTPException(409, f"{name} ist nicht erreichbar.")
-    if not ext.proxy_ok(pfad):
-        raise HTTPException(404, "Diese Aktion lässt sich nicht an einen anderen Rechner weiterleiten.")
+        raise HTTPException(409, f"{name} is not reachable.")
+    if not ext.proxy_ok(path):
+        raise HTTPException(404, "This action cannot be forwarded to another machine.")
     raw = await request.body()
     body = json.loads(raw) if raw else {}
     if not isinstance(body, dict):
-        raise HTTPException(400, "Ungültige Anfrage")
-    return await peer_call(name, pfad, body, 30.0)
+        raise HTTPException(400, "Invalid request")
+    return await peer_call(name, path, body, 30.0)
 
 
 class HandoverReq(BaseModel):
@@ -231,11 +231,11 @@ class HandoverReq(BaseModel):
 async def api_handover(req: HandoverReq):
     peer = peers_state.get(req.target)
     if not peer or not peer.get("reachable"):
-        raise HTTPException(409, f"{req.target} ist nicht erreichbar.")
+        raise HTTPException(409, f"{req.target} is not reachable.")
     if not peer.get("has_handover"):
-        raise HTTPException(409, f"{req.target} läuft noch mit einer älteren Version ohne Übergabe – dort zuerst aktualisieren.")
+        raise HTTPException(409, f"{req.target} still runs an older version without hand-over – update it there first.")
     if any(d.job for d in drives.values()):
-        raise HTTPException(409, "Ein Rip, Backup oder eine Analyse läuft – das Laufwerk hängt an diesem Rechner. Erst abwarten oder abbrechen.")
+        raise HTTPException(409, "A rip, backup or analysis is running – the drive is attached to this machine. Wait for it or cancel it first.")
     handed, errors = [], []
     for c in [c for c in conversions if c["status"] in CV_ACTIVE]:
         label = c["name"]
@@ -244,7 +244,7 @@ async def api_handover(req: HandoverReq):
             errors.append(f"{label}: {req.target} {why}")
             continue
         if c.get("origin") == "library":
-            # Der andere Rechner übernimmt die Sperre (gleicher Besitzer), ich gebe sie nur auf, ohne die Datei freizugeben.
+            # The other machine takes over the lock (same owner); I only give it up without releasing the file.
             try:
                 r = await asyncio.to_thread(_peer_json, peer["url"], "library/convert",
                                             {"paths": [c["rel"]], "convert": cfg, "takeover_from": INSTANCE}, 15.0)
@@ -257,7 +257,7 @@ async def api_handover(req: HandoverReq):
             held_locks.discard(c["lock"])
             c["lock"] = ""
         else:
-            c["handover"] = {"url": peer["url"], "name": req.target}     # Original geht erst ins NAS, dann zum anderen Rechner
+            c["handover"] = {"url": peer["url"], "name": req.target}     # the original goes to the NAS first, then to the other machine
         c["handed"] = req.target
         convert.skip_conversion(c)
         handed.append(label)

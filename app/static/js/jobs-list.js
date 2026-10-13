@@ -1,9 +1,9 @@
-// Schlüsselweise aktualisierte Auftragsliste: pro Auftrag bleibt ein DOM-Element bestehen, es ändern sich nur Text, Balken und Knöpfe.
-// So wird der drehende Kreis nie neu erzeugt (die CSS-Animation würde sonst bei jeder Statusmeldung bei 0° beginnen).
+// Job list updated by key: one DOM element per job stays in place, only text, bar and buttons change.
+// That way the spinning circle is never recreated (otherwise the CSS animation would restart at 0° on every status message).
 import { esc } from './core.js';
 
-// Drehphase an die Uhr koppeln: alle Kreise laufen im Gleichtakt, und ein neu eingefügtes oder verschobenes Element
-// springt nicht auf 0° zurück (die Animation beginnt dann dort, wo sie nach der Uhr gerade stünde).
+// Tie the spin phase to the clock: all circles turn in sync, and a newly inserted or moved element
+// does not jump back to 0° (the animation then starts where it would currently be according to the clock).
 export const syncSpin = (el, ms = 1000) => { if(el) el.style.animationDelay = `-${Date.now() % ms}ms`; };
 
 const ROW = `<span class="status-check" aria-hidden="true"></span>
@@ -23,7 +23,7 @@ function makeRow(key){
   return el;
 }
 
-// Wert nur schreiben, wenn er sich geändert hat (kein unnötiger Eingriff ins DOM)
+// Write a value only if it changed (no needless DOM changes)
 const changed = (el, k, v) => { if(el._v[k] === v) return false; el._v[k] = v; return true; };
 
 // m: {iconCls, iconTxt, name, title, host, cls, txt, small, err, pct, acts}
@@ -42,16 +42,16 @@ function updateRow(el, m){
   if(changed(el, 'err', m.err)) r.small.classList.toggle('err', m.err);
   if(changed(el, 'bar', m.pct === null ? -1 : m.pct)){
     r.bar.hidden = m.pct === null;
-    if(m.pct !== null){ r.fill.style.width = m.pct + '%'; r.bar.setAttribute('role', 'progressbar'); r.bar.setAttribute('aria-valuenow', m.pct); r.bar.setAttribute('aria-label', 'Fortschritt'); }
+    if(m.pct !== null){ r.fill.style.width = m.pct + '%'; r.bar.setAttribute('role', 'progressbar'); r.bar.setAttribute('aria-valuenow', m.pct); r.bar.setAttribute('aria-label', 'Progress'); }
   }
   if(changed(el, 'acts', m.acts)) r.act.innerHTML = m.acts;
 }
 
-// Knöpfe einer Zeile: Text und Symbol, je nach Breite der Liste (css/jobs.css, Container Query) wird eins von beiden gezeigt
+// Buttons of a row: text and symbol; depending on the list's width (css/jobs.css, container query) one of them is shown
 export const jobBtn = (attrs, symbol, label, title, extra = '') =>
   `<button class="secondary job-btn ${extra}" ${attrs} title="${esc(title)}" aria-label="${esc(label)}"><span class="bi" aria-hidden="true">${symbol}</span><span class="bl">${label}</span></button>`;
 
-// Liste `list` auf `items` bringen. items: [{key, model}]. Gleiche Schlüssel behalten ihr Element.
+// Bring `list` in line with `items`. items: [{key, model}]. Equal keys keep their element.
 export function reconcileJobs(list, items, emptyText){
   const rows = list._rows ||= new Map();
   const want = new Set(items.map(i => i.key));
@@ -69,7 +69,7 @@ export function reconcileJobs(list, items, emptyText){
     updateRow(el, i.model);
     return el;
   });
-  // Reihenfolge herstellen: von hinten her, damit möglichst nur das Element bewegt wird, das wirklich woanders hin soll
+  // establish the order: from the back, so that ideally only the element that really has to move is moved
   let next = null;
   for(let i = els.length - 1; i >= 0; i--){
     const el = els[i];

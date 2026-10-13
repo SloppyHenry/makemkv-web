@@ -1,8 +1,8 @@
-"""Optionaler Passwortschutz (HTTP Basic) mit zwei Ausnahmen für den Rechnerverbund (Paket C):
+"""Optional password protection (HTTP Basic) with two exceptions for the machine cluster (package C):
 
-- Gekoppelte Rechner weisen sich mit dem Kopplungs-Token aus (Kopfzeile `X-Node-Token`) und kommen auch bei gesetztem
-  Passwort durch. Wer das Token prüft, meldet sich über `register_token_checker` an (app/nodes.py).
-- Wenige Pfade müssen vor der Kopplung ohne Anmeldung erreichbar sein (Erkennung, Kopplungsanfrage): `allow_public`.
+- Paired machines identify themselves with the pairing token (header `X-Node-Token`) and get through even when a
+  password is set. Whoever checks the token registers via `register_token_checker` (app/nodes.py).
+- A few paths must be reachable without login before pairing (discovery, pairing request): `allow_public`.
 """
 import base64
 import re
@@ -17,12 +17,12 @@ public_paths: list[re.Pattern] = []
 
 
 def register_token_checker(fn: Callable[[str], bool]) -> None:
-    """`fn(token) -> bool`: gehört das Token zu einem gekoppelten Rechner?"""
+    """`fn(token) -> bool`: does the token belong to a paired machine?"""
     token_checkers.append(fn)
 
 
 def allow_public(pattern: str) -> None:
-    """Pfad (vollständig, mit /api/) ist auch ohne Passwort erreichbar."""
+    """Path (complete, with /api/) is reachable without a password too."""
     public_paths.append(re.compile(pattern))
 
 

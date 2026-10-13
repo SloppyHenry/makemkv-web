@@ -1,8 +1,8 @@
-"""Bibliothek: Angaben zu einer Datei (aus ffprobe), Einordnung, Prüfung gegen Konvertierungs-Einstellungen und Einsparungs-Schätzung."""
+"""Library: details about a file (from ffprobe), classification, checks against conversion settings and the savings estimate."""
 from app import convert_caps, convert_stats
 from app.config import LIB_CODECS
 
-INFO_VERSION = 3           # ältere Cache-Einträge ohne die neuen Felder werden neu geprüft
+INFO_VERSION = 3           # older cache entries without the new fields are probed again
 AUDIO_BPS = convert_stats.AUDIO_BPS
 
 
@@ -50,7 +50,7 @@ def lib_state(info) -> str:
 
 
 def kind_of(info: dict) -> str:
-    """'sd' | 'hd' | 'uhd' – bestimmt das Standard-Preset."""
+    """'sd' | 'hd' | 'uhd' – determines the default preset."""
     if info["h"] >= 1600 or info["w"] >= 3000:
         return "uhd"
     return "hd" if info["h"] >= 700 or info["w"] >= 1200 else "sd"
@@ -60,7 +60,7 @@ DISC_KIND = {"sd": "dvd", "hd": "bluray", "uhd": "uhd"}
 
 
 def pseudo_probe(info: dict) -> dict:
-    """Aus den gespeicherten Angaben ein ffprobe-ähnliches Ergebnis (für Prüfungen, die nur Codec/HDR/Spuren brauchen)."""
+    """An ffprobe-like result from the stored details (for checks that only need codec/HDR/tracks)."""
     st = [{"codec_type": "video", "codec_name": info["codec"], "width": info["w"], "height": info["h"], "color_transfer": "smpte2084" if info.get("hdr_fmt") == "HDR10" else
            "arib-std-b67" if info.get("hdr_fmt") == "HLG" else "", "r_frame_rate": f"{round((info.get('fps') or 24) * 1000)}/1000"}]
     st += [{"codec_type": "audio", "channels": a["ch"], "tags": {"language": a["lang"]}} for a in info.get("alist", [])]
@@ -69,11 +69,11 @@ def pseudo_probe(info: dict) -> dict:
 
 
 def file_issue(cfg: dict, info: dict | None, rel: str = "") -> str:
-    """Warum diese Datei mit diesen Einstellungen nicht konvertiert werden soll ('' = in Ordnung)."""
+    """Why this file should not be converted with these settings ('' = fine)."""
     if rel and not rel.lower().endswith(".mkv"):
-        return "nur MKV-Dateien lassen sich konvertieren"
+        return "only MKV files can be converted"
     if info is None:
-        return "nicht lesbar"
+        return "not readable"
     pp = pseudo_probe(info)
     if why := convert_caps.unusable(cfg, pp):
         return why
@@ -82,18 +82,18 @@ def file_issue(cfg: dict, info: dict | None, rel: str = "") -> str:
     changes = (p["scale"] != "keep" or p["denoise"] != "off" or p["deint"] != "off" or p["hdr"] == "tonemap" or snd["mode"] != "copy" or cfg["subs"]["mode"] != "all"
                or cfg["quality"]["mode"] != "crf")
     if same_family and not changes:
-        return "ist bereits " + ("HEVC" if info["codec"] == "hevc" else "AV1")
+        return "is already " + ("HEVC" if info["codec"] == "hevc" else "AV1")
     return ""
 
 
 def default_cfg(info: dict) -> tuple[str, dict]:
-    from app import convert_presets            # erst zur Laufzeit (lädt Einstellungen und Presets)
+    from app import convert_presets            # only at runtime (loads settings and presets)
     d = convert_presets.default_for(DISC_KIND[kind_of(info)])
     return d["id"], d["cfg"]
 
 
 def estimate(info: dict, size: int) -> dict:
-    """Erwartete Größe nach der Konvertierung mit dem Standard-Preset dieser Disc-Art."""
+    """Expected size after conversion with the default preset for this disc type."""
     pid, cfg = default_cfg(info)
     src = {"size": size, "dur": info["dur"], "w": info["w"], "h": info["h"], "fps": info.get("fps") or 24.0, "audio": info["audio"], "abytes": info.get("abytes", 0)}
     b, n = convert_stats.estimate_size(cfg, src)

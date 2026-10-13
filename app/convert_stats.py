@@ -1,7 +1,7 @@
-"""Statistik bisheriger Konvertierungen (DATA/conv_stats.json) und Vorhersage von Zielgröße und Dauer.
+"""Statistics of previous conversions (DATA/conv_stats.json) and prediction of target size and duration.
 
-Das Modell rechnet zuerst mit Faustwerten (Bits je Pixel je Codec, Bilder je Sekunde je Kern) und wird mit jeder fertigen Konvertierung
-genauer: Größe über das Verhältnis „tatsächlich / Modell“, Tempo über die gemessene Geschwindigkeit je Kern, jeweils als Median.
+The model first calculates with rules of thumb (bits per pixel per codec, frames per second per core) and gets more precise with every
+finished conversion: size via the ratio "actual / model", speed via the measured speed per core, each as a median.
 """
 import json
 import math
@@ -15,7 +15,7 @@ from app.convert_schema import CODECS, crf_to_level, level_to_crf
 STATS = DATA / "conv_stats.json"
 MAX_RECORDS = 400
 records: list[dict] = []
-FPS_PER_CORE = {"x265": 0.95, "x264": 3.5, "svtav1": 1.2}       # Bilder/s je Kern bei 1080p und „relativer Zeit 1“ (x265 medium, x264 medium, SVT-AV1 ca. Preset 6)
+FPS_PER_CORE = {"x265": 0.95, "x264": 3.5, "svtav1": 1.2}       # frames/s per core at 1080p and "relative time 1" (x265 medium, x264 medium, SVT-AV1 about preset 6)
 HW_FPS = 70.0
 REF_PX = 1920 * 1080
 AUDIO_BPS = {"truehd": 4_000_000, "dts": 1_500_000, "flac": 1_000_000, "ac3": 448_000, "eac3": 640_000, "aac": 192_000, "mp3": 192_000, "opus": 128_000}
@@ -55,7 +55,7 @@ def rel_time(cfg: dict) -> float:
 
 
 def audio_bytes(audio: list, dur: float) -> int:
-    """Grobe Größe der Tonspuren aus Codecnamen (lib_info liefert 'codec Kanäle Sprache')."""
+    """Rough size of the audio tracks from codec names (lib_info returns 'codec channels language')."""
     tot = 0
     for a in audio:
         name = str(a).split()[0].lower() if a else ""
@@ -64,7 +64,7 @@ def audio_bytes(audio: list, dur: float) -> int:
 
 
 def model_bytes(cfg: dict, src: dict) -> int:
-    """Erwartete Größe des Ergebnisses ohne Statistik. src: size, dur, w, h, fps, audio (Liste), abytes (optional)."""
+    """Expected size of the result without statistics. src: size, dur, w, h, fps, audio (list), abytes (optional)."""
     v, q = cfg["video"], cfg["quality"]
     dur = max(1.0, float(src.get("dur") or 1))
     abytes = src.get("abytes") or audio_bytes(src.get("audio") or [], dur)
@@ -78,14 +78,14 @@ def model_bytes(cfg: dict, src: dict) -> int:
         eq = level_to_crf("x265", crf_to_level(v["codec"], q["crf"]))
         bpp = 0.09 * CODECS[v["codec"]]["bpp"] * 2 ** ((20 - eq) / 6)
         bpp *= {"grain": 1.35, "animation": 0.8}.get(v["tune"], 1) * {"light": 0.93, "medium": 0.85}.get(cfg["picture"]["denoise"], 1)
-        bpp *= 1 - 0.025 * math.log2(rel_time(cfg))          # jede Stufe langsamer spart etwas Platz
+        bpp *= 1 - 0.025 * math.log2(rel_time(cfg))          # every slower level saves some space
         px = out_px(int(src.get("w") or 1920), int(src.get("h") or 1080), cfg["picture"]["scale"])
         vid = min(px * float(src.get("fps") or 24) * bpp * dur / 8, max(0, src["size"] - abytes) * 0.85)
     return int(vid + audio_out_bytes(cfg, src, abytes, dur))
 
 
 def audio_out_bytes(cfg: dict, src: dict, abytes: int = 0, dur: float = 0) -> int:
-    """Größe der Tonspuren im Ergebnis."""
+    """Size of the audio tracks in the result."""
     snd = cfg["sound"]
     dur = dur or max(1.0, float(src.get("dur") or 1))
     abytes = abytes or src.get("abytes") or audio_bytes(src.get("audio") or [], dur)
@@ -104,13 +104,13 @@ def _cal(cfg: dict) -> tuple[float, int]:
 
 
 def estimate_size(cfg: dict, src: dict) -> tuple[int, int]:
-    """(Bytes, Zahl der Konvertierungen, auf denen die Schätzung beruht)."""
+    """(bytes, number of conversions the estimate is based on)."""
     cal, n = _cal(cfg)
     return int(model_bytes(cfg, src) * cal), n
 
 
 def per_core(fam: str, node: str = "") -> tuple[float, int]:
-    """Gemessenes Tempo je Kern (Bilder/s bei 1080p, relativer Zeit 1). Zuerst von diesem Rechner, sonst von allen, sonst Faustwert."""
+    """Measured speed per core (frames/s at 1080p, relative time 1). First from this machine, otherwise from all, otherwise a rule of thumb."""
     rs = [r for r in records if r.get("family") == fam and r.get("norm")]
     mine = [r["norm"] for r in rs if r["node"] == (node or INSTANCE)]
     use = mine or [r["norm"] for r in rs]
@@ -120,7 +120,7 @@ def per_core(fam: str, node: str = "") -> tuple[float, int]:
 
 
 def speed_table() -> dict:
-    """Tempo je Kern je Codec (nur gemessene Werte) für `capabilities.convert.speed`; andere Rechner rechnen damit ihre Vorhersage."""
+    """Speed per core per codec (measured values only) for `capabilities.convert.speed`; other machines calculate their prediction with it."""
     out = {}
     for fam in {r.get("family") for r in records if r.get("norm") and r.get("node") == INSTANCE}:
         out[fam] = round(per_core(fam, INSTANCE)[0], 3)
@@ -128,7 +128,7 @@ def speed_table() -> dict:
 
 
 def estimate_secs(cfg: dict, src: dict, cores: int, node: str = "", speed: dict | None = None) -> tuple[float, int]:
-    """(Sekunden, Zahl der Messungen) für einen Rechner mit `cores` Kernen. `speed` = von dort gemeldetes Tempo je Kern."""
+    """(seconds, number of measurements) for a machine with `cores` cores. `speed` = speed per core reported from there."""
     if cfg["video"]["codec"] == "copy":
         return max(1.0, src["size"] / 150e6), 0
     fam = family(cfg)
@@ -145,7 +145,7 @@ def estimate_secs(cfg: dict, src: dict, cores: int, node: str = "", speed: dict 
 
 
 def record(item: dict):
-    """Eine fertige Konvertierung festhalten (aufgerufen vom Worker)."""
+    """Record a finished conversion (called by the worker)."""
     cfg, meta = item.get("cfg"), item.get("meta")
     if not cfg or not meta or not item.get("started") or not item.get("size_out"):
         return
@@ -167,7 +167,7 @@ def record(item: dict):
     try:
         from app import convert_caps
         convert_caps.publish()
-    except Exception:  # noqa: BLE001      Statistik darf die Konvertierung nie stören
+    except Exception:  # noqa: BLE001      statistics must never disturb the conversion
         pass
 
 

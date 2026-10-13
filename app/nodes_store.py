@@ -1,14 +1,14 @@
-"""Rechnerliste (DATA/nodes.json), eigene Identität und Einstellungen des Namensraums `nodes`.
+"""Machine list (DATA/nodes.json), own identity and the settings of the `nodes` namespace.
 
-Ein Eintrag der Liste:
-  nid      lokale Kennung des Eintrags (uuid), für die REST-Pfade
-  name     Anzeigename (Alias) – zugleich der Schlüssel in `peers` und in `/api/peer/{name}/…`
-  url      Adresse, z. B. http://192.168.178.7:8780
-  id       Instanz-ID des anderen Rechners (leer bei alten Rechnern)
-  token    gemeinsames Kopplungs-Token (leer = nicht gekoppelt)
-  trust    "paired" (Token) | "legacy" (ohne Token, wie bisher vertraut)
-  origin   "peers" (Umgebungsvariable) | "manual" | "pairing" | "discovery"
-Die Tokens verlassen diese Datei nie (nicht in Einstellungen, nicht in /api/state).
+An entry of the list:
+  nid      local id of the entry (uuid), for the REST paths
+  name     display name (alias) – also the key in `peers` and in `/api/peer/{name}/…`
+  url      address, e.g. http://192.168.178.7:8780
+  id       instance id of the other machine (empty for old machines)
+  token    shared pairing token (empty = not paired)
+  trust    "paired" (token) | "legacy" (without token, trusted as before)
+  origin   "peers" (environment variable) | "manual" | "pairing" | "discovery"
+The tokens never leave this file (not in the settings, not in /api/state).
 """
 import ipaddress
 import json
@@ -36,7 +36,7 @@ def cfg() -> dict:
 
 
 def active() -> bool:
-    """Verbund-Betrieb? (Eigenständig: keine Abfragen, keine Suche, nicht auffindbar.)"""
+    """Cluster mode? (Standalone: no polling, no search, not discoverable.)"""
     return cfg()["mode"] == "verbund"
 
 
@@ -48,9 +48,9 @@ def self_id() -> str:
     return data["id"]
 
 
-# ---------- Datei
+# ---------- file
 def load() -> bool:
-    """Liest nodes.json. Gibt False zurück, wenn die Datei neu angelegt werden muss (erster Start mit diesem Stand)."""
+    """Reads nodes.json. Returns False if the file has to be created (first start with this version)."""
     global loaded
     fresh = True
     try:
@@ -83,16 +83,16 @@ def save() -> None:
     os.replace(tmp, FILE)
 
 
-# ---------- Namen und Adressen
+# ---------- names and addresses
 NAME_BAD = re.compile(r'[/\\?#%,\x00-\x1f]')
 
 
 def clean_name(raw: str) -> str:
-    """Alias: kein Pfad-/URL-Zeichen (er steht in /api/peer/<name>/…), höchstens 40 Zeichen. Leer = ungültig."""
+    """Alias: no path/URL characters (it appears in /api/peer/<name>/…), at most 40 characters. Empty = invalid."""
     return NAME_BAD.sub("", (raw or "")).strip(" .")[:40]
 
 
-def unique_name(raw: str, fallback: str = "rechner", skip_nid: str = "") -> str:
+def unique_name(raw: str, fallback: str = "machine", skip_nid: str = "") -> str:
     base = clean_name(raw) or fallback
     taken = {n["name"].lower() for n in data["nodes"] if n["nid"] != skip_nid} | {INSTANCE.lower(), self_name().lower()}
     name, i = base, 2
@@ -102,7 +102,7 @@ def unique_name(raw: str, fallback: str = "rechner", skip_nid: str = "") -> str:
 
 
 def norm_url(raw: str) -> str:
-    """„192.168.178.7“, „host:8781“ oder „http://host:8780/“ -> „http://host:8780“; leer, wenn unbrauchbar."""
+    """Turns "192.168.178.7", "host:8781" or "http://host:8780/" -> "http://host:8780"; empty if unusable."""
     s = (raw or "").strip()
     if not s:
         return ""
@@ -131,7 +131,7 @@ def is_loopback(host: str) -> bool:
         return host.lower() == "localhost"
 
 
-# ---------- Zugriff
+# ---------- access
 def nodes() -> list[dict]:
     return data["nodes"]
 
@@ -168,7 +168,7 @@ def remove(n: dict) -> None:
 
 
 def public(n: dict) -> dict:
-    """Eintrag ohne Token (für Oberfläche und /api/state)."""
+    """Entry without token (for the interface and /api/state)."""
     return {k: v for k, v in n.items() if k != "token"} | {"paired": bool(n.get("token"))}
 
 

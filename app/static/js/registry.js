@@ -1,13 +1,13 @@
-// Erweiterungspunkte der Oberfläche (ohne Abhängigkeiten, von allen Modulen nutzbar).
-// Beschreibung und Beispiele: docs/agents/schnittstellen.md
+// Extension points of the interface (no dependencies, usable from all modules).
+// Description and examples: docs/agents/schnittstellen.md
 const views = [], panels = [], sections = [], actions = [], stateFns = [], handlers = {};
 let current = null, lastState = null;
 
-// ---- Ereignisse zwischen Modulen: on('files-changed', fn) / emit('files-changed', daten)
+// ---- Events between modules: on('files-changed', fn) / emit('files-changed', data)
 export function on(evt, fn){ (handlers[evt] ||= []).push(fn); }
-export function emit(evt, data){ (handlers[evt] || []).slice().forEach(fn => { try{ fn(data); }catch(e){ console.error(`Ereignis ${evt}:`, e); } }); }
+export function emit(evt, data){ (handlers[evt] || []).slice().forEach(fn => { try{ fn(data); }catch(e){ console.error(`Event ${evt}:`, e); } }); }
 
-// ---- Statusänderungen (jede Meldung des Servers): onState(S => …)
+// ---- State changes (every server message): onState(S => …)
 export function onState(fn){ stateFns.push(fn); }
 export function notifyState(S){
   lastState = S;
@@ -15,7 +15,7 @@ export function notifyState(S){
 }
 export const rerender = () => { if(lastState) notifyState(lastState); };
 
-// ---- Ansichten: registerView({id, label, icon, order, hash?, mount(el), unmount()})
+// ---- Views: registerView({id, label, icon, order, hash?, mount(el), unmount()})
 export function registerView(v){
   views.push({order: 100, hash: v.id, icon: '', ...v});
   views.sort((a, b) => a.order - b.order);
@@ -23,7 +23,7 @@ export function registerView(v){
 export const getViews = () => views.slice();
 export const isActive = id => current === id;
 export const currentView = () => current;
-// Rest der Adresse nach der Ansicht: #/einstellungen/media → 'media' (für Unterabschnitte; Ereignis 'route' bei jeder Hash-Änderung)
+// Rest of the address after the view: #/settings/media → 'media' (for subsections; event 'route' on every hash change)
 export const routeRest = () => location.hash.replace(/^#\//, '').split('/').slice(1).join('/').split('?')[0];
 export const navigate = id => { const v = views.find(x => x.id === id); if(v && location.hash !== '#/' + v.hash) location.hash = '#/' + v.hash; else if(v) show(v.id); };
 
@@ -38,7 +38,7 @@ function show(id){
   if(current){ const old = views.find(x => x.id === current); try{ old.unmount && old.unmount(); }catch(e){ console.error(e); } container(current).hidden = true; }
   current = v.id;
   const el = container(v.id); el.hidden = false;
-  try{ v.mount && v.mount(el); }catch(e){ console.error(`Ansicht ${v.id}:`, e); }
+  try{ v.mount && v.mount(el); }catch(e){ console.error(`View ${v.id}:`, e); }
   emit('view', v.id);
   rerender();
 }
@@ -48,8 +48,8 @@ export function startRouter(){
   show(fromHash());
 }
 
-// ---- Felder einer Ansicht: registerPanel({view, slot:'left'|'right'|'bottom', order, id, html})
-// Ansichten mit Zwei-Spalten-Aufbau rufen buildLayout(el, viewId) auf; das HTML jedes Feldes ist ein komplettes <section class="panel">.
+// ---- Panels of a view: registerPanel({view, slot:'left'|'right'|'bottom', order, id, html})
+// Views with a two-column layout call buildLayout(el, viewId); the HTML of each panel is a complete <section class="panel">.
 export function registerPanel(p){ panels.push({order: 100, ...p}); }
 export const panelsFor = (view, slot) => panels.filter(p => p.view === view && p.slot === slot).sort((a, b) => a.order - b.order);
 export function buildLayout(el, viewId){
@@ -60,10 +60,10 @@ export function buildLayout(el, viewId){
   return true;
 }
 
-// ---- Einstellungsabschnitte: registerSettingsSection({id, label, order, render(el, settings), collect() -> {namespace: {...}}})
+// ---- Settings sections: registerSettingsSection({id, label, order, render(el, settings), collect() -> {namespace: {...}}})
 export function registerSettingsSection(s){ sections.push({order: 100, ...s}); sections.sort((a, b) => a.order - b.order); }
 export const getSettingsSections = () => sections.slice();
 
-// ---- Bibliotheks-Aktionen: registerLibraryAction({id, label, icon, primary?, when(files), run(files)})
+// ---- Library actions: registerLibraryAction({id, label, icon, primary?, when(files), run(files)})
 export function registerLibraryAction(a){ actions.push({icon: '', primary: false, ...a}); }
 export const getLibraryActions = () => actions.slice();

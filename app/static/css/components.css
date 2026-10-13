@@ -1,4 +1,4 @@
-/* Bausteine der Laufwerks-Ansicht: Fortschritt, Titelliste, Einstellungsfelder, Aktionsfeld, Dateien, Rechnerwahl */
+/* Building blocks of the drives view: progress, title list, settings fields, action panel, files, machine choice */
 .progress-panel{padding:17px 20px 15px}
 .progress-title{display:flex;align-items:flex-start;gap:18px}
 .progress-title h1{font-size:18px;margin:0 0 2px;letter-spacing:-.3px;overflow-wrap:anywhere}

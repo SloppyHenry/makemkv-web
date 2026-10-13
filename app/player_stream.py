@@ -1,7 +1,7 @@
-"""Player: ffmpeg-Ströme als fragmentiertes MP4, Sitzungen, Aufräumen und Untertitel (WebVTT).
+"""Player: ffmpeg streams as fragmented MP4, sessions, cleanup and subtitles (WebVTT).
 
-Ein Strom = ein ffmpeg-Prozess. Er endet, wenn die Verbindung abreißt, der Player ihn beendet oder der Wächter ihn abräumt.
-Suchen heißt: neue Sitzung mit anderem Startpunkt (ffmpeg-Neustart mit -ss).
+One stream = one ffmpeg process. It ends when the connection breaks, the player ends it or the watchdog clears it away.
+Seeking means: a new session with a different start point (ffmpeg restart with -ss).
 """
 import asyncio
 import hashlib
@@ -20,19 +20,19 @@ from app import state
 from app.config import DATA, LOCK_TTL
 from app.files import busy_reason, lock_path
 
-MAX_STREAMS = 6             # gleichzeitige Ströme (Remux ist billig, Transkodieren zählt extra)
-MAX_TRANSCODES = 1          # höchstens ein Transkodier-Strom je Rechner
-IDLE_KILL = 300             # Sekunden ohne abgenommene Daten (Pause mit vollem Puffer), danach wird ffmpeg beendet
-NEVER_FETCHED = 30          # Sitzung, deren Strom nie abgeholt wurde, verfällt
-START_TIMEOUT = 60          # Sekunden bis zum ersten Byte (kalter Netzlaufwerk-Zugriff)
+MAX_STREAMS = 6             # simultaneous streams (remux is cheap, transcoding counts extra)
+MAX_TRANSCODES = 1          # at most one transcoding stream per machine
+IDLE_KILL = 300             # seconds without data being taken (pause with a full buffer), after that ffmpeg is ended
+NEVER_FETCHED = 30          # a session whose stream was never fetched expires
+START_TIMEOUT = 60          # seconds until the first byte (cold network drive access)
 sessions: dict[str, dict] = {}
 SUBDIR = DATA / "player-cache"
 
 
-# ---------------------------------------------------------------- Rücksicht auf die eigentliche Arbeit
+# ---------------------------------------------------------------- consideration for the actual work
 
 def busy_info() -> dict:
-    """Läuft hier gerade ein Rip, eine Konvertierung oder Übertragung? (Der Player hält sich dann zurück.)"""
+    """Is a rip, conversion or transfer running here right now? (The player then holds back.)"""
     rip = any(d.job for d in state.drives.values())
     conv = sum(1 for c in state.conversions if c["status"] == "running")
     up = any(u["status"] in state.ACTIVE for u in state.uploads)
@@ -44,23 +44,23 @@ def busy_info() -> dict:
 
 
 def lock_info(rel: str, p: Path) -> dict | None:
-    """Wird die Datei gerade konvertiert/übertragen oder ist sie gesperrt? (Abspielen bleibt erlaubt, die Oberfläche warnt.)"""
+    """Is the file being converted/transferred right now or is it locked? (Playing stays allowed, the interface warns.)"""
     reason = busy_reason(rel, False, p)
     by = ""
     try:
         lp = lock_path(p)
         if time.time() - lp.stat().st_mtime < LOCK_TTL:
-            by = json.loads(lp.read_text()).get("inst", "andere Instanz")
-            reason = reason or "wird gerade konvertiert"
+            by = json.loads(lp.read_text()).get("inst", "another instance")
+            reason = reason or "is being converted"
     except (OSError, ValueError):
         pass
     return {"by": by, "reason": reason} if reason else None
 
 
-# ---------------------------------------------------------------- Startpunkt (Keyframe) bei Video-Kopie
+# ---------------------------------------------------------------- start point (keyframe) for video copy
 
 async def keyframe_before(p: Path, t: float) -> float:
-    """Letzter Keyframe des Videos bis einschließlich t. Bei Video-Kopie muss ffmpeg genau dort einsetzen, sonst sind Bild und Ton verschoben."""
+    """Last keyframe of the video up to and including t. With video copy ffmpeg must start exactly there, otherwise picture and audio are shifted."""
     if t <= 0.5:
         return 0.0
     for window in (30.0, 150.0):
@@ -89,7 +89,7 @@ async def keyframe_before(p: Path, t: float) -> float:
     return 0.0 if t < 30 else t
 
 
-# ---------------------------------------------------------------- ffmpeg-Aufruf
+# ---------------------------------------------------------------- ffmpeg call
 
 def video_filters(info: dict, plan: dict, max_h: int, tonemap: bool) -> str:
     v = info["video"]
@@ -98,7 +98,7 @@ def video_filters(info: dict, plan: dict, max_h: int, tonemap: bool) -> str:
         f.append("yadif=deint=interlaced")
     if v["hdr"] and tonemap:
         f.append("zscale=t=linear:npl=100,format=gbrpf32le,zscale=p=bt709,tonemap=tonemap=hable:desat=0,zscale=t=bt709:m=bt709:r=tv")
-    if max_h:                                           # 0 = Original, nicht verkleinern
+    if max_h:                                           # 0 = original, do not downscale
         f.append(f"scale=-2:min({int(max_h)}\\,ih):flags=bilinear")
     f.append("format=yuv420p")
     return ",".join(f)
@@ -132,7 +132,7 @@ def build_args(p: Path, start: float, info: dict, plan: dict, audio_i: int | Non
 
 
 def pick_resources(plan: dict) -> tuple[int, int]:
-    """(nice, Threads): Läuft Rip/Konvertierung/Übertragung, bekommt der Player nur wenig und die niedrigste Priorität."""
+    """(nice, threads): while a rip/conversion/transfer runs, the player only gets a little and the lowest priority."""
     cores = os.cpu_count() or 1
     if plan["video"] != "x264":
         return 10, 1
@@ -141,10 +141,10 @@ def pick_resources(plan: dict) -> tuple[int, int]:
     return 10, max(2, cores // 2)
 
 
-# ---------------------------------------------------------------- Sitzungen
+# ---------------------------------------------------------------- sessions
 
 async def kill(s: dict):
-    """ffmpeg sofort beenden (SIGKILL: am Strom ist nichts abzuschließen, und ein per SIGTERM angehaltener ffmpeg hängt bei vollem Pipe-Puffer)."""
+    """End ffmpeg right away (SIGKILL: there is nothing to finish on the stream, and an ffmpeg stopped via SIGTERM hangs on a full pipe buffer)."""
     pr = s.get("proc")
     if not pr or pr.returncode is not None:
         return
@@ -159,12 +159,12 @@ async def kill(s: dict):
 
 
 def alive(s: dict) -> bool:
-    """Zählt für die Grenzen: noch nicht abgeholt (reserviert) oder ffmpeg läuft."""
+    """Counts towards the limits: not fetched yet (reserved) or ffmpeg is running."""
     return s["proc"] is None or s["proc"].returncode is None
 
 
 def drop_client(client: str):
-    """Alle Sitzungen dieses Browsers beenden (neuer Strom ersetzt den alten, Schließen, Seitenwechsel)."""
+    """End all sessions of this browser (a new stream replaces the old one, closing, page change)."""
     for sid, s in list(sessions.items()):
         if client and s["client"] == client:
             sessions.pop(sid, None)
@@ -172,14 +172,14 @@ def drop_client(client: str):
 
 
 def new_session(client: str, rel: str, p: Path, start: float, info: dict, plan: dict, audio_i: int | None, cfg: dict, tonemap: bool) -> dict:
-    """Sitzung anlegen (ohne Prozess; der startet erst, wenn der Browser den Strom abholt). Prüft die Grenzen und ersetzt den alten Strom desselben Browsers."""
+    """Create a session (without a process; that only starts when the browser fetches the stream). Checks the limits and replaces the same browser's old stream."""
     client = client or secrets.token_hex(4)
     drop_client(client)
     if plan["video"] == "x264":
-        if sum(1 for x in sessions.values() if x["plan"]["video"] == "x264" and alive(x)) >= MAX_TRANSCODES:      # eigener Strom wurde oben schon entfernt
-            raise HTTPException(409, "Auf diesem Rechner läuft schon eine Umwandlung (anderer Browser). Bitte später noch einmal versuchen oder auf einem anderen Rechner abspielen.")
+        if sum(1 for x in sessions.values() if x["plan"]["video"] == "x264" and alive(x)) >= MAX_TRANSCODES:      # our own stream was already removed above
+            raise HTTPException(409, "A transcode is already running on this machine (another browser). Please try again later or play it on another machine.")
     if sum(1 for x in sessions.values() if alive(x)) >= MAX_STREAMS:
-        raise HTTPException(409, "Auf diesem Rechner laufen schon zu viele Wiedergaben gleichzeitig.")
+        raise HTTPException(409, "Too many playbacks are already running on this machine at the same time.")
     sid = secrets.token_urlsafe(9)
     nice, threads = pick_resources(plan)
     s = {"id": sid, "client": client, "rel": rel, "path": p, "start": start, "plan": plan, "created": time.time(), "last_io": time.time(), "bytes": 0,
@@ -190,13 +190,13 @@ def new_session(client: str, rel: str, p: Path, start: float, info: dict, plan: 
 
 
 async def start_process(s: dict) -> bytes:
-    """ffmpeg starten und das erste Datenstück abwarten (Fehler kommen so noch vor den HTTP-Kopfzeilen). Ein zweiter Abruf ersetzt den ersten."""
+    """Start ffmpeg and wait for the first chunk of data (that way errors still arrive before the HTTP headers). A second fetch replaces the first."""
     await kill(s)
     try:
         pr = await asyncio.create_subprocess_exec("nice", "-n", str(s["nice"]), *s["args"], stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
                                                   start_new_session=True)
     except OSError as e:
-        raise HTTPException(503, f"ffmpeg lässt sich nicht starten: {e}")
+        raise HTTPException(503, f"ffmpeg cannot be started: {e}")
     s["proc"], s["last_io"], s["bytes"] = pr, time.time(), 0
 
     async def drain():
@@ -207,11 +207,11 @@ async def start_process(s: dict) -> bytes:
         first = await asyncio.wait_for(pr.stdout.read(1 << 16), START_TIMEOUT)
     except asyncio.TimeoutError:
         await kill(s)
-        raise HTTPException(504, "ffmpeg lieferte nichts (Netzlaufwerk langsam?).")
+        raise HTTPException(504, "ffmpeg delivered nothing (slow network drive?).")
     if not first:
         await kill(s)
         await asyncio.sleep(0.05)
-        raise HTTPException(500, "Wiedergabe nicht möglich: " + (" ".join(list(s["err"])[-3:]) or "ffmpeg wurde ohne Ausgabe beendet."))
+        raise HTTPException(500, "Playback not possible: " + (" ".join(list(s["err"])[-3:]) or "ffmpeg ended without output."))
     s["bytes"] = len(first)
     return first
 
@@ -228,13 +228,13 @@ async def body(s: dict, first: bytes):
             s["bytes"] += len(chunk)
             yield chunk
             s["last_io"] = time.time()
-    finally:                                           # Verbindung abgerissen, Ende oder Abbruch: ffmpeg sofort beenden
+    finally:                                           # connection broken, end or abort: end ffmpeg right away
         await kill(s)
 
 
 class StreamResponse(StreamingResponse):
-    """MP4-Strom, der ffmpeg garantiert beendet, sobald die Antwort endet oder der Browser die Verbindung kappt
-    (ohne das schließt Starlette den Erzeuger erst beim Aufräumen des Speichers, also viel zu spät)."""
+    """MP4 stream that is guaranteed to end ffmpeg as soon as the response ends or the browser cuts the connection
+    (without this, Starlette only closes the generator during garbage collection, i.e. much too late)."""
 
     def __init__(self, s: dict, first: bytes):
         super().__init__(body(s, first), media_type="video/mp4", headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no", "Accept-Ranges": "none"})
@@ -252,7 +252,7 @@ class StreamResponse(StreamingResponse):
 
 
 async def sweep():
-    """Ein Durchgang des Wächters: verwaiste Sitzungen und festhängende ffmpeg-Prozesse abräumen."""
+    """One watchdog pass: clear away orphaned sessions and stuck ffmpeg processes."""
     now = time.time()
     for sid, s in list(sessions.items()):
         pr = s["proc"]
@@ -273,7 +273,7 @@ async def janitor():
         try:
             await sweep()
         except Exception as e:  # noqa: BLE001
-            print(f"Player-Wächter: {e}", flush=True)
+            print(f"Player watchdog: {e}", flush=True)
 
 
 async def stop_all():
@@ -287,10 +287,10 @@ def public_sessions() -> list:
              "running": bool(s["proc"] and s["proc"].returncode is None), "pid": s["proc"].pid if s["proc"] else 0} for s in sessions.values()]
 
 
-# ---------------------------------------------------------------- Untertitel (Textspuren -> WebVTT, zwischengespeichert)
+# ---------------------------------------------------------------- subtitles (text tracks -> WebVTT, cached)
 
 _sub_tasks: dict[str, asyncio.Task] = {}
-_sub_gate = asyncio.Semaphore(1)       # nie zwei Extraktionen gleichzeitig (lesen die ganze Datei)
+_sub_gate = asyncio.Semaphore(1)       # never two extractions at the same time (they read the whole file)
 
 
 def sub_key(p: Path) -> str:
@@ -299,7 +299,7 @@ def sub_key(p: Path) -> str:
 
 
 async def _extract_all(p: Path, info: dict, key: str):
-    """Alle Textspuren in einem Durchgang herausziehen (die Datei wird nur einmal gelesen)."""
+    """Extract all text tracks in one pass (the file is read only once)."""
     texts = [s for s in info["subs"] if s["kind"] == "text"]
     if not texts:
         return
@@ -313,21 +313,21 @@ async def _extract_all(p: Path, info: dict, key: str):
             _, err = await asyncio.wait_for(pr.communicate(), 1800)
         except asyncio.TimeoutError:
             pr.kill()
-            raise HTTPException(504, "Untertitel konnten nicht rechtzeitig gelesen werden.")
+            raise HTTPException(504, "Subtitles could not be read in time.")
     for s in texts:
         part = SUBDIR / f"{key}-{s['i']}.part"
         if part.exists():
             part.replace(SUBDIR / f"{key}-{s['i']}.vtt")
     if pr.returncode and not any((SUBDIR / f"{key}-{s['i']}.vtt").exists() for s in texts):
-        raise HTTPException(500, "Untertitel nicht lesbar: " + err.decode(errors="replace")[-200:])
+        raise HTTPException(500, "Subtitles not readable: " + err.decode(errors="replace")[-200:])
 
 
 async def subtitle_vtt(p: Path, info: dict, idx: int) -> str:
     sub = next((s for s in info["subs"] if s["i"] == idx), None)
     if not sub:
-        raise HTTPException(404, "Untertitelspur nicht gefunden")
+        raise HTTPException(404, "Subtitle track not found")
     if sub["kind"] != "text":
-        raise HTTPException(415, "Bilduntertitel lassen sich nicht als Text anzeigen (nur einbrennen).")
+        raise HTTPException(415, "Image subtitles cannot be shown as text (only burned in).")
     key = sub_key(p)
     f = SUBDIR / f"{key}-{idx}.vtt"
     if not f.exists():
@@ -342,7 +342,7 @@ async def subtitle_vtt(p: Path, info: dict, idx: int) -> str:
     try:
         return f.read_text(encoding="utf-8", errors="replace")
     except OSError:
-        raise HTTPException(500, "Untertitel nicht lesbar.")
+        raise HTTPException(500, "Subtitles not readable.")
 
 
 def prune_cache(max_files: int = 300):

@@ -1,11 +1,11 @@
-"""Rechnerverwaltung (Paket C): Betriebsart, eigene Identität, Rechnerliste, Verbindungstest.
+"""Machine management (package C): mode, own identity, machine list, connection test.
 
-Dieses Modul wird von main.py automatisch geladen (OPTIONAL_MODULES) und meldet sich über app.ext an. Die Teile:
-  nodes_store.py  Rechnerliste (DATA/nodes.json), Namen, Adressen, Tokens
-  nodes_pair.py   Kopplung mit Bestätigung, Entkoppeln
-  nodes_scan.py   Rechner im Netz finden
-  cluster.py      Abfrage der Rechner, Proxy, Übergabe
-Einstellungen (Namensraum `nodes`): mode (standalone|verbund), discoverable, name, public_url, scan_nets, auto_search.
+This module is loaded automatically by main.py (OPTIONAL_MODULES) and registers via app.ext. The parts:
+  nodes_store.py  machine list (DATA/nodes.json), names, addresses, tokens
+  nodes_pair.py   pairing with confirmation, unpairing
+  nodes_scan.py   finding machines on the network
+  cluster.py      polling the machines, proxy, hand-over
+Settings (namespace `nodes`): mode (standalone|verbund = cluster), discoverable, name, public_url, scan_nets, auto_search.
 """
 import asyncio
 import ipaddress
@@ -51,9 +51,9 @@ class NodesSettings(BaseModel):
             try:
                 net = ipaddress.ip_network(p, strict=False)
             except ValueError:
-                raise ValueError(f"„{p}“ ist kein Netz (z. B. 192.168.178.0/24)")
+                raise ValueError(f"\"{p}\" is not a network (e.g. 192.168.178.0/24)")
             if net.version != 4 or net.prefixlen < 20:
-                raise ValueError(f"„{p}“: nur IPv4-Netze bis /20 (höchstens 4096 Adressen)")
+                raise ValueError(f"\"{p}\": only IPv4 networks up to /20 (at most 4096 addresses)")
         return ", ".join(parts)
 
 
@@ -69,16 +69,16 @@ ext.register_settings("nodes", NodesSettings, NodesSettings().model_dump(), on_c
 ext.register_capability("nodes", 1)
 
 
-# ---------- Statusmeldung
+# ---------- state report
 def identity() -> dict:
-    """Leicht: wird von anderen Rechnern mitgelesen (Name, Betriebsart, Hardware)."""
+    """Lightweight: read by other machines (name, mode, hardware)."""
     c = store.cfg()
     return {"id": store.self_id(), "name": store.self_name(), "mode": c["mode"], "discoverable": bool(c["discoverable"] and c["mode"] == "verbund"),
             "version": VERSION, "started": store.STARTED, "cores": os.cpu_count() or 1, "mem": store.mem_total()}
 
 
 def manager() -> dict:
-    """Für die eigene Oberfläche: Rechnerliste (ohne Tokens), offene Kopplungsanfragen, Suchergebnisse."""
+    """For our own interface: machine list (without tokens), open pairing requests, search results."""
     return {"nodes": [store.public(n) for n in store.nodes()], "pairing": nodes_pair.snapshot(), "scan": nodes_scan.snapshot(),
             "env_peers": bool(PEERS_RAW.strip())}
 
@@ -87,17 +87,17 @@ ext.register_snapshot("node", identity)
 ext.register_snapshot("nodemgr", manager)
 
 
-# ---------- Prüfen einer Adresse
+# ---------- checking an address
 async def probe_url(url: str) -> dict:
     t = time.time()
     try:
         d = await asyncio.to_thread(cluster._http_json, url + "/api/state", None, 4.0, store.token_for_url(url))
     except urllib.error.HTTPError as e:
-        return {"ok": False, "error": "Passwortgeschützt (HTTP 401): erst koppeln, falls dort die neue Version läuft." if e.code == 401 else f"HTTP {e.code}"}
+        return {"ok": False, "error": "Password protected (HTTP 401): pair first if the new version runs there." if e.code == 401 else f"HTTP {e.code}"}
     except Exception as e:  # noqa: BLE001
-        return {"ok": False, "error": f"keine Antwort ({type(e).__name__}: {e})"[:160]}
+        return {"ok": False, "error": f"no response ({type(e).__name__}: {e})"[:160]}
     if not (isinstance(d.get("drives"), list) and isinstance(d.get("output"), dict)):
-        return {"ok": False, "error": "Unter dieser Adresse läuft kein Spindle."}
+        return {"ok": False, "error": "There is no Spindle running at this address."}
     caps, node = d.get("capabilities") or {}, d.get("node") or {}
     return {"ok": True, "ms": round((time.time() - t) * 1000), "id": node.get("id", ""), "name": node.get("name") or (d.get("capacity") or {}).get("instance", ""),
             "version": caps.get("version", ""), "legacy": not caps.get("nodes"), "mode": node.get("mode", ""),
@@ -111,7 +111,7 @@ class UrlReq(BaseModel):
 
 def _need_active() -> None:
     if not store.active():
-        raise HTTPException(409, "Im eigenständigen Betrieb gibt es keine Rechnerliste.")
+        raise HTTPException(409, "In standalone mode there is no machine list.")
 
 
 @router.get("")
@@ -121,10 +121,10 @@ def api_list():
 
 @router.post("/check")
 async def api_check(req: UrlReq):
-    """„Prüfen“ vor dem Hinzufügen: erreichbar? alte oder neue Version? schon in der Liste?"""
+    """The "check" before adding: reachable? old or new version? already in the list?"""
     url = store.norm_url(req.url)
     if not url:
-        raise HTTPException(422, "Ungültige Adresse.")
+        raise HTTPException(422, "Invalid address.")
     r = await probe_url(url)
     known = store.by_url(url) or (store.by_remote_id(r.get("id", "")) if r.get("ok") else None)
     return {**r, "url": url, "known": known["name"] if known else ""}
@@ -132,27 +132,27 @@ async def api_check(req: UrlReq):
 
 @router.post("")
 async def api_add(req: UrlReq):
-    """Rechner ohne Kopplung hinzufügen – nur für alte Versionen, die keine Kopplung kennen. Neue werden über /api/nodes/pair gekoppelt."""
+    """Add a machine without pairing – only for old versions that do not know pairing. New ones are paired via /api/nodes/pair."""
     _need_active()
     url = store.norm_url(req.url)
     if not url:
-        raise HTTPException(422, "Ungültige Adresse.")
+        raise HTTPException(422, "Invalid address.")
     if store.by_url(url):
-        raise HTTPException(409, "Dieser Rechner ist schon in der Liste.")
+        raise HTTPException(409, "This machine is already in the list.")
     r = await probe_url(url)
     if not r["ok"]:
         raise HTTPException(502, r["error"])
     if r["self"]:
-        raise HTTPException(400, "Das ist dieser Rechner.")
+        raise HTTPException(400, "That is this machine.")
     if not r["legacy"]:
-        raise HTTPException(409, "Dieser Rechner kennt die Kopplung – bitte „Kopplung anfragen“ verwenden.")
+        raise HTTPException(409, "This machine supports pairing – please use \"Request pairing\".")
     n = store.add(req.name or r["name"] or url_host_name(url), url, "manual")
     broadcast()
     return store.public(n)
 
 
 def url_host_name(url: str) -> str:
-    return store.url_host(url) or "rechner"
+    return store.url_host(url) or "machine"
 
 
 class RenameReq(BaseModel):
@@ -162,7 +162,7 @@ class RenameReq(BaseModel):
 def _get(nid: str) -> dict:
     n = store.by_nid(nid)
     if not n:
-        raise HTTPException(404, "Rechner nicht in der Liste.")
+        raise HTTPException(404, "Machine not in the list.")
     return n
 
 
@@ -171,9 +171,9 @@ def api_rename(nid: str, req: RenameReq):
     n = _get(nid)
     name = store.clean_name(req.name)
     if not name:
-        raise HTTPException(422, "Der Name darf nicht leer sein (keine Zeichen / \\ ? # % ,).")
+        raise HTTPException(422, "The name must not be empty (no characters / \\ ? # % ,).")
     if name.lower() != n["name"].lower() and store.unique_name(name, skip_nid=nid) != name:
-        raise HTTPException(409, "Dieser Name ist schon vergeben.")
+        raise HTTPException(409, "This name is already taken.")
     peers_state.pop(n["name"], None)
     n["name"] = name
     store.save()
@@ -209,7 +209,7 @@ async def api_test(nid: str):
 ext.register_router(router)
 
 
-# ---------- Start: Liste laden, PEERS übernehmen, Abfrage starten
+# ---------- startup: load the list, take over PEERS, start polling
 async def startup():
     existed = store.load()
     peers = cluster.parse_peers(PEERS_RAW)
@@ -224,7 +224,7 @@ async def startup():
     if not existed or added:
         store.save()
     if not existed and added and store.cfg()["mode"] == "standalone":
-        # Erster Start mit diesem Stand und PEERS gesetzt: der Rechner war bisher im Verbund und bleibt es.
+        # First start with this version and PEERS set: the machine was in the cluster before and stays there.
         app_settings["nodes"] = {**store.cfg(), "mode": "verbund"}
         from app.settings import save_settings
         save_settings()

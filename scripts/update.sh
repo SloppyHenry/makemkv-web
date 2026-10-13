@@ -10,10 +10,12 @@ cd "$(dirname "$0")/.."
 BACKUPS=../spindle-backups
 [ -d ../makemkv-web-backups ] && [ ! -e "$BACKUPS" ] && mv ../makemkv-web-backups "$BACKUPS"   # old name
 mkdir -p "$BACKUPS"
+STATE="$BACKUPS/last-state.txt"
+[ -f "$BACKUPS/letzter-stand.txt" ] && [ ! -e "$STATE" ] && mv "$BACKUPS/letzter-stand.txt" "$STATE"   # old name
 
 if [ "${1:-}" = "rollback" ]; then
-  [ -f "$BACKUPS/letzter-stand.txt" ] || { echo "No remembered state in $BACKUPS/letzter-stand.txt"; exit 1; }
-  old="$(cat "$BACKUPS/letzter-stand.txt")"
+  [ -f "$STATE" ] || { echo "No remembered state in $STATE"; exit 1; }
+  old="$(cat "$STATE")"
   echo "→ Back to $old"
   git checkout -q "$old"
   ./install.sh
@@ -28,9 +30,9 @@ if [ "${FORCE:-0}" != "1" ] && curl -fs -m 5 "http://localhost:${port:-8780}/api
 fi
 
 stamp="$(date +%Y%m%d-%H%M%S)"
-git rev-parse HEAD > "$BACKUPS/letzter-stand.txt"
-tar -czf "$BACKUPS/sicherung-$stamp.tgz" .env $(ls data/*.json 2>/dev/null)
-echo "→ Backed up: $BACKUPS/sicherung-$stamp.tgz (previous state: $(git rev-parse --short HEAD))"
+git rev-parse HEAD > "$STATE"
+tar -czf "$BACKUPS/backup-$stamp.tgz" .env $(ls data/*.json 2>/dev/null)
+echo "→ Backed up: $BACKUPS/backup-$stamp.tgz (previous state: $(git rev-parse --short HEAD))"
 
 git fetch -q origin
 git checkout -q main

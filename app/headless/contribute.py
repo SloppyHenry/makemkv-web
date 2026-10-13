@@ -1,7 +1,7 @@
-"""Disc an TheDiscDB melden (nur auf Knopfdruck, mit Vorschau): über die offene Einreichung „Engram“ (POST /api/engram/disc,
-danach das MakeMKV-Scanprotokoll an /api/engram/disc/<Inhalts-Hash>/logs/scan). TheDiscDB prüft Einreichungen von Hand, bevor sie
-erscheinen. Gesendet werden Inhalts-Hash, Volume-Label, die Titel der Disc (Laufzeit, Größe, Segmente, Spuren) und die Zuordnung;
-keine Dateien, keine Laufwerks-, Rechner- oder Nutzerdaten (das Protokoll enthält nur CINFO/TINFO/SINFO/TCOUNT-Zeilen).
+"""Report a disc to TheDiscDB (only at the push of a button, with preview): via the open submission "Engram" (POST /api/engram/disc,
+then the MakeMKV scan log to /api/engram/disc/<content hash>/logs/scan). TheDiscDB reviews submissions by hand before they
+appear. What is sent: content hash, volume label, the disc's titles (runtime, size, segments, tracks) and the assignment;
+no files, no drive, machine or user data (the log contains only CINFO/TINFO/SINFO/TCOUNT lines).
 """
 import asyncio
 import json
@@ -34,7 +34,7 @@ class ContribReq(BaseModel):
     disc_number: int | None = None
     upc: str = ""
     titles: list[ContribTitle] = []
-    send: bool = False               # False: nur Vorschau
+    send: bool = False               # False: preview only
 
 
 class ContribError(Exception):
@@ -48,17 +48,17 @@ def content_type(disc: dict) -> str:
 
 def build(disc: dict, ids: dict, raw: list[str], req: ContribReq) -> tuple[dict, str]:
     if not ids.get("content_hash"):
-        raise ContribError("Inhalts-Hash der Disc fehlt (Disc-Kennung nicht lesbar)")
+        raise ContribError("The disc's content hash is missing (disc identifier not readable)")
     if req.kind not in ("movie", "series"):
-        raise ContribError("Art muss Film oder Serie sein")
+        raise ContribError("The type must be movie or series")
     by_id = {t["id"]: t for t in disc["titles"]}
     chosen = [t for t in req.titles if t.id in by_id and t.type in TYPES]
     if not chosen:
-        raise ContribError("Mindestens einen Titel zuordnen")
+        raise ContribError("Assign at least one title")
     if req.kind == "movie" and not any(t.type == "MainMovie" for t in chosen):
-        raise ContribError("Bei einem Film einen Titel als Hauptfilm markieren")
+        raise ContribError("For a movie, mark one title as the main feature")
     if req.kind == "series" and not any(t.type == "Episode" and t.episode for t in chosen):
-        raise ContribError("Bei einer Serie mindestens eine Folge mit Nummer angeben")
+        raise ContribError("For a series, give at least one episode with a number")
     titles = []
     for c in chosen:
         t = by_id[c.id]
@@ -80,7 +80,7 @@ def build(disc: dict, ids: dict, raw: list[str], req: ContribReq) -> tuple[dict,
 
 
 def _post(url: str, data: bytes, ctype: str, timeout: float = 30) -> tuple[int, bytes]:
-    """Einzige Stelle mit Netzwerkzugriff (Tests ersetzen sie)."""
+    """The only place with network access (tests replace it)."""
     r = urllib.request.Request(url, data=data, method="POST", headers={"Content-Type": ctype, "User-Agent": "spindle", "Accept": "application/json"})
     try:
         with urllib.request.urlopen(r, timeout=timeout) as resp:
@@ -95,9 +95,9 @@ async def submit(payload: dict, log: str) -> dict:
     try:
         st, body = await asyncio.to_thread(_post, f"{discdb.BASE}/api/engram/disc", json.dumps(payload).encode(), "application/json")
     except OSError as e:
-        raise ContribError(f"TheDiscDB nicht erreichbar: {e}") from e
+        raise ContribError(f"TheDiscDB not reachable: {e}") from e
     if st != 200:
-        raise ContribError(f"TheDiscDB lehnt ab ({st}): {body[:200].decode('utf-8', 'replace')}")
+        raise ContribError(f"TheDiscDB refuses ({st}): {body[:200].decode('utf-8', 'replace')}")
     res = json.loads(body or b"{}")
     log_ok = False
     if log.strip():
@@ -109,7 +109,7 @@ async def submit(payload: dict, log: str) -> dict:
     return {"ok": True, "updated": bool(res.get("updated")), "log": log_ok}
 
 
-# ---------------------------------------------------------------- Vorschlag für den Dialog
+# ---------------------------------------------------------------- suggestion for the dialog
 def _types_from_names(picks: list[int], names: dict, disc: dict) -> dict[int, dict]:
     by_id = {t["id"]: t for t in disc["titles"]}
     out, longest = {}, max(picks, key=lambda i: by_id[i]["duration"]) if picks else None
@@ -121,13 +121,13 @@ def _types_from_names(picks: list[int], names: dict, disc: dict) -> dict[int, di
 
 
 async def prefill(drive) -> dict:
-    """Vorschlag: gemerkte Auswahl von Hand, sonst die Titelwahl des Headless-Modus; TMDB-Kennung, wenn bekannt."""
+    """Suggestion: the remembered selection by hand, otherwise headless mode's title choice; TMDB id if known."""
     disc, ids = drive.disc, await planner.get_ids(drive)
     picks, names, source, kind, tm, folder = [], {}, "", "", None, ""
     entry, _ = await memory.lookup(ids) if planner.ids_key(ids) else (None, "")
     m = memory.match(entry, disc) if entry else None
     if m and m["ok"]:
-        picks, names, source, folder = m["picks"], m["names"], "gemerkte Auswahl von Hand", m["folder"]
+        picks, names, source, folder = m["picks"], m["names"], "remembered selection by hand", m["folder"]
     else:
         p = await planner.plan(drive)
         picks, names, source, tm = p["picks"], p["names"], p["source"], p.get("tmdb")

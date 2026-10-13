@@ -1,4 +1,4 @@
-"""Dateien einer Auswahl einsammeln (Ordner werden aufgelöst) und Laufzeit sowie Begleitdaten dazu holen."""
+"""Collect the files of a selection (folders are resolved) and fetch runtime and companion data for them."""
 import asyncio
 import os
 from pathlib import Path
@@ -12,7 +12,7 @@ _sem = asyncio.Semaphore(3)
 
 
 def expand(paths: list[str]) -> list[str]:
-    """Pfade (Dateien oder Ordner, relativ zum Ausgabeordner) -> Liste der Videodateien, sortiert, ohne Doppelte."""
+    """Paths (files or folders, relative to the output folder) -> list of video files, sorted, without duplicates."""
     base = files.out_dir()[0].resolve()
     out: list[str] = []
     for rel in paths:
@@ -28,9 +28,9 @@ def expand(paths: list[str]) -> list[str]:
 
 
 async def duration(rel: str, size: int) -> float:
-    """Laufzeit in Sekunden: aus der Begleitdatei beim Rippen, dem Bibliotheks-Zwischenspeicher, sonst per ffprobe (höchstens drei gleichzeitig). 0 = unbekannt."""
+    """Runtime in seconds: from the companion file of the rip, the library cache, otherwise via ffprobe (at most three at a time). 0 = unknown."""
     sc = store.sidecar(rel)
-    if sc and sc["title"].get("duration"):                  # echte Laufzeit der Disc (die Datei selbst kann gekürzt sein)
+    if sc and sc["title"].get("duration"):                  # the disc's real runtime (the file itself may be shorter)
         return float(sc["title"]["duration"])
     from app import library
     c = library.lib_cache.get(rel)
@@ -46,7 +46,7 @@ async def duration(rel: str, size: int) -> float:
 
 
 async def describe(paths: list[str]) -> list[dict]:
-    """[{path, size, dur, disc?, title_id?}] für `detect.detect`."""
+    """[{path, size, dur, disc?, title_id?}] for `detect.detect`."""
     rels = expand(paths)
     sizes = [files.inside_out(r).stat().st_size for r in rels]
     durs = await asyncio.gather(*(duration(r, s) for r, s in zip(rels, sizes)))

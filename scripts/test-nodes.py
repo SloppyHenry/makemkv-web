@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-"""Verbund-Test mit drei lokalen Instanzen (Paket C). Die Instanzen müssen laufen (frische Datenordner):
+"""Cluster test with three local instances (package C). The instances must be running (fresh data folders):
 
   export NODES_SCAN_TARGETS="127.0.0.1:8820-8822"
   scripts/dev.sh start --bg --port 8820 --name dev-c  --peers "dev-c2=http://127.0.0.1:8821"
   scripts/dev.sh start --bg --port 8821 --name dev-c2 --peers "dev-c=http://127.0.0.1:8820"
-  DEV_ASGI=main:app DEV_APP_DIR=<ae4603e>/app scripts/dev.sh start --bg --port 8822 --name dev-c3   # alter Stand
+  DEV_ASGI=main:app DEV_APP_DIR=<ae4603e>/app scripts/dev.sh start --bg --port 8822 --name dev-c3   # old version
   scripts/test-nodes.py
 
-A = 8820 (verbund), B = 8821 (verbund), C = 8822 (alter Stand ae4603e). Der Test ändert die Einstellungen von A und B.
+A = 8820 (cluster), B = 8821 (cluster), C = 8822 (old version ae4603e). The test changes the settings of A and B.
 """
 import json
 import sys
@@ -34,7 +34,7 @@ def call(base, path, body=None, method=None, headers=None):
 
 def check(cond, msg):
     global fails
-    print(("ok   " if cond else "FEHLER ") + msg)
+    print(("ok    " if cond else "ERROR ") + msg)
     fails += 0 if cond else 1
 
 
@@ -61,105 +61,105 @@ def settings(base, **kw):
 
 
 wait(lambda: call(C, "/api/state")[0] == 200 and call(B, "/api/state")[0] == 200, 30)
-# 1. Migration aus PEERS
+# 1. migration from PEERS
 p = wait(lambda: (peer(A, "dev-c2") or {}).get("reachable") and peer(A, "dev-c2"))
-check(p and p["trust"] == "legacy" and not p["legacy"], "A: dev-c2 aus PEERS übernommen, erreichbar, nicht gekoppelt (neue Version)")
-check(state(A)["settings"]["nodes"]["mode"] == "verbund", "A: Betriebsart wegen PEERS auf verbund")
-check("token" not in json.dumps(state(A)), "A: kein Token in /api/state")
+check(p and p["trust"] == "legacy" and not p["legacy"], "A: dev-c2 taken over from PEERS, reachable, not paired (new version)")
+check(state(A)["settings"]["nodes"]["mode"] == "verbund", "A: mode set to cluster because of PEERS")
+check("token" not in json.dumps(state(A)), "A: no token in /api/state")
 
-# 2. alter Rechner: prüfen, hinzufügen, Kopplung nicht möglich
+# 2. old machine: check, add, pairing not possible
 s, r = call(A, "/api/nodes/check", {"url": "127.0.0.1:8822"})
-check(s == 200 and r["ok"] and r["legacy"], "A: check erkennt C als ältere Version")
+check(s == 200 and r["ok"] and r["legacy"], "A: check recognizes C as an older version")
 s, r = call(A, "/api/nodes/pair", {"url": C})
-check(s == 409, "A: Kopplung mit C (alt) abgelehnt: " + str(r.get("detail"))[:60])
-s, r = call(A, "/api/nodes", {"url": C, "name": "alt"})
-check(s == 200 and r["name"] == "alt", "A: C ohne Kopplung hinzugefügt")
-p = wait(lambda: (peer(A, "alt") or {}).get("reachable") and peer(A, "alt"))
-check(p and p["legacy"] and p["version"] == "" and p["trust"] == "legacy", "A: C als ältere Version markiert (legacy, ohne Version)")
+check(s == 409, "A: pairing with C (old) refused: " + str(r.get("detail"))[:60])
+s, r = call(A, "/api/nodes", {"url": C, "name": "old"})
+check(s == 200 and r["name"] == "old", "A: C added without pairing")
+p = wait(lambda: (peer(A, "old") or {}).get("reachable") and peer(A, "old"))
+check(p and p["legacy"] and p["version"] == "" and p["trust"] == "legacy", "A: C marked as an older version (legacy, without version)")
 s, r = call(A, "/api/nodes", {"url": B})
-check(s == 409, "A: neue Version nicht ohne Kopplung hinzufügbar (schon in Liste)")
+check(s == 409, "A: new version cannot be added without pairing (already in the list)")
 
-# 3. Suche: B nicht auffindbar, dann auffindbar
+# 3. search: B not discoverable, then discoverable
 settings(B, discoverable=False)
 settings(A, discoverable=False)
 call(A, "/api/discovery/scan", {})
 wait(lambda: not call(A, "/api/discovery/scan")[1]["running"])
 sc = call(A, "/api/discovery/scan")[1]
-check(not sc["found"] and sc["total"] == 3, f"Suche: nichts gefunden, solange niemand auffindbar ist ({sc['total']} Adressen)")
-check(call(B, "/api/discovery/hello")[0] == 404, "hello: 404, wenn nicht auffindbar")
+check(not sc["found"] and sc["total"] == 3, f"search: nothing found as long as nobody is discoverable ({sc['total']} addresses)")
+check(call(B, "/api/discovery/hello")[0] == 404, "hello: 404 when not discoverable")
 settings(B, discoverable=True)
 call(A, "/api/discovery/scan", {})
 time.sleep(0.5)
 wait(lambda: not call(A, "/api/discovery/scan")[1]["running"])
 sc = call(A, "/api/discovery/scan")[1]
-check([f["name"] for f in sc["found"]] == ["dev-c2"] and sc["found"][0]["known"] == "dev-c2", "Suche: nur B gefunden (alter Rechner antwortet nicht), als bekannt markiert")
+check([f["name"] for f in sc["found"]] == ["dev-c2"] and sc["found"][0]["known"] == "dev-c2", "search: only B found (the old machine does not answer), marked as known")
 settings(B, discoverable=False)
 
-# 4. Kopplung A -> B mit Bestätigung
+# 4. pairing A -> B with confirmation
 s, r = call(A, "/api/nodes/pair", {"url": B})
-check(s == 200 and len(r["code"]) == 6, "A: Kopplungsanfrage gesendet")
+check(s == 200 and len(r["code"]) == 6, "A: pairing request sent")
 inc = wait(lambda: state(B)["nodemgr"]["pairing"]["incoming"])
-check(inc and inc[0]["code"] == r["code"], "B: Anfrage mit demselben Code sichtbar")
+check(inc and inc[0]["code"] == r["code"], "B: request visible with the same code")
 time.sleep(3)
-check((peer(A, "dev-c2") or {}).get("trust") == "legacy", "A: bis zur Bestätigung weiter nicht gekoppelt")
+check((peer(A, "dev-c2") or {}).get("trust") == "legacy", "A: still not paired until confirmed")
 s, _ = call(B, f"/api/nodes/pair-incoming/{inc[0]['rid']}/accept", {})
-check(s == 200, "B: bestätigt")
-check(wait(lambda: (peer(A, "dev-c2") or {}).get("trust") == "paired"), "A: dev-c2 gekoppelt")
-check(wait(lambda: (peer(B, "dev-c") or {}).get("trust") == "paired"), "B: dev-c gekoppelt")
+check(s == 200, "B: confirmed")
+check(wait(lambda: (peer(A, "dev-c2") or {}).get("trust") == "paired"), "A: dev-c2 paired")
+check(wait(lambda: (peer(B, "dev-c") or {}).get("trust") == "paired"), "B: dev-c paired")
 time.sleep(14)
-check((peer(B, "dev-c") or {}).get("trust") == "paired" and (peer(A, "dev-c2") or {}).get("trust") == "paired", "beide bleiben gekoppelt (kein falsches „gelöst“)")
+check((peer(B, "dev-c") or {}).get("trust") == "paired" and (peer(A, "dev-c2") or {}).get("trust") == "paired", "both stay paired (no false \"dissolved\")")
 s, r = call(A, "/api/peer/dev-c2/conversions/pause", {"paused": False})
-check(s == 200, "Proxy mit Token funktioniert")
+check(s == 200, "proxy with token works")
 s, r = call(B, "/api/nodes/whoami")
-check(r == {"paired": False}, "whoami ohne Token verrät nichts")
+check(r == {"paired": False}, "whoami without a token reveals nothing")
 tok = json.load(open(sys.argv[1]))["nodes"][0]["token"] if len(sys.argv) > 1 else None
 if tok:
-    check(call(B, "/api/nodes/whoami", headers={"X-Node-Token": tok})[1].get("paired") is True, "whoami mit Token: gekoppelt")
+    check(call(B, "/api/nodes/whoami", headers={"X-Node-Token": tok})[1].get("paired") is True, "whoami with token: paired")
 
-# 5. Entkoppeln von A: beide Seiten ohne Token
+# 5. unpairing from A: both sides without a token
 s, nodes = call(A, "/api/nodes")
 nid = next(n["nid"] for n in nodes["nodes"] if n["name"] == "dev-c2")
-check(call(A, f"/api/nodes/{nid}/unpair", {})[0] == 200, "A: entkoppelt")
+check(call(A, f"/api/nodes/{nid}/unpair", {})[0] == 200, "A: unpaired")
 check(wait(lambda: (peer(A, "dev-c2") or {}).get("trust") == "legacy") and wait(lambda: (peer(B, "dev-c") or {}).get("trust") == "legacy"),
-      "beide Seiten: Token gelöscht, Rechner bleibt in der Liste")
+      "both sides: token deleted, the machine stays in the list")
 
-# 6. Ablehnen und Zurückziehen
+# 6. declining and withdrawing
 s, r = call(A, "/api/nodes/pair", {"url": B})
 inc = wait(lambda: state(B)["nodemgr"]["pairing"]["incoming"])
 call(B, f"/api/nodes/pair-incoming/{inc[0]['rid']}/deny", {})
 o = wait(lambda: [x for x in state(A)["nodemgr"]["pairing"]["outgoing"] if x["rid"] == r["rid"] and x["status"] != "waiting"])
-check(o and o[0]["status"] == "denied", "Ablehnen kommt bei A an")
+check(o and o[0]["status"] == "denied", "declining reaches A")
 s, r = call(A, "/api/nodes/pair", {"url": B})
-check(s == 200, "A: neue Anfrage")
+check(s == 200, "A: new request")
 call(A, f"/api/nodes/pair-outgoing/{r['rid']}/cancel", {})
-check(wait(lambda: not state(B)["nodemgr"]["pairing"]["incoming"]), "Zurückziehen entfernt die Anfrage bei B")
+check(wait(lambda: not state(B)["nodemgr"]["pairing"]["incoming"]), "withdrawing removes the request on B")
 
-# 7. Koppeln, dann B entfernt A -> A wird benachrichtigt
+# 7. pair, then B removes A -> A is notified
 s, r = call(A, "/api/nodes/pair", {"url": B})
 inc = wait(lambda: state(B)["nodemgr"]["pairing"]["incoming"])
 call(B, f"/api/nodes/pair-incoming/{inc[0]['rid']}/accept", {})
 wait(lambda: (peer(A, "dev-c2") or {}).get("trust") == "paired")
 nidB = next(n["nid"] for n in call(B, "/api/nodes")[1]["nodes"] if n["name"] == "dev-c")
 call(B, f"/api/nodes/{nidB}", method="DELETE")
-check(wait(lambda: (peer(A, "dev-c2") or {}).get("trust") == "legacy"), "A: wurde von B entkoppelt (Token weg)")
-check(peer(B, "dev-c") is None, "B: dev-c aus der Liste entfernt")
+check(wait(lambda: (peer(A, "dev-c2") or {}).get("trust") == "legacy"), "A: was unpaired by B (token gone)")
+check(peer(B, "dev-c") is None, "B: dev-c removed from the list")
 
-# 8. Umbenennen, doppelter Name
-nid = next(n["nid"] for n in call(A, "/api/nodes")[1]["nodes"] if n["name"] == "alt")
-check(call(A, f"/api/nodes/{nid}", {"name": "dev-c2"}, "PATCH")[0] == 409, "Umbenennen auf vergebenen Namen: 409")
-check(call(A, f"/api/nodes/{nid}", {"name": "secondtux"}, "PATCH")[0] == 200 and wait(lambda: peer(A, "secondtux") and not peer(A, "alt")), "Umbenennen übernimmt Zustand")
+# 8. renaming, duplicate name
+nid = next(n["nid"] for n in call(A, "/api/nodes")[1]["nodes"] if n["name"] == "old")
+check(call(A, f"/api/nodes/{nid}", {"name": "dev-c2"}, "PATCH")[0] == 409, "renaming to a name that is taken: 409")
+check(call(A, f"/api/nodes/{nid}", {"name": "secondtux"}, "PATCH")[0] == 200 and wait(lambda: peer(A, "secondtux") and not peer(A, "old")), "renaming keeps the state")
 
-# 9. Eigenständig
+# 9. standalone
 settings(A, mode="standalone", discoverable=True)
 time.sleep(1.5)
-check(state(A)["peers"] == [], "eigenständig: keine Rechner in /api/state")
-check(call(A, "/api/discovery/hello")[0] == 404, "eigenständig: nicht auffindbar")
-check(call(A, "/api/discovery/scan", {})[0] == 409, "eigenständig: keine Suche")
+check(state(A)["peers"] == [], "standalone: no machines in /api/state")
+check(call(A, "/api/discovery/hello")[0] == 404, "standalone: not discoverable")
+check(call(A, "/api/discovery/scan", {})[0] == 409, "standalone: no search")
 s, r = call(A, "/api/nodes/pair-request", {"id": "x" * 32, "name": "x", "url": B, "secret": "s" * 20})
-check(s == 403, "eigenständig: keine Kopplungsanfragen")
-check(len(state(A)["nodemgr"]["nodes"]) == 2, "eigenständig: Liste bleibt gespeichert")
+check(s == 403, "standalone: no pairing requests")
+check(len(state(A)["nodemgr"]["nodes"]) == 2, "standalone: the list stays saved")
 settings(A, mode="verbund")
-check(wait(lambda: (peer(A, "dev-c2") or {}).get("reachable")), "zurück im Verbund: Rechner wieder da")
+check(wait(lambda: (peer(A, "dev-c2") or {}).get("reachable")), "back in cluster mode: machines are back")
 
-print("\nFehler:", fails)
+print("\nErrors:", fails)
 sys.exit(1 if fails else 0)

@@ -1,4 +1,4 @@
-"""Auswerfen: lehnt das Laufwerk CDROMEJECT ab (positiver SCSI-Status), geht es über den SCSI-Weg wie `eject`."""
+"""Ejecting: if the drive refuses CDROMEJECT (positive SCSI status), the SCSI path is used like `eject`."""
 import unittest
 from unittest import mock
 
@@ -19,7 +19,7 @@ class TrayTest(unittest.TestCase):
         self.assertFalse(self._tray(drives.CDROM_EJECT, 0).called)
 
     def test_eject_check_condition_uses_scsi(self):
-        """Panasonic UJ240 im USB-Gehäuse (vierstein): CDROMEJECT -> 2, Disc bleibt drin."""
+        """Panasonic UJ240 in a USB enclosure (vierstein): CDROMEJECT -> 2, the disc stays in."""
         self.assertEqual(self._tray(drives.CDROM_EJECT, 2).call_args.args, ("/dev/sr0",))
 
     def test_close_refused_raises(self):

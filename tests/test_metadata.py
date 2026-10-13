@@ -1,4 +1,4 @@
-"""Tests für app/media/metadata.py gegen die lokale TMDB-Attrappe (scripts/tmdb_mock.py), kein Netzwerkzugriff nach außen."""
+"""Tests for app/media/metadata.py against the local fake TMDB (scripts/tmdb_mock.py), no network access to the outside."""
 import asyncio
 import importlib.util
 import tempfile
@@ -49,7 +49,7 @@ class MetadataTest(unittest.TestCase):
 
     def test_key_test(self):
         self.assertTrue(run(m.test_key("testkey"))["ok"])
-        bad = run(m.test_key("falsch"))
+        bad = run(m.test_key("wrong"))
         self.assertFalse(bad["ok"])
         self.assertEqual(bad["code"], "bad_key")
 
@@ -60,7 +60,7 @@ class MetadataTest(unittest.TestCase):
         self.assertTrue(r[0]["poster_url"].endswith("/w185/twd.jpg"))
         n = self.calls
         run(m.search("testkey", "tv", "walking dead"))
-        self.assertEqual(self.calls, n)                                  # aus dem Zwischenspeicher
+        self.assertEqual(self.calls, n)                                  # from the cache
         self.assertGreater(m.cache_size(), 0)
 
     def test_year_filter(self):
@@ -90,11 +90,11 @@ class MetadataTest(unittest.TestCase):
     def test_network_error_uses_stale_cache(self):
         run(m.search("testkey", "movie", "matrix"))
         old = m.BASE
-        m.BASE = "http://127.0.0.1:9/3"                                  # nichts hört zu
+        m.BASE = "http://127.0.0.1:9/3"                                  # nothing is listening
         try:
-            self.assertEqual(run(m.search("testkey", "movie", "matrix", ))[0]["tmdb"], 603)   # frisch genug: Cache
+            self.assertEqual(run(m.search("testkey", "movie", "matrix", ))[0]["tmdb"], 603)   # fresh enough: cache
             with self.assertRaises(m.MetadataError) as c:
-                run(m.search("testkey", "movie", "nichtda"))
+                run(m.search("testkey", "movie", "notthere"))
             self.assertEqual(c.exception.code, "network")
         finally:
             m.BASE = old

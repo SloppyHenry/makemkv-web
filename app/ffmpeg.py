@@ -1,4 +1,4 @@
-"""ffmpeg/ffprobe: Argumente, Fortschritt, Segmente, Pause."""
+"""ffmpeg/ffprobe: arguments, progress, segments, pause."""
 import asyncio
 import json
 import os
@@ -24,7 +24,7 @@ def signal_all(procs: list, sig: int):
 
 
 def set_conv_paused(paused: bool):
-    """Alle laufenden ffmpeg-Prozesse anhalten bzw. fortsetzen; neue Aufträge starten erst nach dem Fortsetzen."""
+    """Stop or resume all running ffmpeg processes; new jobs only start after resuming."""
     conv_state["paused"] = paused
     for procs in conv_procs.values():
         signal_all(procs, signal.SIGSTOP if paused else signal.SIGCONT)
@@ -34,7 +34,7 @@ def set_conv_paused(paused: bool):
 
 
 def apply_pause(procs: list):
-    """Frisch gestartete Prozesse sofort anhalten, wenn gerade pausiert ist."""
+    """Stop freshly started processes right away if paused at the moment."""
     if conv_state["paused"]:
         signal_all(procs, signal.SIGSTOP)
 
@@ -57,7 +57,7 @@ async def probe(path: Path) -> dict:
 
 
 async def detect_crop(src: Path, dur: float, w: int, h: int):
-    """Schwarze Balken automatisch erkennen (5 Stichproben, größter gemeinsamer Bildbereich)."""
+    """Detect black bars automatically (5 samples, largest common picture area)."""
     boxes = []
     for f in (0.1, 0.3, 0.5, 0.7, 0.9):
         p = await asyncio.create_subprocess_exec("nice", "-n", "10", "ffmpeg", "-hide_banner", "-nostdin", "-ss", str(int(dur * f)), "-i", str(src),
@@ -78,7 +78,7 @@ async def detect_crop(src: Path, dur: float, w: int, h: int):
 
 
 async def detect_scan(src: Path, dur: float) -> str:
-    """Zeilensprung erkennen (idet an drei Stellen): 'progressive', 'interlaced' oder 'telecine' (3:2-Pulldown, braucht IVTC)."""
+    """Detect interlacing (idet at three positions): 'progressive', 'interlaced' or 'telecine' (3:2 pulldown, needs IVTC)."""
     tff = bff = prog = top = bot = neither = 0
     for f in (0.25, 0.5, 0.75):
         p = await asyncio.create_subprocess_exec("nice", "-n", "10", "ffmpeg", "-hide_banner", "-nostdin", "-ss", str(int(dur * f)), "-i", str(src), "-t", "12",
@@ -99,13 +99,13 @@ async def detect_scan(src: Path, dur: float) -> str:
 
 
 def _frac(v: str, scale: int) -> int:
-    """ffprobe liefert Brüche wie „34000/50000“; x265 will ganze Zahlen in festen Einheiten."""
+    """ffprobe returns fractions like "34000/50000"; x265 wants integers in fixed units."""
     n, _, d = str(v).partition("/")
     return round(float(n) / float(d or 1) * scale)
 
 
 async def probe_hdr(src: Path) -> dict:
-    """HDR10-Angaben (Mastering-Display, MaxCLL/MaxFALL) aus dem ersten Bild der Quelle; Dolby Vision wird nur erkannt (nicht erhalten)."""
+    """HDR10 metadata (mastering display, MaxCLL/MaxFALL) from the first frame of the source; Dolby Vision is only detected (not kept)."""
     p = await asyncio.create_subprocess_exec("ffprobe", "-v", "error", "-select_streams", "v:0", "-read_intervals", "%+#1", "-show_frames", "-print_format", "json",
                                              str(src), stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL)
     out, _ = await p.communicate()
@@ -127,7 +127,7 @@ async def probe_hdr(src: Path) -> dict:
 
 
 async def pump(proc, state: dict, key, tail: deque) -> int:
-    """Liest die -progress-Ausgabe eines ffmpeg-Prozesses nach state[key] und sammelt die letzten Fehlerzeilen."""
+    """Reads the -progress output of an ffmpeg process into state[key] and collects the last error lines."""
     async def err():
         async for raw in proc.stderr:
             tail.append(raw.decode(errors="replace").strip())
@@ -152,10 +152,10 @@ async def pump(proc, state: dict, key, tail: deque) -> int:
 
 
 async def aggregate(item: dict, state: dict, dur: float, npass: int = 1, cur: list | None = None):
-    """Fortschritt aller (Teil-)Prozesse zu einer Anzeige zusammenfassen. Bei zwei Durchgängen zählt `cur[0]` den laufenden (0 oder 1)."""
+    """Combine the progress of all (partial) processes into one display. With two passes `cur[0]` counts the running one (0 or 1)."""
     t0 = time.monotonic()
     while True:
-        if conv_state["paused"]:                      # Pausenzeit zählt nicht zur Laufzeit (Tempo/Restzeit)
+        if conv_state["paused"]:                      # paused time does not count towards elapsed time (speed/remaining time)
             t0 += 0.8
             await asyncio.sleep(0.8)
             continue
@@ -183,7 +183,7 @@ async def _run_one(item, args: list[str], state: dict, tail: deque) -> int:
 
 
 async def convert_single(item, src, cfg, ctx, dur, out):
-    """Ein Prozess für den ganzen Film; bei „Zielgröße“/„Bitrate“ mit x265/x264 in zwei Durchgängen."""
+    """One process for the whole movie; with "target size"/"bitrate" and x265/x264 in two passes."""
     passes = [1, 2] if two_pass(cfg) else [0]
     cur, rc = [0], 0
     state, tail = {0: {"t": 0.0, "fps": 0.0, "size": 0}}, deque(maxlen=40)
@@ -206,11 +206,11 @@ async def convert_single(item, src, cfg, ctx, dur, out):
         raise SkipConversion()
     if rc != 0 or not out.exists():
         out.unlink(missing_ok=True)
-        raise OSError(ffmpeg_errors.message("ffmpeg fehlgeschlagen", tail))
+        raise OSError(ffmpeg_errors.message("ffmpeg failed", tail))
 
 
 async def convert_segments(item, src, cfg, ctx, dur, nseg, out):
-    """Film in Zeitabschnitte teilen, parallel kodieren, danach mit Original-Audio/Untertiteln/Kapiteln zusammensetzen."""
+    """Split the movie into time segments, encode them in parallel, then join them with the original audio/subtitles/chapters."""
     info = ctx["info"]
     v = next(x for x in info["streams"] if x["codec_type"] == "video")
     num, den = (int(x) for x in v["r_frame_rate"].split("/"))
@@ -226,7 +226,7 @@ async def convert_segments(item, src, cfg, ctx, dur, nseg, out):
         for i in range(nseg):
             seek = []
             if i > 0:
-                seek += ["-ss", f"{(bounds[i] - 0.5) / fps:.6f}"]       # Schnitt auf halber Bildgrenze: eindeutig, ohne doppeltes/fehlendes Bild
+                seek += ["-ss", f"{(bounds[i] - 0.5) / fps:.6f}"]       # cut at half a frame boundary: unambiguous, no duplicate/missing frame
             if i < nseg - 1:
                 seek += ["-to", f"{(bounds[i + 1] - 0.5) / fps:.6f}"]
             procs.append(await spawn(segment_args(src, work / f"seg{i:02d}.mkv", cfg, sctx, seek, f"{num}/{den}")))
@@ -244,12 +244,12 @@ async def convert_segments(item, src, cfg, ctx, dur, nseg, out):
             raise SkipConversion()
         for i, rc in enumerate(rcs):
             if rc != 0:
-                raise OSError(ffmpeg_errors.message(f"Segment {i + 1}/{nseg} fehlgeschlagen", tails[i], 3))
-        for i in range(nseg):                                        # jedes Segment muss die erwartete Länge haben
+                raise OSError(ffmpeg_errors.message(f"Segment {i + 1}/{nseg} failed", tails[i], 3))
+        for i in range(nseg):                                        # every segment must have the expected length
             want = (bounds[i + 1] - bounds[i]) / fps
             got = float((await probe(work / f"seg{i:02d}.mkv"))["format"]["duration"])
             if abs(got - want) > 2 / fps + 0.3:
-                raise OSError(f"Segment {i + 1} hat falsche Länge ({got:.2f}s statt {want:.2f}s)")
+                raise OSError(f"Segment {i + 1} has the wrong length ({got:.2f}s instead of {want:.2f}s)")
         item.update(pct=0.98, eta=0, fps=0.0)
         broadcast()
         lst = work / "list.txt"
@@ -262,15 +262,15 @@ async def convert_segments(item, src, cfg, ctx, dur, nseg, out):
         if item["status"] == "skipped":
             raise SkipConversion()
         if p.returncode != 0 or not out.exists():
-            raise OSError("Zusammensetzen fehlgeschlagen: " + err.decode(errors="replace")[-300:])
-        # Bildanzahl des Ergebnisses prüfen (±1 Bild je Schnittstelle toleriert)
+            raise OSError("Joining failed: " + err.decode(errors="replace")[-300:])
+        # check the frame count of the result (±1 frame per cut tolerated)
         r = await asyncio.create_subprocess_exec("ffprobe", "-v", "error", "-select_streams", "v:0", "-count_packets", "-show_entries",
                                                  "stream=nb_read_packets", "-of", "csv=p=0", str(out),
                                                  stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL)
         o, _ = await r.communicate()
         frames = int(o.decode().strip().split(",")[0] or 0)
         if abs(frames - total) > nseg + 3:
-            raise OSError(f"Bildanzahl stimmt nicht ({frames} statt ca. {total})")
+            raise OSError(f"Frame count does not match ({frames} instead of about {total})")
     except BaseException:
         out.unlink(missing_ok=True)
         for pr in procs:
