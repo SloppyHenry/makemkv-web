@@ -24,7 +24,7 @@ from app.config import DATA, INSTANCE
 
 FILE = DATA / "nodes.json"
 DEFAULT_PORT = 8780
-DEFAULTS = {"mode": "standalone", "discoverable": False, "name": "", "public_url": "", "scan_nets": "", "auto_search": False}
+DEFAULTS = {"mode": "verbund", "pairing_required": False, "name": "", "public_url": "", "scan_nets": "", "auto_search": False}
 STARTED = time.time()
 
 data: dict = {"v": 1, "id": "", "nodes": [], "env_seen": []}
@@ -36,7 +36,7 @@ def cfg() -> dict:
 
 
 def active() -> bool:
-    """Cluster mode? (Standalone: no polling, no search, not discoverable.)"""
+    """Cluster mode? (Standalone: no polling, no search, not discoverable. In cluster mode every machine is always discoverable.)"""
     return cfg()["mode"] == "verbund"
 
 

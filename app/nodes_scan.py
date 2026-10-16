@@ -11,7 +11,7 @@ Which addresses are checked (order of the sources):
   4. setting `nodes.scan_nets` (CIDR list)
   5. only if none of that yields a network: the networks of the own interfaces
 Ports: 8780, the port of the opened page and NODES_SCAN_PORTS.
-A machine only answers if "discoverable" is switched on there; otherwise 404.
+A machine always answers, except in standalone mode (then 404).
 """
 import asyncio
 import ipaddress
@@ -39,8 +39,8 @@ APP_NAMES = ("spindle", "makemkv-web")   # "makemkv-web": machines still running
 
 @router.get("/hello")
 def hello():
-    """Answer to the search. Only in cluster mode and only if "discoverable" is on; otherwise the machine pretends this does not exist."""
-    if not (store.active() and store.cfg()["discoverable"]):
+    """Answer to the search. Only in cluster mode; in standalone mode the machine pretends this does not exist."""
+    if not store.active():
         raise HTTPException(404, "Not found")
     return {"app": "spindle", "id": store.self_id(), "name": store.self_name(), "instance": INSTANCE, "version": VERSION, "features": FEATURES,
             "cores": os.cpu_count() or 1, "mem": store.mem_total(), "pairing": True}

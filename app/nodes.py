@@ -5,7 +5,8 @@ This module is loaded automatically by main.py (OPTIONAL_MODULES) and registers 
   nodes_pair.py   pairing with confirmation, unpairing
   nodes_scan.py   finding machines on the network
   cluster.py      polling the machines, proxy, hand-over
-Settings (namespace `nodes`): mode (standalone|verbund = cluster), discoverable, name, public_url, scan_nets, auto_search.
+Settings (namespace `nodes`): mode (verbund = cluster | standalone), pairing_required, name, public_url, scan_nets, auto_search.
+Default: cluster mode, always discoverable, pairing with a token optional (pairing_required=False: machines can be added directly).
 """
 import asyncio
 import ipaddress
@@ -26,8 +27,8 @@ router = APIRouter(prefix="/api/nodes")
 
 
 class NodesSettings(BaseModel):
-    mode: Literal["standalone", "verbund"] = "standalone"
-    discoverable: bool = False
+    mode: Literal["standalone", "verbund"] = "verbund"
+    pairing_required: bool = False
     name: str = ""
     public_url: str = ""
     scan_nets: str = ""
@@ -73,7 +74,7 @@ ext.register_capability("nodes", 1)
 def identity() -> dict:
     """Lightweight: read by other machines (name, mode, hardware)."""
     c = store.cfg()
-    return {"id": store.self_id(), "name": store.self_name(), "mode": c["mode"], "discoverable": bool(c["discoverable"] and c["mode"] == "verbund"),
+    return {"id": store.self_id(), "name": store.self_name(), "mode": c["mode"], "discoverable": c["mode"] == "verbund",
             "version": VERSION, "started": store.STARTED, "cores": os.cpu_count() or 1, "mem": store.mem_total()}
 
 
@@ -132,7 +133,7 @@ async def api_check(req: UrlReq):
 
 @router.post("")
 async def api_add(req: UrlReq):
-    """Add a machine without pairing – only for old versions that do not know pairing. New ones are paired via /api/nodes/pair."""
+    """Add a machine without pairing: always allowed for old versions; for new ones only while pairing is not required (pairing_required)."""
     _need_active()
     url = store.norm_url(req.url)
     if not url:
@@ -144,8 +145,8 @@ async def api_add(req: UrlReq):
         raise HTTPException(502, r["error"])
     if r["self"]:
         raise HTTPException(400, "That is this machine.")
-    if not r["legacy"]:
-        raise HTTPException(409, "This machine supports pairing – please use \"Request pairing\".")
+    if not r["legacy"] and store.cfg()["pairing_required"]:
+        raise HTTPException(409, "Pairing is required – please use \"Request pairing\".")
     n = store.add(req.name or r["name"] or url_host_name(url), url, "manual")
     broadcast()
     return store.public(n)

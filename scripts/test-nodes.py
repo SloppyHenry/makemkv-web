@@ -79,21 +79,23 @@ check(p and p["legacy"] and p["version"] == "" and p["trust"] == "legacy", "A: C
 s, r = call(A, "/api/nodes", {"url": B})
 check(s == 409, "A: new version cannot be added without pairing (already in the list)")
 
-# 3. search: B not discoverable, then discoverable
-settings(B, discoverable=False)
-settings(A, discoverable=False)
-call(A, "/api/discovery/scan", {})
-wait(lambda: not call(A, "/api/discovery/scan")[1]["running"])
-sc = call(A, "/api/discovery/scan")[1]
-check(not sc["found"] and sc["total"] == 3, f"search: nothing found as long as nobody is discoverable ({sc['total']} addresses)")
-check(call(B, "/api/discovery/hello")[0] == 404, "hello: 404 when not discoverable")
-settings(B, discoverable=True)
+# 3. search: in cluster mode every machine is always discoverable
+check(call(B, "/api/discovery/hello")[0] == 200, "hello: B always answers in cluster mode")
 call(A, "/api/discovery/scan", {})
 time.sleep(0.5)
 wait(lambda: not call(A, "/api/discovery/scan")[1]["running"])
 sc = call(A, "/api/discovery/scan")[1]
 check([f["name"] for f in sc["found"]] == ["dev-c2"] and sc["found"][0]["known"] == "dev-c2", "search: only B found (the old machine does not answer), marked as known")
-settings(B, discoverable=False)
+
+# 3b. pairing is optional: without the requirement B can be added directly, with it not
+nidB = next(n["nid"] for n in call(A, "/api/nodes")[1]["nodes"] if n["name"] == "dev-c2")
+call(A, f"/api/nodes/{nidB}", method="DELETE")
+settings(A, pairing_required=True)
+check(call(A, "/api/nodes", {"url": B})[0] == 409, "A: with pairing required no direct adding")
+settings(A, pairing_required=False)
+s, r = call(A, "/api/nodes", {"url": B})
+check(s == 200 and r["name"] == "dev-c2" and not r["paired"], "A: without the requirement B added directly")
+check(wait(lambda: (peer(A, "dev-c2") or {}).get("reachable")), "A: directly added machine reachable")
 
 # 4. pairing A -> B with confirmation
 s, r = call(A, "/api/nodes/pair", {"url": B})
@@ -150,10 +152,10 @@ check(call(A, f"/api/nodes/{nid}", {"name": "dev-c2"}, "PATCH")[0] == 409, "rena
 check(call(A, f"/api/nodes/{nid}", {"name": "secondtux"}, "PATCH")[0] == 200 and wait(lambda: peer(A, "secondtux") and not peer(A, "old")), "renaming keeps the state")
 
 # 9. standalone
-settings(A, mode="standalone", discoverable=True)
+settings(A, mode="standalone")
 time.sleep(1.5)
 check(state(A)["peers"] == [], "standalone: no machines in /api/state")
-check(call(A, "/api/discovery/hello")[0] == 404, "standalone: not discoverable")
+check(call(A, "/api/discovery/hello")[0] == 404, "standalone: not discoverable (always on only in cluster mode)")
 check(call(A, "/api/discovery/scan", {})[0] == 409, "standalone: no search")
 s, r = call(A, "/api/nodes/pair-request", {"id": "x" * 32, "name": "x", "url": B, "secret": "s" * 20})
 check(s == 403, "standalone: no pairing requests")

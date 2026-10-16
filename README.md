@@ -44,7 +44,7 @@ Settings › MakeMKV key and Settings › About.
 - Library with filters, list/grid view, detail pane and selection bar; converted files replace the original once the check passes; lock files keep two instances from working on the same file
 - Built-in browser player (direct, remux or transcode, subtitles, seeking)
 - Sorting into Jellyfin folders (movies/series) with TMDB search, plan, undo and optional automation
-- Several machines in a cluster: discovery on the network, pairing via token, hand-over of conversions, remote control of drives
+- Several machines in a cluster: always-on discovery on the network, optional pairing via token (off by default), hand-over of conversions, remote control of drives
 - Output to a mounted network share (NFS/SMB), with a local fallback
 - Survives USB resets of the drive (waits and repeats the step automatically)
 - Headless mode: insert a disc, done – the right titles (main feature or episodes) are determined from its own memory (formerly picked by hand), TheDiscDB, TMDB runtimes or the structure of the disc, ripped, and the disc is ejected; unknown discs can be reported to TheDiscDB

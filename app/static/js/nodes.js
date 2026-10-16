@@ -1,6 +1,6 @@
-// Settings section "Machines": mode, name, discoverability, machine list, network search, adding by address.
+// Settings section "Machines": mode, name, pairing (optional), machine list, network search, adding by address.
 // Layout 1:1 after docs/mockups/paket-c.html. The list is not a form field: its buttons call their own endpoints (/api/nodes, /api/discovery).
-// Via the settings page only name, mode, discoverability and the search options are saved (namespace `nodes`).
+// Via the settings page only name, mode, pairing requirement and the search options are saved (namespace `nodes`).
 import { $, S, api, delegate, dec, esc, setHtml, toast } from './core.js';
 import { onState, registerSettingsSection } from './registry.js';
 import { agoSrv, encoderChips, gb, hostOf, spanTxt } from './nodes-util.js';
@@ -8,13 +8,14 @@ import { agoSrv, encoderChips, gb, hostOf, spanTxt } from './nodes-util.js';
 let editing = '', scanOpen = false, addRes = null;
 const tests = {};                                   // nid -> result of the last connection test
 const mgr = () => (S && S.nodemgr) || {nodes: [], pairing: {incoming: [], outgoing: []}, scan: {found: []}};
-const saved = () => (S && S.settings && S.settings.nodes) || {mode: 'standalone', discoverable: false, name: '', scan_nets: '', auto_search: false};
-const active = () => saved().mode === 'verbund';   // stored value 'verbund' = cluster mode
+const saved = () => (S && S.settings && S.settings.nodes) || {mode: 'verbund', pairing_required: false, name: '', scan_nets: '', auto_search: false};
+const active = () => saved().mode === 'verbund';
+const needPair = () => !!saved().pairing_required;   // stored value 'verbund' = cluster mode
 const waitingFor = url => mgr().pairing.outgoing.find(o => o.status === 'waiting' && o.url === url);
 const code = c => String(c || '').replace(/^(\d{3})(\d{3})$/, '$1 $2');
 
 registerSettingsSection({
-  id: 'nodes', label: 'Machines', order: 30, icon: '⇄', description: 'Cluster, discoverability and paired machines',
+  id: 'nodes', label: 'Machines', order: 30, icon: '⇄', description: 'Cluster, pairing and machine list',
   render(el, s){
     const n = s.nodes || saved(), inst = (S && S.capacity && S.capacity.instance) || '';
     el.innerHTML = `<div class="node-section" id="nodeSection">
@@ -27,13 +28,13 @@ registerSettingsSection({
             <p class="help">Standalone: no other machines, no search, no cluster buttons.</p></div>
         </div>
         <p class="node-note info" id="nodeStandNote" style="margin:0" hidden><strong>Standalone mode.</strong> This machine works on its own: no connection to other machines, not discoverable, no cluster buttons. The list below stays saved and becomes active again when you switch back.</p>
-        <label class="node-opt" id="nodeDiscLabel"><input class="check" type="checkbox" id="nodeDisc" ${n.discoverable ? 'checked' : ''}><span>Discoverable on the network<p class="help">Other machines can find this one with "Search the network for machines" and request pairing. Pairing only happens after your confirmation. Off = reachable by address only.</p></span></label>
-        <p class="help" style="margin:0">Name, mode and discoverability are saved by the Save button below. The list takes effect immediately.</p>
+        <label class="node-opt" id="nodeReqLabel"><input class="check" type="checkbox" id="nodeReq" ${n.pairing_required ? 'checked' : ''}><span>Require pairing with a token<p class="help">Off (default): machines on the network can be added with one click, without confirmation or token. On: new machines are only added through a pairing request confirmed on the other machine. In cluster mode every machine is always discoverable on the network.</p></span></label>
+        <p class="help" style="margin:0">Name, mode and pairing requirement are saved by the Save button below. The list takes effect immediately.</p>
       </section>
       <div id="nodeSearchWrap" hidden>
         <section class="panel"><div class="panel-head"><div><h2>Search the network for machines</h2><span class="sub" id="nodeScanSub"></span></div><div class="node-actionsbar" id="nodeScanBtns"></div></div>
           <div id="nodeScanBody"></div></section>
-        <p class="node-note info" style="margin:10px 0 0"><strong>Not found?</strong> A machine only shows up if "Discoverable on the network" is switched on under Settings › Machines on it. Machines with an older version can only be added by address. If this machine runs in Docker, it searches the network you opened the page from; enter a different network below.</p>
+        <p class="node-note info" style="margin:10px 0 0"><strong>Not found?</strong> A machine only shows up if it is running and in cluster mode (not standalone). Machines with an older version can only be added by address. If this machine runs in Docker, it searches the network you opened the page from; enter a different network below.</p>
         <div class="node-field" style="margin-top:10px"><label for="nodeNets">Network to search (optional)</label><input class="input" type="text" id="nodeNets" placeholder="automatic, e.g. 192.168.178.0/24, 10.0.0.0/24" value="${esc(n.scan_nets)}"></div>
         <label class="node-opt" style="margin-top:10px"><input class="check" type="checkbox" id="nodeAuto" ${n.auto_search ? 'checked' : ''}><span>Search regularly in the background<p class="help">Every 10 minutes. New machines are only suggested, never connected automatically.</p></span></label>
       </div>
@@ -49,7 +50,7 @@ registerSettingsSection({
     </div>`;
     const modeChanged = () => {
       const v = ($('input[name=nodeMode]:checked', el) || {}).value, live = v === 'verbund';
-      $('#nodeStandNote').hidden = live; $('#nodeDisc').disabled = !live; $('#nodeDiscLabel').style.opacity = live ? '' : '.45';
+      $('#nodeStandNote').hidden = live; $('#nodeReq').disabled = !live; $('#nodeReqLabel').style.opacity = live ? '' : '.45';
     };
     el.addEventListener('change', e => { if(e.target.name === 'nodeMode') modeChanged(); });
     $('#nodeAddUrl').addEventListener('keydown', e => { if(e.key === 'Enter'){ e.preventDefault(); doCheck(); } });
@@ -58,7 +59,7 @@ registerSettingsSection({
   collect(){
     if(!$('#nodeName')) return {nodes: {}};
     return {nodes: {name: $('#nodeName').value.trim(), mode: ($('input[name=nodeMode]:checked') || {}).value || 'standalone',
-      discoverable: $('#nodeDisc').checked, scan_nets: $('#nodeNets').value.trim(), auto_search: $('#nodeAuto').checked}};
+      pairing_required: $('#nodeReq').checked, scan_nets: $('#nodeNets').value.trim(), auto_search: $('#nodeAuto').checked}};
   },
 });
 
@@ -85,7 +86,7 @@ function note(rec, p, on, known, old, lost, wait){
   else if(p && p.id_mismatch) out.push('<p class="node-note warn">A different machine answers at this address (address reassigned?). Remove it and pair again.</p>');
   else if(!on && known) out.push(`<p class="node-note">Not reachable. Machine off, asleep or disconnected from the network?${rec.paired ? ' The pairing stays in place; things continue as soon as it is back.' : ''}</p>`);
   else if(old) out.push('<p class="node-note warn">Still runs the old version: without pairing and without a capability report. Seeing jobs, hand-over and remote control work as before; new conversion settings (codec, AV1 …) are greyed out for this machine.</p>');
-  else if(on && !rec.paired) out.push(`<p class="node-note info">${rec.origin === 'peers' ? 'Taken over from the former <code>PEERS</code> setting and used without verification as before. ' : 'Not paired yet, used without verification. '}"Pair" replaces that with a token only the two of you know.</p>`);
+  else if(on && !rec.paired && needPair()) out.push(`<p class="node-note info">${rec.origin === 'peers' ? 'Taken over from the former <code>PEERS</code> setting and used without verification as before. ' : 'Not paired yet, used without verification. '}"Pair" replaces that with a token only the two of you know.</p>`);
   return out.join('');
 }
 
@@ -95,7 +96,7 @@ function rowHtml(rec, live){
   const badges = [];
   if(live && !on) badges.push('<span class="st">Offline</span>');
   badges.push(wait ? '<span class="st warn">Waiting for confirmation</span>' : lost ? '<span class="st warn">Pairing dissolved</span>' : rec.paired ? '<span class="st ok">Paired</span>'
-    : old || (known && p.legacy) ? '<span class="st warn">Older version</span>' : '<span class="st warn">Not paired</span>');
+    : old || (known && p.legacy) ? '<span class="st warn">Older version</span>' : needPair() ? '<span class="st warn">Not paired</span>' : '<span class="st">No token</span>');
   if(old && rec.paired) badges.pop();
   const meta = [`<span>${esc(hostOf(rec.url))}</span>`];
   if(on) meta.push(`<span>online for <b>${spanTxt((p.started ? p.now - p.started : S.now - p.online_since))}</b></span>`);
@@ -106,7 +107,7 @@ function rowHtml(rec, live){
     wait ? `<button type="button" class="secondary" data-na="withdraw" data-rid="${esc(wait.rid)}">Withdraw request</button>`
       : lost ? b('pair', 'Pair again', 'primary" style="width:auto') + b('remove', 'Remove', 'secondary danger')
       : rec.paired ? b('unpair', 'Unpair', 'secondary danger')
-      : old || (known && p.legacy) ? b('remove', 'Remove', 'secondary danger') : b('pair', 'Pair', 'primary" style="width:auto') + b('remove', 'Remove', 'secondary danger')].join('');
+      : old || (known && p.legacy) ? b('remove', 'Remove', 'secondary danger') : b('pair', 'Pair', needPair() ? 'primary" style="width:auto' : 'secondary') + b('remove', 'Remove', 'secondary danger')].join('');
   const name = editing === rec.nid ? `<span class="node-name-edit"><input class="input" type="text" id="nodeRen" maxlength="40" value="${esc(rec.name)}" data-nid="${esc(rec.nid)}"><button type="button" class="primary" style="width:auto;padding:7px 12px" data-na="renok" data-nid="${esc(rec.nid)}">OK</button><button type="button" class="secondary" data-na="renx">Cancel</button></span>`
     : `<span class="node-name">${esc(rec.name)}</span>`;
   return `<article class="node ${on ? (old ? 'on old' : 'on') : 'off'}"><div class="node-head"><span class="node-dot" title="${on ? 'Online' : 'Offline'}"></span>${name}<span class="node-badges">${badges.join('')}</span><div class="node-btns">${btns}</div></div>
@@ -136,7 +137,9 @@ function renderScan(){
   const rows = found.map(f => {
     const w = waitingFor(f.url);
     const act = f.self ? '<span class="st">That is you</span>' : w ? '<span class="st warn">Waiting for confirmation</span>' : f.paired ? '<span class="st ok">Paired</span>'
-      : `<button type="button" class="primary" style="width:auto" data-na="pair" data-url="${esc(f.url)}">${f.known ? 'Pair' : 'Connect'}</button>`;
+      : f.known ? `<button type="button" class="${needPair() ? 'primary" style="width:auto' : 'secondary'}" data-na="pair" data-url="${esc(f.url)}">Pair</button>`
+      : needPair() ? `<button type="button" class="primary" style="width:auto" data-na="pair" data-url="${esc(f.url)}">Connect</button>`
+      : `<button type="button" class="primary" style="width:auto" data-na="adddirect" data-url="${esc(f.url)}" data-name="${esc(f.name)}">Add</button><button type="button" class="secondary" data-na="pair" data-url="${esc(f.url)}">Pair</button>`;
     return `<div class="node-found"><span class="node-dot" style="background:${f.self ? '#4a5568' : 'var(--green)'}"></span><div class="grow"><strong>${esc(f.name)}</strong><small>${esc(hostOf(f.url))}${f.self ? ' · this machine' : ` · version ${esc(f.version || '?')}${f.cores ? ' · ' + f.cores + ' threads' : ''}${f.mem ? ' · ' + gb(f.mem) + ' RAM' : ''}${f.known && !f.paired ? ' · already in the list' : ''}`}</small></div>${act}</div>`;
   }).join('');
   setHtml($('#nodeScanBody'), head + (rows ? `<div class="node-list">${rows}</div>` : ''));
@@ -150,7 +153,7 @@ function renderAdd(){
     : r.known ? `<p class="node-note" style="margin:0">Already in the list (as "${esc(r.known)}").</p>`
     : r.legacy ? `<div class="node-head"><span class="node-dot" style="background:var(--amber)"></span><span class="node-name">${name}</span><span class="node-badges"><span class="st warn">Older version</span></span><div class="node-btns"><button type="button" class="secondary" data-na="addold">Add without pairing</button></div></div>
       <p class="node-note warn" style="margin:8px 0 0 20px"><strong>Cannot be paired.</strong> ${name} does not know pairing yet. It can still be used as before (see jobs, control drives, hand-over), but without a token and without newer features; password protection there would block access.</p>`
-    : `<div class="node-head"><span class="node-dot" style="background:var(--green)"></span><span class="node-name">${name}</span><span class="node-badges"><span class="st ok">Reachable</span></span><div class="node-btns"><button type="button" class="primary" style="width:auto" data-na="pair" data-url="${esc(r.url)}">Request pairing</button></div></div>
+    : `<div class="node-head"><span class="node-dot" style="background:var(--green)"></span><span class="node-name">${name}</span><span class="node-badges"><span class="st ok">Reachable</span></span><div class="node-btns">${needPair() ? '' : `<button type="button" class="primary" style="width:auto" data-na="adddirect" data-url="${esc(r.url)}" data-name="${esc(r.name || '')}">Add</button>`}<button type="button" class="${needPair() ? 'primary" style="width:auto' : 'secondary'}" data-na="pair" data-url="${esc(r.url)}">Request pairing</button></div></div>
       <div class="node-meta"><span>${esc(hostOf(r.url))}</span><span>Version <b>${esc(r.version || '?')}</b></span></div>`;
   setHtml(el, `<div class="node" style="border-bottom:0">${body}</div>`);
 }
@@ -181,6 +184,11 @@ delegate('#nodeSection [data-na]', 'click', async (e, b) => {
   else if(a === 'check') doCheck();
   else if(a === 'addold'){
     try{ await api('/api/nodes', 'POST', {url: addRes.url, name: $('#nodeAddName').value.trim() || addRes.name}); toast('Machine added (without pairing).'); addRes = null; $('#nodeAdd').hidden = true; $('#nodeAddUrl').value = ''; }catch{}
+    renderAll();
+  }
+  else if(a === 'adddirect'){
+    b.disabled = true;
+    try{ await api('/api/nodes', 'POST', {url: b.dataset.url, name: ($('#nodeAddName').value.trim() && addRes) ? $('#nodeAddName').value.trim() : b.dataset.name}); toast('Machine added.'); addRes = null; $('#nodeAdd').hidden = true; $('#nodeAddUrl').value = ''; }catch{}
     renderAll();
   }
   else if(a === 'pair') pair(b.dataset.url);
